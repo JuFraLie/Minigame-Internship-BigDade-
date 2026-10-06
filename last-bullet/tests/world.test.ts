@@ -571,6 +571,10 @@ describe('upgrade stacking and caps', () => {
       crawlSpeedFor(stacks({ magnet: 4 })) > crawlSpeedFor(stacks({ magnet: 1 })),
       'and more stacks drag it home faster',
     );
+    assert.ok(
+      crawlSpeedFor(stacks({ magnet: 1 })) > PLAYER_SPEED,
+      'a pulled bullet always beats walking over to it - that is the card',
+    );
   });
 
   test('Heavy Round buys its damage back with a slower chambering', () => {

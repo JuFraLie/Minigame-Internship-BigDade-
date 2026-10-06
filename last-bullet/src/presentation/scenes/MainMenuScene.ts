@@ -1,11 +1,28 @@
 import Phaser from 'phaser';
 import type { SceneContextPort } from '../../ports/SceneContextPort.ts';
 import { computePlayLayout, type PlayLayout } from '../layout/Layout.ts';
+import {
+  bakeCharacterArt,
+  poseCharacter,
+  queueCharacterArt,
+  WALK_FPS,
+  WALK_FRAMES,
+  type CharacterId,
+} from '../art/CharacterArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { AMBER, CARD_HEX, CYAN, CYAN_HEX, PAPER, SLATE } from '../palette.ts';
 
 const FONT_HEAD = '"Arial Black", Impact, sans-serif';
 const FONT_BODY = 'Arial, Helvetica, sans-serif';
+
+/** One of the five zombies circling the hero: drawn, aimed, and kept walking. */
+interface HeroEnemy {
+  readonly image: Phaser.GameObjects.Image;
+  readonly kind: CharacterId;
+  /** Where it is looking - always inwards, at where the hero stands. */
+  dx: number;
+  dy: number;
+}
 
 /**
  * The Play Screen (AGENTS.md section 2): title plus a Play button, and tapping
@@ -29,14 +46,20 @@ export class MainMenuScene extends Phaser.Scene {
 
   private glow?: Phaser.GameObjects.Image;
   private heroBullet?: Phaser.GameObjects.Image;
-  private readonly heroEnemies: Phaser.GameObjects.Image[] = [];
+  private readonly heroEnemies: HeroEnemy[] = [];
 
   constructor() {
     super('MainMenu');
   }
 
+  /** The walk pack is fetched before `create` so it can be baked in one go. */
+  preload(): void {
+    queueCharacterArt(this);
+  }
+
   create(): void {
     generateTextures(this);
+    bakeCharacterArt(this);
     this.ctx = this.registry.get('ctx') as SceneContextPort;
     this.started = false;
     this.heroEnemies.length = 0;
@@ -139,19 +162,29 @@ export class MainMenuScene extends Phaser.Scene {
     });
 
     for (let i = 0; i < 5; i++) {
-      const enemy = this.add
-        .image(0, 0, i % 3 === 0 ? 'enemy_fast' : 'enemy_zombie')
-        .setAlpha(0.7)
-        .setRotation((i / 5) * Math.PI * 2);
-      this.heroEnemies.push(enemy);
+      const kind: CharacterId = i % 3 === 0 ? 'fast' : 'zombie';
+      // Placeholder texture until `applyLayout` poses it with the walk pack;
+      // when the pack is missing, this shape is all it ever is.
+      const image = this.add
+        .image(0, 0, kind === 'fast' ? 'enemy_fast' : 'enemy_zombie')
+        .setAlpha(0.7);
+      this.heroEnemies.push({ image, kind, dx: 0, dy: 1 });
       this.tweens.add({
-        targets: enemy,
+        targets: image,
         alpha: { from: 0.35, to: 0.9 },
         duration: 700 + i * 90,
         ease: 'Sine.easeInOut',
         yoyo: true,
         repeat: -1,
       });
+    }
+  }
+
+  /** Runs the horde's walk cycle, so the Play Screen is a scene and not a still. */
+  update(time: number): void {
+    const cycle = Math.floor((time / 1000) * WALK_FPS) % WALK_FRAMES;
+    for (const enemy of this.heroEnemies) {
+      poseCharacter(enemy.image, enemy.kind, enemy.dx, enemy.dy, cycle, Math.atan2(enemy.dy, enemy.dx));
     }
   }
 
@@ -190,10 +223,13 @@ export class MainMenuScene extends Phaser.Scene {
     const radius = Math.min(width * 0.34, 150 * unit) + 40 * unit;
     this.heroEnemies.forEach((enemy, i) => {
       const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
-      enemy.setPosition(
-        width / 2 + Math.cos(angle) * radius,
-        heroY + Math.sin(angle) * radius * 0.6,
-      );
+      const x = width / 2 + Math.cos(angle) * radius;
+      const y = heroY + Math.sin(angle) * radius * 0.6;
+      enemy.image.setPosition(x, y);
+      // The horde faces inwards: this is the ring, and the hero is the target.
+      enemy.dx = width / 2 - x;
+      enemy.dy = heroY - y;
+      poseCharacter(enemy.image, enemy.kind, enemy.dx, enemy.dy, 0, Math.atan2(enemy.dy, enemy.dx));
     });
 
     this.playBox

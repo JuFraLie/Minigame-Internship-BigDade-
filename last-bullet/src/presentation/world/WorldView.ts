@@ -2,6 +2,12 @@ import Phaser from 'phaser';
 import type { WorldFrame } from '../../core/types.ts';
 import type { InputPort } from '../../ports/InputPort.ts';
 import type { ViewportPort } from '../../ports/ViewportPort.ts';
+import {
+  poseCharacter,
+  WALK_FRAMES,
+  WALK_FPS,
+  WALK_STRIDE,
+} from '../art/CharacterArt.ts';
 import { ENEMY_TEXTURE_RADIUS, RING_RADIUS } from '../art/TextureGenerator.ts';
 
 const DEPTH_GRID = -10;
@@ -51,6 +57,14 @@ export class WorldView {
 
   private grid?: Phaser.GameObjects.TileSprite;
   private player?: Phaser.GameObjects.Image;
+  /**
+   * Where the player stood last frame, and the distance walked since: the
+   * cycle is counted in ground covered, not in seconds, so a sprint quickens
+   * the stride and standing still parks it on the standing pose.
+   */
+  private playerX = 0;
+  private playerY = 0;
+  private playerStride = 0;
   private stickBase?: Phaser.GameObjects.Image;
   private stickKnob?: Phaser.GameObjects.Image;
   private camera?: Phaser.Cameras.Scene2D.Camera;
@@ -232,7 +246,27 @@ export class WorldView {
     const player = frame.player;
     if (!this.player) return;
 
-    this.player.setPosition(player.x, player.y).setRotation(player.facing);
+    const dx = player.x - this.playerX;
+    const dy = player.y - this.playerY;
+    this.playerX = player.x;
+    this.playerY = player.y;
+
+    if (dx * dx + dy * dy > 0.01) this.playerStride += Math.hypot(dx, dy);
+    else this.playerStride = 0;
+    const cycle = Math.floor(this.playerStride / WALK_STRIDE) % WALK_FRAMES;
+
+    this.player.setPosition(player.x, player.y);
+    // Four-way art instead of a turned disc: `facing` is the way it is going,
+    // and it is also what the placeholder shape is aimed with when the pack
+    // did not load.
+    poseCharacter(
+      this.player,
+      'player',
+      Math.cos(player.facing),
+      Math.sin(player.facing),
+      cycle,
+      player.facing,
+    );
     // A hard blink is the clearest "these 0.8 seconds are free" signal there is.
     this.player.setAlpha(
       player.invulnerable && Math.floor(frame.time * 14) % 2 === 0 ? 0.3 : 1,
@@ -241,15 +275,20 @@ export class WorldView {
 
   private syncEnemies(frame: WorldFrame): void {
     const list = frame.enemies;
+    const player = frame.player;
 
     for (let i = 0; i < list.length; i++) {
       const view = list[i];
       const image = this.ensure(this.enemies, i, DEPTH_ENEMY);
+      // Every zombie shambles at its own pace around the cycle, so a pack of
+      // them does not bob in step like one machine.
+      const cycle = Math.floor((frame.time + view.id * 0.37) * WALK_FPS) % WALK_FRAMES;
       image
         .setVisible(true)
-        .setTexture(`enemy_${view.kind}`)
         .setPosition(view.x, view.y)
         .setScale((view.radius / ENEMY_TEXTURE_RADIUS[view.kind]) * (1 + view.hit * 0.4));
+      // They are always heading for the closest thing that is still alive.
+      poseCharacter(image, view.kind, player.x - view.x, player.y - view.y, cycle);
     }
     this.hideFrom(this.enemies, list.length, this.lastEnemies);
     this.lastEnemies = list.length;

@@ -12,8 +12,10 @@ import {
 } from '../palette.ts';
 
 /**
- * All art is baked at boot into canvas textures - no image files, nothing to
- * download, nothing to fail offline (AGENTS.md A3.4).
+ * Every texture that is *drawn* rather than shipped: the bullets, the HUD,
+ * the floor, the stick, and the placeholder shapes the walk pack falls back
+ * to (see `CharacterArt`). All of it is baked at boot into canvas textures -
+ * no network, nothing to fail offline (AGENTS.md A3.4).
  *
  * The shapes are deliberately flat and high-contrast: at the 120-zombie cap
  * the only thing that keeps a fight readable is silhouette plus colour.

@@ -56,11 +56,15 @@ export const PICKUP_RADIUS = 46;
 export const PICKUP_RADIUS_STEP = 34;
 /**
  * Magnet: a bullet inside the reach does not leap into the hand - it crawls
- * home at this speed, +25 per stack, and is taken only once it touches you.
+ * home at this speed, +40 per stack, and is taken only once it touches you.
  * There is no stack limit on the card, so neither is there on the pull.
+ *
+ * The first stack lands at 175, already well over `PLAYER_SPEED` (145): a
+ * pulled bullet always gets back to the chamber faster than walking over to
+ * it would, which is the whole point of picking the card.
  */
-export const CRAWL_SPEED = 60;
-export const CRAWL_SPEED_STEP = 25;
+export const CRAWL_SPEED = 135;
+export const CRAWL_SPEED_STEP = 40;
 /** Sprint's per-stack speed bonus. */
 export const SPRINT_STEP = 0.08;
 /** Explosive Round: zombies within this of the impact take the same damage. */

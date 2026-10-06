@@ -4,6 +4,7 @@ import type { KeyState } from '../../ports/KeyboardPort.ts';
 import type { SceneContextPort } from '../../ports/SceneContextPort.ts';
 import type { SessionPort } from '../../ports/SessionPort.ts';
 import { computeHudLayout, computeOverlayLayout } from '../layout/Layout.ts';
+import { bakeCharacterArt, queueCharacterArt } from '../art/CharacterArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { GameHud } from '../hud/GameHud.ts';
 import { LevelUpOverlay } from '../overlay/LevelUpOverlay.ts';
@@ -56,8 +57,18 @@ export class GameScene extends Phaser.Scene {
     this.ctx = data.ctx;
   }
 
+  /**
+   * Normally the Play Screen has already fetched the walk pack; asking again
+   * only queues the frames that never arrived, so entering the round without
+   * ever seeing that screen still gets the art.
+   */
+  preload(): void {
+    queueCharacterArt(this);
+  }
+
   create(): void {
     generateTextures(this);
+    bakeCharacterArt(this);
     this.paused = false;
     this.finishing = false;
 
