@@ -122,6 +122,40 @@ export const ENEMY_STATS: Readonly<Record<EnemyKind, EnemyStats>> = {
   tank: { hp: 3, speed: 58, radius: 23, damage: 2, xp: 5, points: 30 },
 };
 
+/**
+ * Body-overlap passes per step. One pass of pair corrections leaves a packed
+ * crowd a body or two still touching, because undoing one gap can reopen the
+ * gap behind it; a second pass settles the chain. Two is enough for the worst
+ * case the pool allows (a full 120-zombie pile) because the walk itself no
+ * longer deepens the pile - see `CROWD_PRESSURE`.
+ */
+export const SEPARATION_PASSES = 3;
+
+/**
+ * How far a homing step may reach *past* the body standing in front of it.
+ *
+ * Zero would lock the horde up: the front rank stops at the survivor and
+ * every rank behind it stops on the rank in front, a static wall that never
+ * shuffles. Some pressure keeps it leaning instead - each rank presses a
+ * little into the next, the separation pass pushes it back out, and the crowd
+ * reads as alive.
+ *
+ * It is also what bounds how much one step may deepen an overlap: a rank can
+ * close on the rank ahead by at most this much, so the relaxation passes are
+ * always handed something small to settle rather than a wall to tear down.
+ */
+export const CROWD_PRESSURE = 0.75;
+
+/**
+ * How far a zombie is allowed to sink into the survivor, in world units.
+ *
+ * The walk stops them just short of contact rather than exactly on it, so the
+ * contact test - a plain `<=` against the same reach - can never be decided by
+ * a rounding error. Deep enough to be unmissable, shallow enough that it
+ * reads as standing against them rather than inside them.
+ */
+export const CONTACT_SINK = 0.25;
+
 // --- waves -----------------------------------------------------------------
 
 /** Zombies in a wave: `WAVE_SIZE_STEP x wave + WAVE_SIZE_BASE`, i.e. 3, 7, 11, ... */

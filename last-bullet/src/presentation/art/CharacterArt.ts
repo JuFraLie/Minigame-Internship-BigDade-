@@ -55,6 +55,24 @@ const SCALE: Record<CharacterId, number> = {
   tank: 3.2,
 };
 
+/** Where each character's side view points in world space: `1` for +x, `-1` for -x. */
+const SIDE_FACING: Record<CharacterId, 1 | -1> = {
+  player: 1,
+  zombie: -1,
+  fast: -1,
+  tank: -1,
+};
+
+/**
+ * Does travelling `dx` this way put the side view the wrong way round, so it
+ * has to be mirrored? The player's sheet is drawn facing +x and the three
+ * zombies' facing -x - one pack, two orientations - so the same direction
+ * mirrors one and leaves the other alone. This is the whole of that rule,
+ * kept apart from the drawing so it can be tested headless.
+ */
+export const sideMirrored = (id: CharacterId, dx: number): boolean =>
+  dx * SIDE_FACING[id] < 0;
+
 /** Placeholder shapes, baked by `TextureGenerator`, used when the pack is absent. */
 const FALLBACK: Record<CharacterId, string> = {
   player: 'player',
@@ -176,8 +194,8 @@ const bakeCharacter = (scene: Phaser.Scene, id: CharacterId): void => {
 /**
  * Points `image` where it is going and puts it on the right frame of the
  * cycle. `dx`/`dy` is the direction of travel in world space (y grows
- * downwards); the pack draws its side view facing +x, so travelling left
- * mirrors it.
+ * downwards); the side view is mirrored when the travel direction is against
+ * the way that character's sheet is drawn - see `SIDE_FACING`.
  *
  * `fallbackRotation` is what the placeholder shape is drawn with when the
  * pack is absent - the shapes are unidirectional, so they keep the old
@@ -198,7 +216,7 @@ export const poseCharacter = (
 
   if (image.scene.textures.exists(key)) {
     image.setTexture(key);
-    image.setFlipX(direction === 'side' && dx < 0);
+    image.setFlipX(direction === 'side' && sideMirrored(id, dx));
     image.setRotation(0);
     return;
   }

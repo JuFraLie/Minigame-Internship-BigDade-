@@ -5,6 +5,8 @@ import {
   BULLET_CAP,
   BULLET_RADIUS,
   BULLET_SPEED,
+  CONTACT_SINK,
+  CROWD_PRESSURE,
   ENEMY_CAP,
   ENEMY_STATS,
   INVULNERABLE_SECONDS,
@@ -14,6 +16,7 @@ import {
   SECOND_WIND_HEARTS,
   SECOND_WIND_INVULN,
   SECOND_WIND_PUSH,
+  SEPARATION_PASSES,
   SPAWN_LAG,
   SPAWN_RING_MARGIN,
   SUPER_RARE_CHANCE,
@@ -111,6 +114,65 @@ const distSq = (ax: number, ay: number, bx: number, by: number): number => {
   const dx = ax - bx;
   const dy = ay - by;
   return dx * dx + dy * dy;
+};
+
+/**
+ * Resolves one overlapping pair: each body takes half of the gap along the
+ * line joining them, so neither is favoured. Two zombies dropped on exactly
+ * the same point still need a direction, and it has to be a *stable* one -
+ * so it is derived from their slot ids rather than from the RNG, whose
+ * stream belongs to gameplay and must not be spent on geometry.
+ */
+const pushApart = (a: Enemy, b: Enemy, i: number, j: number): void => {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const reach = a.radius + b.radius;
+  const dSq = dx * dx + dy * dy;
+  if (dSq >= reach * reach) return;
+
+  const d = Math.sqrt(dSq);
+  let nx: number;
+  let ny: number;
+  if (d > 1e-6) {
+    nx = dx / d;
+    ny = dy / d;
+  } else {
+    // Both slots hashed to one point: a stable pseudo-angle from the ids.
+    const hash = Math.imul(i + 1, 2654435761) ^ Math.imul(j + 1, 40503);
+    const angle = (hash / 4294967296) * TAU;
+    nx = Math.cos(angle);
+    ny = Math.sin(angle);
+  }
+
+  const nudge = (reach - d) * 0.5;
+  a.x -= nx * nudge;
+  a.y -= ny * nudge;
+  b.x += nx * nudge;
+  b.y += ny * nudge;
+};
+
+/**
+ * The player is a fixed body: only the zombie gives ground, and it is placed
+ * exactly on the resting edge rather than nudged, so repeated steps cannot
+ * grind it through. That edge sits `CONTACT_SINK` inside the contact radius,
+ * so the damage test - `<=` against the full radius - is never decided by a
+ * rounding error. The horde therefore arrives *around* the player instead of
+ * inside them, at no cost to how often it hits.
+ */
+const pushOutOfPlayer = (enemy: Enemy, px: number, py: number): void => {
+  const rest = enemy.radius + PLAYER_RADIUS - CONTACT_SINK;
+  const dx = enemy.x - px;
+  const dy = enemy.y - py;
+  const dSq = dx * dx + dy * dy;
+  if (dSq >= rest * rest) return;
+
+  const d = Math.sqrt(dSq);
+  if (d > 1e-6) {
+    enemy.x = px + (dx / d) * rest;
+    enemy.y = py + (dy / d) * rest;
+  } else {
+    enemy.x = px + rest;
+  }
 };
 
 /** Does the segment a->b come within `radius` of the circle at c? */
@@ -382,8 +444,20 @@ export class GameWorld implements RenderPort, UpgradePort {
     if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - dt);
 
     this.directorStep(dt);
-    this.moveEnemies(dt);
+
+    // Three rebuilds per step, each one answering a different question. This
+    // one is "who stands where before anyone moves" - the walk below needs it
+    // to tell an open path from a blocked one, spawns included.
     this.rebuildHash();
+    this.moveEnemies(dt);
+
+    // Now "where everyone ended up", so the crowd can be settled against the
+    // real field, and once more afterwards: the bullet, contact and target
+    // passes must see the field the renderer draws, not the pre-shove one.
+    this.rebuildHash();
+    this.separateEnemies();
+    this.rebuildHash();
+
     this.stepBullets(dt);
     if (!this.running) return;
 
@@ -524,9 +598,118 @@ export class GameWorld implements RenderPort, UpgradePort {
         uy = hy / n;
       }
 
-      enemy.x += ux * enemy.speed * dt;
-      enemy.y += uy * enemy.speed * dt;
+      // Capped by the room actually left ahead, not just by the clock: a
+      // zombie walks into the crowd, it does not walk through it.
+      const wanted = enemy.speed * dt;
+      const step = Math.min(wanted, this.freeStep(enemy, ux, uy, wanted));
+      enemy.x += ux * step;
+      enemy.y += uy * step;
       if (enemy.hit > 0) enemy.hit = Math.max(0, enemy.hit - dt);
+    }
+  }
+
+  /**
+   * How far `enemy` may still travel along `(ux, uy)` before it would force
+   * itself into whoever stands in the way: the survivor, who is a fixed body,
+   * and any zombie whose body overlaps the path. The crowd's answer gets
+   * `CROWD_PRESSURE` added so the horde keeps leaning on itself instead of
+   * locking into a wall; the survivor's does not - the caller caps the result
+   * at full speed.
+   *
+   * The hash answering here was rebuilt before the walk, so a neighbour that
+   * has already stepped this frame reads up to one step out of date; the
+   * query is padded by that same step so nobody is missed.
+   */
+  private freeStep(enemy: Enemy, ux: number, uy: number, wanted: number): number {
+    const list = this.candidates;
+    list.length = 0;
+    this.hash.queryCircle(enemy.x, enemy.y, enemy.radius + MAX_ENEMY_RADIUS + wanted, list);
+
+    // Room left by the crowd: `CROWD_PRESSURE` is added to it, so the horde
+    // keeps leaning on whoever is ahead instead of locking into a wall.
+    let room = wanted;
+    // Room left by the survivor: exact, never leaned on. They are a fixed
+    // body, and the front rank holding them still is what lets the rest of
+    // the crowd spread sideways instead of piling into the rank in front.
+    let against = wanted;
+
+    const reach = enemy.radius + PLAYER_RADIUS - CONTACT_SINK;
+    const px = this.px - enemy.x;
+    const py = this.py - enemy.y;
+    const d = Math.sqrt(px * px + py * py) || 1;
+    const towardPlayer = (px * ux + py * uy) / d;
+    // Already inside the survivor counts as no room at all: they may not walk
+    // further in, the separation pass is what puts them back out.
+    if (towardPlayer > 0.01) against = Math.max(0, (d - reach) / towardPlayer);
+
+    for (let n = 0; n < list.length; n++) {
+      const other = this.enemies[list[n]];
+      if (other === enemy || !other.alive) continue;
+
+      const ox = other.x - enemy.x;
+      const oy = other.y - enemy.y;
+      const reachOther = enemy.radius + other.radius;
+      const oSq = ox * ox + oy * oy;
+      if (oSq <= reachOther * reachOther) {
+        room = 0; // shoulder to shoulder already: press, do not part
+        continue;
+      }
+
+      const od = Math.sqrt(oSq);
+      const ahead = (ox * ux + oy * uy) / od;
+      // Beside or behind is not in the way: a shoulder to shoulder neighbour
+      // must not stall the walk, only one standing in the path may.
+      if (ahead <= 0.01) continue;
+      if (od <= reachOther) {
+        room = 0; // already in the way: press, do not part
+        continue;
+      }
+      const space = (od - reachOther) / ahead;
+      if (space < room) room = space;
+    }
+
+    return Math.min(room + CROWD_PRESSURE, against);
+  }
+
+  /**
+   * Solid bodies: no two zombies may stand in the same place, and none may
+   * stand inside the player. Each pass walks the live pool, asks the hash for
+   * the neighbours around it and splits any overlap down the middle - both
+   * give ground - while the player, who never gives ground, simply sheds the
+   * zombie out to the edge of its own circle.
+   *
+   * The corrections are positional rather than velocity-based on purpose:
+   * they are constraints, so they do not care how long the step was, and
+   * nothing accumulates between steps. The homing walk will always push the
+   * crowd back together, which is exactly what makes a horde look like it is
+   * jostling through itself instead of clipping into one another.
+   *
+   * Runs between two hash rebuilds - see `step`.
+   */
+  private separateEnemies(): void {
+    const list = this.candidates;
+
+    for (let pass = 0; pass < SEPARATION_PASSES; pass++) {
+      for (let i = 0; i < ENEMY_CAP; i++) {
+        const a = this.enemies[i];
+        if (!a.alive) continue;
+
+        list.length = 0;
+        // One body width of slack on top of the contact radius: a correction
+        // earlier in this pass may have moved a body by at most that much,
+        // and the hash still has it in the cell it moved out of.
+        this.hash.queryCircle(a.x, a.y, a.radius + 2 * MAX_ENEMY_RADIUS, list);
+
+        for (let n = 0; n < list.length; n++) {
+          const j = list[n];
+          if (j <= i) continue; // settled together when the lower id was read
+          const b = this.enemies[j];
+          if (!b.alive) continue;
+          pushApart(a, b, i, j);
+        }
+
+        pushOutOfPlayer(a, this.px, this.py);
+      }
     }
   }
 

@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { characterArtFiles, WALK_FRAMES } from '../src/presentation/art/CharacterArt.ts';
+import { characterArtFiles, sideMirrored, WALK_FRAMES } from '../src/presentation/art/CharacterArt.ts';
 
 /** `public/`, where the walk pack ships with the build. */
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
@@ -31,6 +31,15 @@ describe('walk pack', () => {
     for (const file of characterArtFiles()) {
       assert.ok(file.endsWith('.png'), `${file} is not a PNG`);
       assert.ok(!file.includes('undefined'), `${file} is missing part of its name`);
+    }
+  });
+
+  test('the player mirrors going left, the zombies going right', () => {
+    assert.equal(sideMirrored('player', -1), true, 'the player sheet faces +x');
+    assert.equal(sideMirrored('player', 1), false);
+    for (const id of ['zombie', 'fast', 'tank'] as const) {
+      assert.equal(sideMirrored(id, 1), true, `${id} faces -x, so it mirrors going right`);
+      assert.equal(sideMirrored(id, -1), false);
     }
   });
 });

@@ -65,6 +65,15 @@ export class WorldView {
   private playerX = 0;
   private playerY = 0;
   private playerStride = 0;
+  /**
+   * World time of the step this pose was last measured against. The world
+   * only moves on whole 1/30 s steps, but `sync` runs on every render frame -
+   * so at 60 FPS every other frame finds the survivor exactly where it was.
+   * Those frames are the same step seen twice, not a standstill, and they must
+   * not park the stride: without this gate the cycle never leaves frame zero
+   * and the walk never plays.
+   */
+  private playerTime = -1;
   private stickBase?: Phaser.GameObjects.Image;
   private stickKnob?: Phaser.GameObjects.Image;
   private camera?: Phaser.Cameras.Scene2D.Camera;
@@ -251,8 +260,18 @@ export class WorldView {
     this.playerX = player.x;
     this.playerY = player.y;
 
-    if (dx * dx + dy * dy > 0.01) this.playerStride += Math.hypot(dx, dy);
-    else this.playerStride = 0;
+    if (this.playerTime !== frame.time) {
+      // The first frame only plants the marker: the cycle must not open with
+      // the stride of the walk from the spawn point to here.
+      if (this.playerTime >= 0) {
+        this.playerStride = dx * dx + dy * dy > 0.01
+          ? this.playerStride + Math.hypot(dx, dy)
+          : 0;
+      }
+      this.playerTime = frame.time;
+    }
+    // Frozen for a level-up nobody is walking, so the feet stop too.
+    if (frame.offers !== null) this.playerStride = 0;
     const cycle = Math.floor(this.playerStride / WALK_STRIDE) % WALK_FRAMES;
 
     this.player.setPosition(player.x, player.y);
