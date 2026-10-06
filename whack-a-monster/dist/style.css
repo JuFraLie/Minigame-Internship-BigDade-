@@ -1,0 +1,59 @@
+/* Layout only — the game itself is rendered exclusively by the Phaser canvas. */
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #14210f;
+    color: rgba(255, 255, 255, 0.87);
+    /* The game is touch-only inside a mobile WebView: never scroll, never zoom,
+       never trigger pull-to-refresh or the long-press callout. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+}
+
+#app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* The canvas is the touch target: repeat the rule here so no gesture — tap, drag or
+   swipe — is ever handed to the browser to scroll, zoom or cancel mid-motion. */
+#game-container canvas {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Zero-size, invisible probe: reports the device cutout inset to the game layout. */
+#safe-area-probe {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    visibility: hidden;
+    pointer-events: none;
+}

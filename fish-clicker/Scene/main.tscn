@@ -1,0 +1,223 @@
+[gd_scene format=3 uid="uid://d3oeivx5a5aq6"]
+
+[ext_resource type="Script" uid="uid://04hku2nct0if" path="res://Script/main.gd" id="1_ow1sv"]
+[ext_resource type="Script" uid="uid://dyvxbqs2dei1j" path="res://Script/FishingSystem.gd" id="2_75buv"]
+[ext_resource type="Script" uid="uid://da0qn2vn4qsip" path="res://Scene/ScoreSystem.gd" id="3_75buv"]
+[ext_resource type="Script" uid="uid://civ8arxuxngt2" path="res://Script/GameUI.gd" id="3_c2iwn"]
+[ext_resource type="FontFile" uid="uid://c3xk3ytc15q62" path="res://Asset/Font/minecraft/Minecraft.ttf" id="4_3pt4j"]
+[ext_resource type="Script" uid="uid://orcjas4a43xt" path="res://Scene/AreaSystem.gd" id="4_c2iwn"]
+[ext_resource type="Script" uid="uid://dmxw7p5ady38y" path="res://Scene/UpgradeSystem.gd" id="5_3pt4j"]
+[ext_resource type="Texture2D" uid="uid://bf8qfs8ytfage" path="res://Asset/UI/button.png" id="5_7y4ci"]
+[ext_resource type="Texture2D" uid="uid://crp654mc1x64g" path="res://Asset/Background/Glass.png" id="6_mxd2g"]
+[ext_resource type="Texture2D" uid="uid://bam5bmgshuaik" path="res://Asset/Player/Fisherman.png" id="7_0sxm5"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_om17j"]
+bg_color = Color(0, 0, 0, 0.49019608)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_uydx1"]
+bg_color = Color(2.117753e-06, 0.6529251, 0.8796981, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="LabelSettings" id="LabelSettings_grmdb"]
+font = ExtResource("4_3pt4j")
+outline_size = 2
+outline_color = Color(0, 0, 0, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_j4wfn"]
+font = ExtResource("4_3pt4j")
+font_size = 20
+
+[sub_resource type="LabelSettings" id="LabelSettings_7y4ci"]
+font = ExtResource("4_3pt4j")
+
+[sub_resource type="LabelSettings" id="LabelSettings_ofag4"]
+font = ExtResource("4_3pt4j")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_rh0r0"]
+texture = ExtResource("5_7y4ci")
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_ofag4"]
+texture = ExtResource("5_7y4ci")
+
+[sub_resource type="LabelSettings" id="LabelSettings_3pt4j"]
+font = ExtResource("4_3pt4j")
+font_size = 12
+
+[sub_resource type="LabelSettings" id="LabelSettings_rh0r0"]
+font = ExtResource("4_3pt4j")
+font_size = 12
+
+[node name="Main" type="Node2D" unique_id=793820638]
+script = ExtResource("1_ow1sv")
+
+[node name="FishManager" type="Node" parent="." unique_id=1734012440]
+
+[node name="FishingSystem" type="Node" parent="FishManager" unique_id=963720319]
+script = ExtResource("2_75buv")
+
+[node name="ScoreSystem" type="Node" parent="FishManager" unique_id=1700922821]
+script = ExtResource("3_75buv")
+
+[node name="AreaSystem" type="Node" parent="FishManager" unique_id=2031219899]
+script = ExtResource("4_c2iwn")
+
+[node name="UpgradeSystem" type="Node" parent="FishManager" unique_id=526824173]
+script = ExtResource("5_3pt4j")
+
+[node name="UI" type="Control" parent="." unique_id=2021066239]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("3_c2iwn")
+
+[node name="FishButton" type="TextureButton" parent="UI" unique_id=2122456724]
+custom_minimum_size = Vector2(150, 150)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 2.0
+offset_top = 280.0
+offset_right = 365.0
+offset_bottom = 547.0
+grow_horizontal = 2
+grow_vertical = 2
+scale = Vector2(0.9912124, 1)
+
+[node name="Background" type="Sprite2D" parent="UI" unique_id=1562094814]
+position = Vector2(180, 320)
+
+[node name="Glass" type="Sprite2D" parent="UI" unique_id=231839729]
+position = Vector2(180, 460)
+texture = ExtResource("6_mxd2g")
+
+[node name="ColorRect" type="ColorRect" parent="UI" unique_id=1243448027]
+layout_mode = 0
+offset_right = 360.0
+offset_bottom = 66.0
+color = Color(0, 0, 0, 0.49019608)
+
+[node name="ProgressBar" type="ProgressBar" parent="UI" unique_id=1574541668]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = 328.0
+offset_top = 76.0
+offset_right = 348.0
+offset_bottom = 252.0
+grow_horizontal = 2
+theme_override_fonts/font = ExtResource("4_3pt4j")
+theme_override_styles/background = SubResource("StyleBoxFlat_om17j")
+theme_override_styles/fill = SubResource("StyleBoxFlat_uydx1")
+fill_mode = 3
+show_percentage = false
+
+[node name="CatchLabel" type="Label" parent="UI" unique_id=1000684473]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = 160.0
+offset_top = 150.0
+offset_right = 200.0
+offset_bottom = 173.0
+grow_horizontal = 2
+label_settings = SubResource("LabelSettings_grmdb")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScoreLabel" type="Label" parent="UI" unique_id=638632698]
+layout_mode = 0
+offset_left = 160.0
+offset_top = 9.0
+offset_right = 200.0
+offset_bottom = 32.0
+label_settings = SubResource("LabelSettings_j4wfn")
+horizontal_alignment = 1
+
+[node name="FrenzyLabel" type="Label" parent="UI" unique_id=236459033]
+layout_mode = 0
+offset_left = 160.0
+offset_top = 39.0
+offset_right = 200.0
+offset_bottom = 62.0
+label_settings = SubResource("LabelSettings_7y4ci")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="AreaLabel" type="Label" parent="UI" unique_id=831940399]
+layout_mode = 0
+offset_left = 6.0
+offset_top = 9.0
+offset_right = 46.0
+offset_bottom = 32.0
+label_settings = SubResource("LabelSettings_ofag4")
+
+[node name="AreaButton" type="Button" parent="UI" unique_id=1238637073]
+layout_mode = 0
+offset_left = 184.0
+offset_top = 552.0
+offset_right = 360.0
+offset_bottom = 625.0
+theme_override_fonts/font = ExtResource("4_3pt4j")
+theme_override_styles/normal = SubResource("StyleBoxTexture_rh0r0")
+text = "NEXT LOCATION"
+
+[node name="UpgradeButton" type="Button" parent="UI" unique_id=1946133302]
+texture_filter = 1
+layout_mode = 0
+offset_top = 552.0
+offset_right = 176.0
+offset_bottom = 625.0
+theme_override_fonts/font = ExtResource("4_3pt4j")
+theme_override_styles/normal = SubResource("StyleBoxTexture_ofag4")
+text = "UPGRADE"
+
+[node name="AreaProgressLabel" type="Label" parent="UI" unique_id=909599986]
+layout_mode = 0
+offset_left = 191.0
+offset_top = 596.5
+offset_right = 354.0
+offset_bottom = 619.5
+label_settings = SubResource("LabelSettings_3pt4j")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="UpgradeLabel" type="Label" parent="UI" unique_id=1130442215]
+layout_mode = 0
+offset_left = 7.0
+offset_top = 596.5
+offset_right = 170.0
+offset_bottom = 619.5
+label_settings = SubResource("LabelSettings_rh0r0")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1369678309]
+position = Vector2(180, 126)
+texture = ExtResource("7_0sxm5")
+
+[node name="BiteIndicator" type="Label" parent="Sprite2D" unique_id=191986786]
+offset_left = 11.0
+offset_top = -24.0
+offset_right = 51.0
+offset_bottom = -1.0
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_fonts/font = ExtResource("4_3pt4j")
+theme_override_font_sizes/font_size = 20
+text = "!"
+horizontal_alignment = 1
+vertical_alignment = 1

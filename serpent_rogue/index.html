@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <title>Serpent Rogue</title>
+  <style>
+    /* Layout only — every pixel of the game itself is drawn by the Phaser canvas
+       (AGENTS.md §3.4: no raw-CSS game rendering). */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #06040f;
+      overflow: hidden;
+      /* Touch-only inside a host WebView: never scroll, never zoom, never show the
+         long-press callout or the tap highlight. */
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+    #app {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* Scale.FIT letterboxes the canvas inside this box; the centring is done here by
+       flex, not by Phaser's autoCenter — that combination would offset the canvas
+       twice and push the HUD off-centre. */
+    #game-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* The canvas is the touch target: repeat the rule so no gesture — tap, drag or
+       swipe — is ever handed to the browser to scroll, zoom or cancel mid-motion. */
+    #game-container canvas {
+      display: block;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="game-container"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
