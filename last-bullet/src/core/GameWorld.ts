@@ -1,361 +1,96 @@
 import type { RandomPort } from '../ports/RandomPort.ts';
 import type { RenderPort } from '../ports/RenderPort.ts';
 import type { UpgradePort } from '../ports/UpgradePort.ts';
-import {
-  BULLET_CAP,
-  BULLET_RADIUS,
-  BULLET_SPEED,
-  CONTACT_SINK,
-  CROWD_PRESSURE,
-  ENEMY_CAP,
-  ENEMY_STATS,
-  INVULNERABLE_SECONDS,
-  LEGENDARY_CHANCE,
-  PLAYER_MAX_HP,
-  PLAYER_RADIUS,
-  SECOND_WIND_HEARTS,
-  SECOND_WIND_INVULN,
-  SECOND_WIND_PUSH,
-  SEPARATION_PASSES,
-  SPAWN_LAG,
-  SPAWN_RING_MARGIN,
-  SUPER_RARE_CHANCE,
-} from './config.ts';
-import {
-  availableUpgrades,
-  boomerangEnabled,
-  bloodFrenzyEnabled,
-  bulletDamageFor,
-  bulletRangeFor,
-  chamberFor,
-  crawlSpeedFor,
-  explosiveRadiusFor,
-  fireRangeFor,
-  initialUpgrades,
-  moveSpeedFor,
-  pickupRadiusFor,
-  rarityPool,
-  returnSpeedFor,
-  scoreFor,
-  shotDelayFor,
-  xpNeededForLevel,
-  type UpgradeState,
-} from './rules.ts';
-import { SpatialHash } from './spatialHash.ts';
-import { WaveDirector, type SpawnEntry } from './WaveDirector.ts';
-import type {
-  BulletState,
-  EnemyKind,
-  EnemyView,
-  BulletView,
-  Rarity,
-  UpgradeId,
-  Vec2,
-  WorldEventsPort,
-  WorldFrame,
-} from './types.ts';
-
-/** Seconds a hit stays readable; `EnemyView.hit` normalises against this. */
-const HIT_FLASH = 0.15;
-/** Widest enemy, so one circle query covers any contact test. */
-const MAX_ENEMY_RADIUS = Math.max(
-  ENEMY_STATS.zombie.radius,
-  ENEMY_STATS.fast.radius,
-  ENEMY_STATS.tank.radius,
-);
-const TAU = Math.PI * 2;
-
-interface Enemy {
-  alive: boolean;
-  id: number;
-  kind: EnemyKind;
-  x: number;
-  y: number;
-  hp: number;
-  maxHp: number;
-  speed: number;
-  radius: number;
-  damage: number;
-  xp: number;
-  /** Runner wobble phase. */
-  wobble: number;
-  /** Seconds left of the hit-pop reaction. */
-  hit: number;
-}
+import { ENEMY_CAP, PLAYER_MAX_HP, PLAYER_RADIUS, SECOND_WIND_PUSH } from './config.ts';
+import { CrowdField } from './CrowdField.ts';
+import { EnemyWalk } from './EnemyWalk.ts';
+import { EnemyPool, MAX_ENEMY_RADIUS } from './entities.ts';
+import { distSq } from './geometry.ts';
+import { FrameBuilder, type FrameRound } from './FrameBuilder.ts';
+import { Progression } from './Progression.ts';
+import { moveSpeedFor } from './rules.ts';
+import { Survivor } from './Survivor.ts';
+import type { UpgradeId, Vec2, WorldEventsPort, WorldFrame } from './types.ts';
+import { WaveSpawner } from './WaveSpawner.ts';
+import { Weapon, type KillSink } from './Weapon.ts';
 
 /**
- * One bullet. It stops the instant it touches a zombie - there is no hit
- * budget to track, because a bullet never pierces and never lingers in flight.
- * "Held" is the player's `held` counter, never a slot in this pool.
- */
-interface Bullet {
-  alive: boolean;
-  /** Globally unique, never reused - the renderer keys its sprites on it. */
-  uid: number;
-  state: BulletState;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  angle: number;
-  /** Distance flown since it was fired. */
-  travel: number;
-  age: number;
-}
-
-const makeArray = <T>(length: number, factory: () => T): T[] => {
-  const out = new Array<T>(length);
-  for (let i = 0; i < length; i++) out[i] = factory();
-  return out;
-};
-
-/** Squared distance, so the hot paths never take a square root they skip. */
-const distSq = (ax: number, ay: number, bx: number, by: number): number => {
-  const dx = ax - bx;
-  const dy = ay - by;
-  return dx * dx + dy * dy;
-};
-
-/**
- * Resolves one overlapping pair: each body takes half of the gap along the
- * line joining them, so neither is favoured. Two zombies dropped on exactly
- * the same point still need a direction, and it has to be a *stable* one -
- * so it is derived from their slot ids rather than from the RNG, whose
- * stream belongs to gameplay and must not be spent on geometry.
- */
-const pushApart = (a: Enemy, b: Enemy, i: number, j: number): void => {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const reach = a.radius + b.radius;
-  const dSq = dx * dx + dy * dy;
-  if (dSq >= reach * reach) return;
-
-  const d = Math.sqrt(dSq);
-  let nx: number;
-  let ny: number;
-  if (d > 1e-6) {
-    nx = dx / d;
-    ny = dy / d;
-  } else {
-    // Both slots hashed to one point: a stable pseudo-angle from the ids.
-    const hash = Math.imul(i + 1, 2654435761) ^ Math.imul(j + 1, 40503);
-    const angle = (hash / 4294967296) * TAU;
-    nx = Math.cos(angle);
-    ny = Math.sin(angle);
-  }
-
-  const nudge = (reach - d) * 0.5;
-  a.x -= nx * nudge;
-  a.y -= ny * nudge;
-  b.x += nx * nudge;
-  b.y += ny * nudge;
-};
-
-/**
- * The player is a fixed body: only the zombie gives ground, and it is placed
- * exactly on the resting edge rather than nudged, so repeated steps cannot
- * grind it through. That edge sits `CONTACT_SINK` inside the contact radius,
- * so the damage test - `<=` against the full radius - is never decided by a
- * rounding error. The horde therefore arrives *around* the player instead of
- * inside them, at no cost to how often it hits.
- */
-const pushOutOfPlayer = (enemy: Enemy, px: number, py: number): void => {
-  const rest = enemy.radius + PLAYER_RADIUS - CONTACT_SINK;
-  const dx = enemy.x - px;
-  const dy = enemy.y - py;
-  const dSq = dx * dx + dy * dy;
-  if (dSq >= rest * rest) return;
-
-  const d = Math.sqrt(dSq);
-  if (d > 1e-6) {
-    enemy.x = px + (dx / d) * rest;
-    enemy.y = py + (dy / d) * rest;
-  } else {
-    enemy.x = px + rest;
-  }
-};
-
-/** Does the segment a->b come within `radius` of the circle at c? */
-const segmentIntersectsCircle = (
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-  cx: number,
-  cy: number,
-  radius: number,
-): boolean => {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const lenSq = dx * dx + dy * dy;
-  let t = lenSq > 0 ? ((cx - ax) * dx + (cy - ay) * dy) / lenSq : 0;
-  if (t < 0) t = 0;
-  else if (t > 1) t = 1;
-  return distSq(ax + t * dx, ay + t * dy, cx, cy) <= radius * radius;
-};
-
-/**
- * The game world: a pure-TypeScript endless-wave simulation.
+ * The game world: a pure-TypeScript endless-wave simulation, now kept as the
+ * *orchestrator* of it.
  *
  * No Phaser, no pixels, no DOM, no clock of its own - it is stepped with an
  * explicit `dt` and a move vector, which is what lets a whole run be replayed
- * headless in the test suite. It owns its pools, its spatial hash and its view
- * frame, so a step allocates nothing once warm.
+ * headless in the test suite. Each concern behind it lives in a module of its
+ * own and knows nothing about the others:
  *
- * Decisions live in three places: `WaveDirector` decides what arrives and
- * when, `rules.ts` decides what anything is worth, and this class decides
- * where everything stands. It implements the two ports the renderer reads
- * through: `RenderPort` (the frame) and `UpgradePort` (the level-up handshake).
+ *   WaveSpawner   what arrives, and where it stands
+ *   EnemyWalk     how the horde moves and settles
+ *   Survivor      the player's body: position, hearts, invulnerability
+ *   Weapon        the chamber, the shots, their one hit and their return
+ *   Progression   XP, levels, card stacks and the score
+ *   CrowdField    the spatial index they all query
+ *   FrameBuilder  the read model the renderer is handed
+ *
+ * What is left here is exactly what none of them may own: the order the step
+ * runs in, the round itself (time, running, the end), and the two places
+ * where concerns meet - a body going down, and a body touching the survivor.
+ * It implements the two ports the renderer reads through: `RenderPort` (the
+ * frame) and `UpgradePort` (the level-up handshake), plus the weapon's narrow
+ * `KillSink`, because the accounting for a kill is a round-level fact.
  */
-export class GameWorld implements RenderPort, UpgradePort {
-  // --- player --------------------------------------------------------------
-  private px = 0;
-  private py = 0;
-  private hp = PLAYER_MAX_HP;
-  private invuln = 0;
-  private facing = -Math.PI / 2;
-
+export class GameWorld implements RenderPort, UpgradePort, KillSink {
   // --- round ---------------------------------------------------------------
   private time = 0;
-  private kills = 0;
-  /** Banked kill points (10 / 20 / 30); waves and levels are added on read. */
-  private points = 0;
   private running = true;
   private win = false;
   private ended = false;
-
-  // --- progression ---------------------------------------------------------
-  private level = 1;
-  private xp = 0;
-  private ups: UpgradeState = initialUpgrades();
-  private offersList: UpgradeId[] | null = null;
-
-  // --- shooting ------------------------------------------------------------
-  private held = 1;
-  private cooldown = 0;
-  /** Second Wind has already been spent this round. */
-  private secondWindUsed = false;
-  /**
-   * Blood Frenzy kills waiting for a bullet: one per kill, capped by how many
-   * the hand could still take, so a blast that kills a pack promises a full
-   * chamber and never more.
-   */
-  private bloodReturns = 0;
-
-  // --- waves ---------------------------------------------------------------
-  private readonly wave: WaveDirector;
-  private spawnRing = 700;
   /** Wave 1 is placed on the first step, when the view size is already known. */
   private started = false;
 
-  // --- pools ---------------------------------------------------------------
-  private readonly enemies: Enemy[];
-  private readonly enemyFree: number[] = [];
-  private enemiesAlive = 0;
-  private readonly bullets: Bullet[];
-  private readonly bulletFree: number[] = [];
-  private bulletsAlive = 0;
-  private nextId = 1;
-  private bulletUid = 1;
+  // --- collaborators -------------------------------------------------------
+  private readonly events: WorldEventsPort;
+  private readonly enemies: EnemyPool;
+  private readonly field: CrowdField;
+  private readonly survivor: Survivor;
+  private readonly progression: Progression;
+  private readonly waves: WaveSpawner;
+  private readonly walk: EnemyWalk;
+  private readonly weapon: Weapon;
+  private readonly frames: FrameBuilder;
 
   // --- scratch -------------------------------------------------------------
-  private readonly rng: RandomPort;
-  private readonly events: WorldEventsPort;
-  private readonly hash: SpatialHash;
-  private readonly candidates: number[] = [];
-  /** Blast victims of Explosive Round, separate from the query above it. */
-  private readonly blast: number[] = [];
-  /** Where the last bullet hit: reused so a hit allocates nothing. */
-  private readonly impact = { x: 0, y: 0 };
-
-  // --- view frame ----------------------------------------------------------
-  private readonly frame: WorldFrame;
-  private readonly enemyViews: EnemyView[];
-  private readonly bulletViews: BulletView[];
+  /** Candidates for the contact test, reused so a step allocates nothing. */
+  private readonly contact: number[] = [];
+  /** Reused record, so `getFrame()` never allocates either. */
+  private readonly round: FrameRound = { running: true, win: false, time: 0 };
   private dirty = true;
 
   constructor(rng: RandomPort, events: WorldEventsPort) {
     // Plain fields rather than constructor parameter properties: Node's
     // `--experimental-strip-types` only erases types, so it cannot rewrite a
     // parameter into a field assignment.
-    this.rng = rng;
     this.events = events;
-    this.wave = new WaveDirector(rng);
-
-    this.enemies = makeArray(ENEMY_CAP, () => ({
-      alive: false,
-      id: 0,
-      kind: 'zombie' as EnemyKind,
-      x: 0,
-      y: 0,
-      hp: 0,
-      maxHp: 0,
-      speed: 0,
-      radius: 0,
-      damage: 0,
-      xp: 0,
-      wobble: 0,
-      hit: 0,
-    }));
-    for (let i = ENEMY_CAP - 1; i >= 0; i--) this.enemyFree.push(i);
-
-    this.bullets = makeArray(BULLET_CAP, () => ({
-      alive: false,
-      uid: 0,
-      state: 'ground' as BulletState,
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      angle: 0,
-      travel: 0,
-      age: 0,
-    }));
-    for (let i = BULLET_CAP - 1; i >= 0; i--) this.bulletFree.push(i);
-
-    this.hash = new SpatialHash(64, ENEMY_CAP);
-
-    this.enemyViews = makeArray(ENEMY_CAP, () => ({
-      id: 0,
-      kind: 'zombie' as EnemyKind,
-      x: 0,
-      y: 0,
-      radius: 0,
-      hp: 0,
-      maxHp: 0,
-      hit: 0,
-    }));
-    this.bulletViews = makeArray(BULLET_CAP, () => ({
-      id: 0,
-      state: 'ground' as BulletState,
-      x: 0,
-      y: 0,
-      angle: 0,
-      age: 0,
-    }));
-
-    this.frame = {
-      running: true,
-      win: false,
-      time: 0,
-      wave: 1,
-      phase: 'fight',
-      phaseAge: 0,
-      breatherLeft: 0,
-      breatherTotal: 0,
-      kills: 0,
-      level: 1,
-      xp: 0,
-      xpNeeded: xpNeededForLevel(1),
-      score: 0,
-      held: 1,
-      chamber: 1,
-      stacks: { ...initialUpgrades() },
-      offers: null,
-      player: { x: 0, y: 0, hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP, invulnerable: false, facing: this.facing, charge: 1 },
-      enemies: [],
-      bullets: [],
-    };
+    this.enemies = new EnemyPool(ENEMY_CAP);
+    this.field = new CrowdField(ENEMY_CAP);
+    this.survivor = new Survivor();
+    this.progression = new Progression(rng, events);
+    this.waves = new WaveSpawner(this.enemies, rng);
+    this.walk = new EnemyWalk(this.enemies, this.field);
+    this.weapon = new Weapon({
+      enemies: this.enemies,
+      field: this.field,
+      survivor: this.survivor,
+      progression: this.progression,
+      events,
+      kills: this,
+    });
+    this.frames = new FrameBuilder({
+      enemies: this.enemies,
+      weapon: this.weapon,
+      survivor: this.survivor,
+      progression: this.progression,
+      waves: this.waves,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -363,36 +98,39 @@ export class GameWorld implements RenderPort, UpgradePort {
   // -------------------------------------------------------------------------
 
   getFrame(): WorldFrame {
-    if (this.dirty) this.rebuild();
-    return this.frame;
+    if (this.dirty) {
+      this.dirty = false;
+      this.round.running = this.running;
+      this.round.win = this.win;
+      this.round.time = this.time;
+      this.frames.rebuild(this.round);
+    }
+    return this.frames.frame;
   }
 
   offers(): readonly UpgradeId[] | null {
-    return this.offersList;
+    return this.progression.pending;
   }
 
   choose(id: UpgradeId): boolean {
-    const pending = this.offersList;
-    if (pending === null || !pending.includes(id)) return false;
+    if (!this.progression.take(id)) return false;
 
-    this.ups[id] = this.ups[id] + 1;
-    if (id === 'mend') this.hp = Math.min(PLAYER_MAX_HP, this.hp + 2);
-
+    // The stack was taken; the card's *effect* lands on the body it changes.
     // The chamber card hands over the round it promises. Bullets are a
     // conserved pool - firing moves one out of the hand, collecting moves it
     // back - so growing the capacity alone would leave every extra slot empty
     // for the rest of the run. `held` cannot overshoot: it was at most the old
     // capacity, and the capacity has just grown by one.
-    if (id === 'extraChamber') this.held += 1;
+    if (id === 'mend') this.survivor.heal(2);
+    if (id === 'extraChamber') this.weapon.grantChamber();
 
-    this.offersList = null;
     this.dirty = true;
-    this.events.onUpgradeChosen({ id, level: this.level });
+    this.events.onUpgradeChosen({ id, level: this.progression.level });
     return true;
   }
 
   // -------------------------------------------------------------------------
-  // Configuration
+  // Configuration and diagnostics
   // -------------------------------------------------------------------------
 
   /**
@@ -400,13 +138,13 @@ export class GameWorld implements RenderPort, UpgradePort {
    * so enemies always arrive from off-screen, whatever the device is.
    */
   setViewSize(width: number, height: number): void {
-    this.spawnRing = Math.hypot(width / 2, height / 2) + SPAWN_RING_MARGIN;
+    this.waves.setViewSize(width, height);
     this.dirty = true;
   }
 
   /** True while the simulation must not advance: level-up card or round over. */
   frozen(): boolean {
-    return !this.running || this.offersList !== null;
+    return !this.running || this.progression.pending !== null;
   }
 
   /**
@@ -415,120 +153,7 @@ export class GameWorld implements RenderPort, UpgradePort {
    * inside their caps for a whole round.
    */
   counts(): { enemies: number; bullets: number } {
-    return { enemies: this.enemiesAlive, bullets: this.bulletsAlive };
-  }
-
-  // -------------------------------------------------------------------------
-  // Simulation
-  // -------------------------------------------------------------------------
-
-  /**
-   * One fixed step. `move` is the normalised world-space drag vector, already
-   * converted from screen space by the input adapter.
-   */
-  step(dt: number, move: Vec2): void {
-    if (!this.running || this.offersList !== null) return;
-    this.dirty = true;
-
-    this.time += dt;
-
-    // Wave 1 waits for the first step so the spawn ring is already the real
-    // device's, not the constructor's default.
-    if (!this.started) {
-      this.started = true;
-      this.placeWave(this.wave.begin());
-    }
-
-    this.movePlayer(dt, move);
-    if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - dt);
-    if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - dt);
-
-    this.directorStep(dt);
-
-    // Three rebuilds per step, each one answering a different question. This
-    // one is "who stands where before anyone moves" - the walk below needs it
-    // to tell an open path from a blocked one, spawns included.
-    this.rebuildHash();
-    this.moveEnemies(dt);
-
-    // Now "where everyone ended up", so the crowd can be settled against the
-    // real field, and once more afterwards: the bullet, contact and target
-    // passes must see the field the renderer draws, not the pre-shove one.
-    this.rebuildHash();
-    this.separateEnemies();
-    this.rebuildHash();
-
-    this.stepBullets(dt);
-    if (!this.running) return;
-
-    this.checkContact();
-    if (!this.running) return;
-
-    this.tryFire();
-    this.checkLevelUp();
-  }
-
-  private movePlayer(dt: number, move: Vec2): void {
-    let mx = move.x;
-    let my = move.y;
-    const mag = Math.sqrt(mx * mx + my * my);
-    if (mag <= 0.001) return;
-
-    if (mag > 1) {
-      mx /= mag;
-      my /= mag;
-    }
-
-    const speed = moveSpeedFor(this.ups);
-    this.px += mx * speed * dt;
-    this.py += my * speed * dt;
-    this.facing = Math.atan2(my, mx);
-  }
-
-  // --- waves ---------------------------------------------------------------
-
-  /**
-   * One wave decision per step. `WaveDirector` reports a clear (score and
-   * banners follow) or hands back the next wave's plan, which is placed in the
-   * very same tick so a wave always arrives all at once.
-   */
-  private directorStep(dt: number): void {
-    const tick = this.wave.tick(dt, this.enemiesAlive);
-    if (tick.spawn) this.placeWave(tick.spawn);
-    // A cleared wave only changes what the frame is worth: the score is
-    // derived from the director, so there is nothing to bank here.
-  }
-
-  private placeWave(entries: readonly SpawnEntry[]): void {
-    const ring = this.spawnRing;
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
-      this.spawnOne(entry.kind, entry.angle, ring + entry.lag);
-    }
-  }
-
-  private spawnOne(kind: EnemyKind, angle: number, radius: number): boolean {
-    const slot = this.enemyFree.pop();
-    if (slot === undefined) return false;
-
-    const stats = ENEMY_STATS[kind];
-    const enemy = this.enemies[slot];
-    enemy.alive = true;
-    enemy.id = this.nextId++;
-    enemy.kind = kind;
-    enemy.x = this.px + Math.cos(angle) * radius;
-    enemy.y = this.py + Math.sin(angle) * radius;
-    enemy.maxHp = stats.hp;
-    enemy.hp = stats.hp;
-    enemy.speed = stats.speed * this.wave.speedMultiplier;
-    enemy.radius = stats.radius;
-    enemy.damage = stats.damage;
-    enemy.xp = stats.xp;
-    enemy.wobble = this.rng.pickFloat() * TAU;
-    enemy.hit = 0;
-
-    this.enemiesAlive += 1;
-    return true;
+    return { enemies: this.enemies.count, bullets: this.weapon.bullets.count };
   }
 
   /**
@@ -538,13 +163,7 @@ export class GameWorld implements RenderPort, UpgradePort {
    * waves to reach it. Returns how many were placed.
    */
   seedRing(count: number): number {
-    let placed = 0;
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * TAU;
-      if (this.spawnOne('zombie', angle, this.spawnRing + this.rng.pickFloat() * SPAWN_LAG)) {
-        placed += 1;
-      }
-    }
+    const placed = this.waves.seedRing(count, this.survivor.x, this.survivor.y);
     this.dirty = true;
     return placed;
   }
@@ -557,7 +176,7 @@ export class GameWorld implements RenderPort, UpgradePort {
    * to `choose`.
    */
   grantUpgrade(id: UpgradeId, stacks = 1): void {
-    this.ups[id] = this.ups[id] + stacks;
+    this.progression.grant(id, stacks);
     this.dirty = true;
   }
 
@@ -568,586 +187,125 @@ export class GameWorld implements RenderPort, UpgradePort {
    * as a real level-up does until one of them is taken.
    */
   offerCards(ids: readonly UpgradeId[]): void {
-    if (this.ended || this.offersList !== null || ids.length === 0) return;
-    this.offersList = [...ids];
+    if (this.ended || this.progression.pending !== null || ids.length === 0) return;
     this.dirty = true;
-    this.events.onLevelUp({ level: this.level, offers: this.offersList });
+    this.progression.offer(ids);
   }
 
-  // --- enemies -------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Simulation
+  // -------------------------------------------------------------------------
 
-  private moveEnemies(dt: number): void {
-    for (let i = 0; i < ENEMY_CAP; i++) {
-      const enemy = this.enemies[i];
-      if (!enemy.alive) continue;
+  /**
+   * One fixed step, in the order the simulation depends on: the survivor
+   * moves, the wave answers, the horde walks and settles, the shots fly, and
+   * only then does anything touch the survivor or the trigger.
+   *
+   * `move` is the normalised world-space drag vector, already converted from
+   * screen space by the input adapter.
+   */
+  step(dt: number, move: Vec2): void {
+    if (!this.running || this.progression.pending !== null) return;
+    this.dirty = true;
 
-      const dx = this.px - enemy.x;
-      const dy = this.py - enemy.y;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      let ux = dx / d;
-      let uy = dy / d;
+    this.time += dt;
 
-      if (enemy.kind === 'fast') {
-        // Erratic wobble: a perpendicular sway on top of the homing vector.
-        enemy.wobble += dt * 7;
-        const sway = Math.sin(enemy.wobble) * 0.6;
-        const hx = ux - uy * sway;
-        const hy = uy + ux * sway;
-        const n = Math.sqrt(hx * hx + hy * hy) || 1;
-        ux = hx / n;
-        uy = hy / n;
-      }
-
-      // Capped by the room actually left ahead, not just by the clock: a
-      // zombie walks into the crowd, it does not walk through it.
-      const wanted = enemy.speed * dt;
-      const step = Math.min(wanted, this.freeStep(enemy, ux, uy, wanted));
-      enemy.x += ux * step;
-      enemy.y += uy * step;
-      if (enemy.hit > 0) enemy.hit = Math.max(0, enemy.hit - dt);
+    // Wave 1 waits for the first step so the spawn ring is already the real
+    // device's, not the constructor's default.
+    if (!this.started) {
+      this.started = true;
+      this.waves.begin(this.survivor.x, this.survivor.y);
     }
+
+    this.survivor.move(dt, move, moveSpeedFor(this.progression.stacks));
+    this.survivor.tick(dt);
+    this.weapon.tick(dt);
+
+    this.waves.tick(dt, this.enemies.count, this.survivor.x, this.survivor.y);
+
+    // Three rebuilds per step, each one answering a different question. This
+    // one is "who stands where before anyone moves" - the walk below needs it
+    // to tell an open path from a blocked one, spawns included.
+    this.field.rebuild(this.enemies.items);
+    this.walk.step(dt, this.survivor.x, this.survivor.y);
+
+    // Now "where everyone ended up", so the crowd can be settled against the
+    // real field, and once more afterwards: the bullet, contact and target
+    // passes must see the field the renderer draws, not the pre-shove one.
+    this.field.rebuild(this.enemies.items);
+    this.walk.settle(this.survivor.x, this.survivor.y);
+    this.field.rebuild(this.enemies.items);
+
+    this.weapon.step(dt);
+    if (!this.running) return;
+
+    this.checkContact();
+    if (!this.running) return;
+
+    this.weapon.tryFire();
+    this.progression.checkLevelUp(this.survivor.hp, this.waves.wave);
   }
 
   /**
-   * How far `enemy` may still travel along `(ux, uy)` before it would force
-   * itself into whoever stands in the way: the survivor, who is a fixed body,
-   * and any zombie whose body overlaps the path. The crowd's answer gets
-   * `CROWD_PRESSURE` added so the horde keeps leaning on itself instead of
-   * locking into a wall; the survivor's does not - the caller caps the result
-   * at full speed.
+   * Where the horde meets the survivor: the first body close enough to touch
+   * costs a heart, opens the invulnerability window and reports the hit.
    *
-   * The hash answering here was rebuilt before the walk, so a neighbour that
-   * has already stepped this frame reads up to one step out of date; the
-   * query is padded by that same step so nobody is missed.
+   * Second Wind (legendary) is decided here too, because whether a fatal hit
+   * ends the round is a fact about the *round* - the survivor only says what
+   * the blow did, and this is where the crowd gets shoved clear of the body
+   * it just saved.
    */
-  private freeStep(enemy: Enemy, ux: number, uy: number, wanted: number): number {
-    const list = this.candidates;
-    list.length = 0;
-    this.hash.queryCircle(enemy.x, enemy.y, enemy.radius + MAX_ENEMY_RADIUS + wanted, list);
-
-    // Room left by the crowd: `CROWD_PRESSURE` is added to it, so the horde
-    // keeps leaning on whoever is ahead instead of locking into a wall.
-    let room = wanted;
-    // Room left by the survivor: exact, never leaned on. They are a fixed
-    // body, and the front rank holding them still is what lets the rest of
-    // the crowd spread sideways instead of piling into the rank in front.
-    let against = wanted;
-
-    const reach = enemy.radius + PLAYER_RADIUS - CONTACT_SINK;
-    const px = this.px - enemy.x;
-    const py = this.py - enemy.y;
-    const d = Math.sqrt(px * px + py * py) || 1;
-    const towardPlayer = (px * ux + py * uy) / d;
-    // Already inside the survivor counts as no room at all: they may not walk
-    // further in, the separation pass is what puts them back out.
-    if (towardPlayer > 0.01) against = Math.max(0, (d - reach) / towardPlayer);
-
-    for (let n = 0; n < list.length; n++) {
-      const other = this.enemies[list[n]];
-      if (other === enemy || !other.alive) continue;
-
-      const ox = other.x - enemy.x;
-      const oy = other.y - enemy.y;
-      const reachOther = enemy.radius + other.radius;
-      const oSq = ox * ox + oy * oy;
-      if (oSq <= reachOther * reachOther) {
-        room = 0; // shoulder to shoulder already: press, do not part
-        continue;
-      }
-
-      const od = Math.sqrt(oSq);
-      const ahead = (ox * ux + oy * uy) / od;
-      // Beside or behind is not in the way: a shoulder to shoulder neighbour
-      // must not stall the walk, only one standing in the path may.
-      if (ahead <= 0.01) continue;
-      if (od <= reachOther) {
-        room = 0; // already in the way: press, do not part
-        continue;
-      }
-      const space = (od - reachOther) / ahead;
-      if (space < room) room = space;
-    }
-
-    return Math.min(room + CROWD_PRESSURE, against);
-  }
-
-  /**
-   * Solid bodies: no two zombies may stand in the same place, and none may
-   * stand inside the player. Each pass walks the live pool, asks the hash for
-   * the neighbours around it and splits any overlap down the middle - both
-   * give ground - while the player, who never gives ground, simply sheds the
-   * zombie out to the edge of its own circle.
-   *
-   * The corrections are positional rather than velocity-based on purpose:
-   * they are constraints, so they do not care how long the step was, and
-   * nothing accumulates between steps. The homing walk will always push the
-   * crowd back together, which is exactly what makes a horde look like it is
-   * jostling through itself instead of clipping into one another.
-   *
-   * Runs between two hash rebuilds - see `step`.
-   */
-  private separateEnemies(): void {
-    const list = this.candidates;
-
-    for (let pass = 0; pass < SEPARATION_PASSES; pass++) {
-      for (let i = 0; i < ENEMY_CAP; i++) {
-        const a = this.enemies[i];
-        if (!a.alive) continue;
-
-        list.length = 0;
-        // One body width of slack on top of the contact radius: a correction
-        // earlier in this pass may have moved a body by at most that much,
-        // and the hash still has it in the cell it moved out of.
-        this.hash.queryCircle(a.x, a.y, a.radius + 2 * MAX_ENEMY_RADIUS, list);
-
-        for (let n = 0; n < list.length; n++) {
-          const j = list[n];
-          if (j <= i) continue; // settled together when the lower id was read
-          const b = this.enemies[j];
-          if (!b.alive) continue;
-          pushApart(a, b, i, j);
-        }
-
-        pushOutOfPlayer(a, this.px, this.py);
-      }
-    }
-  }
-
-  private rebuildHash(): void {
-    this.hash.clear();
-    for (let i = 0; i < ENEMY_CAP; i++) {
-      const enemy = this.enemies[i];
-      if (enemy.alive) this.hash.insert(i, enemy.x, enemy.y);
-    }
-  }
-
-  /** Index of the closest live enemy within `range`, or -1. */
-  private nearestEnemy(range: number): number {
-    const list = this.candidates;
-    list.length = 0;
-    this.hash.queryCircle(this.px, this.py, range, list);
-
-    let best = -1;
-    let bestSq = range * range;
-    for (let i = 0; i < list.length; i++) {
-      const index = list[i];
-      const enemy = this.enemies[index];
-      if (!enemy.alive) continue;
-      const d = distSq(enemy.x, enemy.y, this.px, this.py);
-      if (d <= bestSq) {
-        bestSq = d;
-        best = index;
-      }
-    }
-    return best;
-  }
-
   private checkContact(): void {
-    if (this.invuln > 0) return;
+    if (this.survivor.invulnerable) return;
 
-    const list = this.candidates;
+    const list = this.contact;
     list.length = 0;
-    this.hash.queryCircle(this.px, this.py, PLAYER_RADIUS + MAX_ENEMY_RADIUS, list);
-
-    for (let i = 0; i < list.length; i++) {
-      const enemy = this.enemies[list[i]];
-      if (!enemy.alive) continue;
-      const reach = enemy.radius + PLAYER_RADIUS;
-      if (distSq(enemy.x, enemy.y, this.px, this.py) > reach * reach) continue;
-
-      this.hp = Math.max(0, this.hp - enemy.damage);
-
-      // Second Wind: the fatal hit burns the card instead of the run.
-      if (this.hp <= 0 && this.tryRevive()) return;
-
-      this.invuln = INVULNERABLE_SECONDS;
-      this.events.onPlayerHit({ hp: this.hp, maxHp: PLAYER_MAX_HP });
-      if (this.hp <= 0) this.finish();
-      return;
-    }
-  }
-
-  /**
-   * Second Wind (legendary): once per round a hit that would have ended the
-   * round instead restores three hearts and shoves everything close to the
-   * player clear. Score, wave, level and upgrades all carry on untouched, so
-   * this is a revive inside the round and never a restart.
-   */
-  private tryRevive(): boolean {
-    if (this.secondWindUsed || this.ups.secondWind <= 0) return false;
-
-    this.secondWindUsed = true;
-    this.hp = SECOND_WIND_HEARTS;
-    this.invuln = SECOND_WIND_INVULN;
-
-    for (let i = 0; i < ENEMY_CAP; i++) {
-      const enemy = this.enemies[i];
-      if (!enemy.alive) continue;
-      const dx = enemy.x - this.px;
-      const dy = enemy.y - this.py;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      if (d >= SECOND_WIND_PUSH) continue;
-      enemy.x = this.px + (dx / d) * SECOND_WIND_PUSH;
-      enemy.y = this.py + (dy / d) * SECOND_WIND_PUSH;
-    }
-
-    this.events.onPlayerHit({ hp: this.hp, maxHp: PLAYER_MAX_HP });
-    return true;
-  }
-
-  // --- bullets -------------------------------------------------------------
-
-  private tryFire(): void {
-    if (this.held <= 0 || this.cooldown > 0) return;
-
-    const target = this.nearestEnemy(fireRangeFor(this.ups));
-    if (target < 0) return; // in hand, but nothing in range: hold the shot
-
-    const enemy = this.enemies[target];
-    const dx = enemy.x - this.px;
-    const dy = enemy.y - this.py;
-    const d = Math.sqrt(dx * dx + dy * dy) || 1;
-    const angle = Math.atan2(dy, dx);
-
-    const slot = this.bulletFree.pop();
-    if (slot === undefined) return;
-
-    const bullet = this.bullets[slot];
-    bullet.alive = true;
-    bullet.uid = this.bulletUid++;
-    bullet.state = 'flight';
-    bullet.x = this.px;
-    bullet.y = this.py;
-    bullet.vx = (dx / d) * BULLET_SPEED;
-    bullet.vy = (dy / d) * BULLET_SPEED;
-    bullet.angle = angle;
-    bullet.travel = 0;
-    bullet.age = 0;
-
-    this.bulletsAlive += 1;
-    this.held -= 1;
-    this.cooldown = shotDelayFor(this.ups);
-    this.facing = angle;
-    this.events.onBulletFired({ x: this.px, y: this.py, angle, held: this.held });
-  }
-
-  private stepBullets(dt: number): void {
-    for (let i = 0; i < BULLET_CAP; i++) {
-      const bullet = this.bullets[i];
-      if (!bullet.alive) continue;
-
-      if (bullet.state === 'flight') {
-        const nx = bullet.x + bullet.vx * dt;
-        const ny = bullet.y + bullet.vy * dt;
-
-        // The first zombie in the path ends the flight, right there: a bullet
-        // never pierces and never keeps going past what it hit.
-        const hit = this.firstHit(bullet.x, bullet.y, nx, ny);
-        if (hit !== null) {
-          this.stopBullet(bullet, i, hit.x, hit.y);
-          continue;
-        }
-
-        bullet.x = nx;
-        bullet.y = ny;
-        bullet.travel += BULLET_SPEED * dt;
-
-        if (bullet.travel >= bulletRangeFor(this.ups)) this.stopBullet(bullet, i, bullet.x, bullet.y);
-        continue;
-      }
-
-      if (bullet.state === 'return') {
-        const dx = this.px - bullet.x;
-        const dy = this.py - bullet.y;
-        const d2 = dx * dx + dy * dy;
-        const reach = pickupRadiusFor(this.ups);
-
-        if (d2 <= reach * reach) {
-          this.tryCollect(bullet, i);
-          continue;
-        }
-
-        const d = Math.sqrt(d2);
-        const ux = dx / d;
-        const uy = dy / d;
-        bullet.x += ux * Math.min(returnSpeedFor(this.ups) * dt, d);
-        bullet.y += uy * Math.min(returnSpeedFor(this.ups) * dt, d);
-        // Nothing is harmed on the way home: the bullet has had its one hit.
-        bullet.angle = Math.atan2(uy, ux);
-        continue;
-      }
-
-      // Ground: it lies there for the rest of the round. Standing on it takes
-      // it at once; the Magnet instead drags it in, and it is yours only when
-      // it actually touches you.
-      bullet.age += dt;
-      const dx = this.px - bullet.x;
-      const dy = this.py - bullet.y;
-      const d2 = dx * dx + dy * dy;
-      const touch = PLAYER_RADIUS + BULLET_RADIUS;
-      if (d2 <= touch * touch) {
-        this.tryCollect(bullet, i);
-        continue;
-      }
-
-      const reach = pickupRadiusFor(this.ups);
-      if (d2 > reach * reach) continue;
-
-      const crawl = crawlSpeedFor(this.ups);
-      if (crawl <= 0) {
-        // No Magnet: walking within the pickup radius is all it takes.
-        this.tryCollect(bullet, i);
-        continue;
-      }
-
-      const d = Math.sqrt(d2);
-      const ux = dx / d;
-      const uy = dy / d;
-      const gap = d - touch;
-      const step = crawl * dt;
-      if (gap <= step) {
-        // This stride would carry it past you: park it on your shoulder and
-        // hand it over - or leave it waiting there while the chamber is full.
-        bullet.x = this.px - ux * touch;
-        bullet.y = this.py - uy * touch;
-        bullet.angle = Math.atan2(uy, ux);
-        this.tryCollect(bullet, i);
-        continue;
-      }
-      bullet.x += ux * step;
-      bullet.y += uy * step;
-      bullet.angle = Math.atan2(uy, ux);
-    }
-  }
-
-  /**
-   * Ends a flight at the point it stopped: on the zombie it hit, or out at
-   * max range if it missed. Boomerang makes it fly home instead of dropping.
-   */
-  private stopBullet(bullet: Bullet, slot: number, x: number, y: number): void {
-    bullet.x = x;
-    bullet.y = y;
-    bullet.age = 0;
-    bullet.state = boomerangEnabled(this.ups) ? 'return' : 'ground';
-    this.spendBloodReturn(bullet, slot);
-  }
-
-  /** One promised Blood Frenzy bullet has come down: offer it to the hand. */
-  private spendBloodReturn(bullet: Bullet, slot: number): void {
-    if (this.bloodReturns <= 0) return;
-    this.tryCollect(bullet, slot);
-  }
-
-  private tryCollect(bullet: Bullet, slot: number): void {
-    if (this.held < chamberFor(this.ups)) {
-      this.held += 1;
-      // Any bullet that reaches the hand pays off one Blood Frenzy promise,
-      // whether it was walked over or called back by a kill.
-      if (this.bloodReturns > 0) this.bloodReturns -= 1;
-      this.killBullet(slot);
-      this.events.onBulletPickedUp({ x: bullet.x, y: bullet.y, held: this.held });
-      return;
-    }
-    // Chamber full: a returning bullet drops where it arrived and waits.
-    if (bullet.state === 'return') {
-      bullet.state = 'ground';
-      bullet.age = 0;
-    }
-  }
-
-  private killBullet(slot: number): void {
-    const bullet = this.bullets[slot];
-    if (!bullet.alive) return;
-    bullet.alive = false;
-    this.bulletsAlive -= 1;
-    this.bulletFree.push(slot);
-  }
-
-  /**
-   * The first zombie the flight segment touches, and where the bullet stopped
-   * to touch it. The target takes the bullet's damage (plus the Explosive
-   * Round blast, if that card is up) and the caller ends the flight on the
-   * returned point - so a bullet always comes to rest in the horde, never
-   * through it.
-   *
-   * Returns `null` when the segment touched nothing: the flight carries on.
-   * The result is a reused scratch record - read it before the next hit.
-   */
-  private firstHit(
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-  ): { x: number; y: number } | null {
-    const list = this.candidates;
-    list.length = 0;
-    const pad = BULLET_RADIUS + MAX_ENEMY_RADIUS;
-    this.hash.queryBox(
-      Math.min(x0, x1) - pad,
-      Math.min(y0, y1) - pad,
-      Math.max(x0, x1) + pad,
-      Math.max(y0, y1) + pad,
+    this.field.queryCircle(
+      this.survivor.x,
+      this.survivor.y,
+      PLAYER_RADIUS + MAX_ENEMY_RADIUS,
       list,
     );
 
-    const segX = x1 - x0;
-    const segY = y1 - y0;
-    const lenSq = segX * segX + segY * segY;
-    const damage = bulletDamageFor(this.ups);
-
     for (let i = 0; i < list.length; i++) {
-      const index = list[i];
-      const enemy = this.enemies[index];
+      const enemy = this.enemies.items[list[i]];
       if (!enemy.alive) continue;
+      const reach = enemy.radius + PLAYER_RADIUS;
+      if (distSq(enemy.x, enemy.y, this.survivor.x, this.survivor.y) > reach * reach) continue;
 
-      const reach = enemy.radius + BULLET_RADIUS;
-      if (!segmentIntersectsCircle(x0, y0, x1, y1, enemy.x, enemy.y, reach)) continue;
+      const canRevive = !this.survivor.reviveSpent && this.progression.stacks.secondWind > 0;
+      const outcome = this.survivor.hit(enemy.damage, canRevive);
 
-      enemy.hit = HIT_FLASH;
-      enemy.hp -= damage;
+      if (outcome === 'revived') {
+        this.walk.repelFrom(this.survivor.x, this.survivor.y, SECOND_WIND_PUSH);
+        this.events.onPlayerHit({ hp: this.survivor.hp, maxHp: PLAYER_MAX_HP });
+        return;
+      }
 
-      // Where its path met the zombie: the same projection the test used.
-      let t = lenSq > 0 ? ((enemy.x - x0) * segX + (enemy.y - y0) * segY) / lenSq : 0;
-      if (t < 0) t = 0;
-      else if (t > 1) t = 1;
-      this.impact.x = x0 + t * segX;
-      this.impact.y = y0 + t * segY;
-
-      if (enemy.hp <= 0) this.killEnemy(index);
-      this.detonate(this.impact.x, this.impact.y, index);
-      return this.impact;
+      this.events.onPlayerHit({ hp: this.survivor.hp, maxHp: PLAYER_MAX_HP });
+      if (outcome === 'down') this.finish();
+      return;
     }
-    return null;
   }
 
   /**
-   * Explosive Round (legendary): the impact hurts every zombie inside the
-   * blast. The direct target is skipped - it has already paid for this
-   * bullet, and a kill from the blast counts exactly like any other.
+   * `KillSink`: a body's hp reached zero. Release it, pay for it, tell the
+   * gun to make good on its Blood Frenzy promise, and only then report it -
+   * in that order, so a listener that reads the frame sees the kill already
+   * banked.
    */
-  private detonate(x: number, y: number, direct: number): void {
-    const radius = explosiveRadiusFor(this.ups);
-    if (radius <= 0) return;
+  onEnemyDown(slot: number): void {
+    const enemy = this.enemies.release(slot);
+    if (enemy === null) return;
 
-    this.events.onExplosion({ x, y, radius });
-
-    const list = this.blast;
-    list.length = 0;
-    this.hash.queryCircle(x, y, radius, list);
-
-    const damage = bulletDamageFor(this.ups);
-    const radiusSq = radius * radius;
-    for (let i = 0; i < list.length; i++) {
-      const index = list[i];
-      if (index === direct) continue;
-      const enemy = this.enemies[index];
-      if (!enemy.alive) continue;
-      if (distSq(enemy.x, enemy.y, x, y) > radiusSq) continue;
-
-      enemy.hit = HIT_FLASH;
-      enemy.hp -= damage;
-      if (enemy.hp <= 0) this.killEnemy(index);
-    }
-  }
-
-  private killEnemy(slot: number): void {
-    const enemy = this.enemies[slot];
-    if (!enemy.alive) return;
-
-    enemy.alive = false;
-    this.enemiesAlive -= 1;
-    this.enemyFree.push(slot);
-    this.kills += 1;
-    this.points += ENEMY_STATS[enemy.kind].points;
-    // XP is banked the instant it dies: nothing drops, nothing is collected.
-    this.xp += enemy.xp;
-    this.bloodFrenzyReturn();
+    this.progression.bankKill(enemy);
+    this.weapon.onKill();
     this.events.onEnemyKilled({ kind: enemy.kind, x: enemy.x, y: enemy.y, value: enemy.xp });
   }
 
-  /**
-   * Blood Frenzy (legendary): every kill hands a bullet straight back. The
-   * nearest one lying out returns on the spot; if they are all still in the
-   * air, the kill is banked and paid out as flights come down - one promise
-   * per kill, never more than the chamber could hold.
-   */
-  private bloodFrenzyReturn(): void {
-    if (!bloodFrenzyEnabled(this.ups) || this.held >= chamberFor(this.ups)) return;
-
-    let best = -1;
-    let bestSq = Infinity;
-    for (let i = 0; i < BULLET_CAP; i++) {
-      const bullet = this.bullets[i];
-      if (!bullet.alive || bullet.state === 'flight') continue;
-      const d = distSq(bullet.x, bullet.y, this.px, this.py);
-      if (d < bestSq) {
-        bestSq = d;
-        best = i;
-      }
-    }
-
-    if (best >= 0) {
-      this.tryCollect(this.bullets[best], best);
-      return;
-    }
-    if (this.bloodReturns < chamberFor(this.ups) - this.held) this.bloodReturns += 1;
-  }
-
-  // --- progression ---------------------------------------------------------
-
-  private checkLevelUp(): void {
-    if (this.offersList !== null) return;
-
-    let need = xpNeededForLevel(this.level);
-    while (this.xp >= need) {
-      this.xp -= need;
-      this.level += 1;
-
-      const offers = this.rollOffers();
-      if (offers.length > 0) {
-        this.offersList = offers;
-        this.events.onLevelUp({ level: this.level, offers });
-        return;
-      }
-      need = xpNeededForLevel(this.level);
-    }
-  }
-
-  /**
-   * Three cards, rolled one slot at a time (Game Design Document, section 7):
-   * 5 % for a Legendary, a further 3 % for a Super Rare, the rest Common.
-   *
-   * Every tier falls back to the next commonest one it can still fill, so a
-   * late round whose commons are all capped never wastes a slot - and never
-   * offers a card the wave has not unlocked, because `availableUpgrades`
-   * gates by `unlockWave` before any of this runs.
-   */
-  private rollOffers(): UpgradeId[] {
-    const legal = availableUpgrades(this.ups, this.hp, PLAYER_MAX_HP, this.wave.wave);
-    const picked: UpgradeId[] = [];
-
-    const takeFrom = (tier: Rarity): boolean => {
-      const pool = rarityPool(legal, tier);
-      if (pool.length === 0) return false;
-      const def = pool[this.rng.pickInt(0, pool.length - 1)];
-      const at = legal.indexOf(def);
-      if (at >= 0) legal.splice(at, 1); // no duplicates inside one roll
-      picked.push(def.id);
-      return true;
-    };
-
-    for (let slot = 0; slot < 3 && legal.length > 0; slot++) {
-      const roll = this.rng.pickFloat();
-      if (roll < LEGENDARY_CHANCE && takeFrom('legendary')) continue;
-      if (roll < LEGENDARY_CHANCE + SUPER_RARE_CHANCE && takeFrom('superRare')) continue;
-      if (takeFrom('common')) continue;
-      if (takeFrom('superRare')) continue;
-      takeFrom('legendary');
-    }
-    return picked;
-  }
-
-  // --- ending --------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Ending
+  // -------------------------------------------------------------------------
 
   /**
    * The run ends only when the last heart goes. LAST BULLET is endless, so
@@ -1158,103 +316,16 @@ export class GameWorld implements RenderPort, UpgradePort {
     this.ended = true;
     this.running = false;
     this.win = true;
-    this.offersList = null;
+    this.progression.clearOffers();
     this.dirty = true;
 
     this.events.onRunEnded({
       win: true,
-      score: this.scoreNow(),
-      kills: this.kills,
-      level: this.level,
-      wave: this.wave.wave,
+      score: this.progression.score(this.waves.wavesCleared),
+      kills: this.progression.kills,
+      level: this.progression.level,
+      wave: this.waves.wave,
       time: this.time,
     });
-  }
-
-  /** Kill points, plus 100 per wave cleared and 50 per level gained. */
-  private scoreNow(): number {
-    return scoreFor({
-      points: this.points,
-      wavesCleared: this.wave.wavesCleared,
-      levelsGained: this.level - 1,
-    });
-  }
-
-  // -------------------------------------------------------------------------
-  // View frame
-  // -------------------------------------------------------------------------
-
-  private rebuild(): void {
-    this.dirty = false;
-
-    const frame = this.frame;
-    frame.running = this.running;
-    frame.win = this.win;
-    frame.time = this.time;
-    frame.wave = this.wave.wave;
-    frame.phase = this.wave.phase;
-    frame.phaseAge = this.wave.phaseAge;
-    frame.breatherLeft = this.wave.breatherRemaining;
-    frame.breatherTotal = this.wave.breatherDuration;
-    frame.kills = this.kills;
-    frame.level = this.level;
-    frame.xp = this.xp;
-    frame.xpNeeded = xpNeededForLevel(this.level);
-    frame.score = this.scoreNow();
-    frame.held = this.held;
-    frame.chamber = chamberFor(this.ups);
-    const stacks = frame.stacks;
-    stacks.extraChamber = this.ups.extraChamber;
-    stacks.quickHands = this.ups.quickHands;
-    stacks.longBarrel = this.ups.longBarrel;
-    stacks.magnet = this.ups.magnet;
-    stacks.sprint = this.ups.sprint;
-    stacks.mend = this.ups.mend;
-    stacks.heavyRound = this.ups.heavyRound;
-    stacks.boomerang = this.ups.boomerang;
-    stacks.explosive = this.ups.explosive;
-    stacks.secondWind = this.ups.secondWind;
-    stacks.bloodFrenzy = this.ups.bloodFrenzy;
-    frame.offers = this.offersList;
-
-    const player = frame.player;
-    player.x = this.px;
-    player.y = this.py;
-    player.hp = this.hp;
-    player.maxHp = PLAYER_MAX_HP;
-    player.invulnerable = this.invuln > 0;
-    player.facing = this.facing;
-    player.charge =
-      this.held > 0 ? Math.min(1, Math.max(0, 1 - this.cooldown / shotDelayFor(this.ups))) : 0;
-
-    frame.enemies.length = 0;
-    for (let i = 0; i < ENEMY_CAP; i++) {
-      const enemy = this.enemies[i];
-      if (!enemy.alive) continue;
-      const view = this.enemyViews[frame.enemies.length];
-      view.id = enemy.id;
-      view.kind = enemy.kind;
-      view.x = enemy.x;
-      view.y = enemy.y;
-      view.radius = enemy.radius;
-      view.hp = enemy.hp;
-      view.maxHp = enemy.maxHp;
-      view.hit = enemy.hit > 0 ? Math.min(1, enemy.hit / HIT_FLASH) : 0;
-      frame.enemies.push(view);
-    }
-
-    frame.bullets.length = 0;
-    for (let i = 0; i < BULLET_CAP; i++) {
-      const bullet = this.bullets[i];
-      if (!bullet.alive) continue;
-      const view = this.bulletViews[frame.bullets.length];
-      view.id = bullet.uid;
-      view.state = bullet.state;
-      view.x = bullet.x;
-      view.y = bullet.y;
-      view.angle = bullet.angle;
-      view.age = bullet.age;
-      frame.bullets.push(view);
-    }
   }
 }
