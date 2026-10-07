@@ -4,11 +4,11 @@ import { upgradeDef, type UpgradeDef } from '../../core/rules.ts';
 import type { RenderPort } from '../../ports/RenderPort.ts';
 import type { UpgradePort } from '../../ports/UpgradePort.ts';
 import type { OverlayLayout } from '../layout/Layout.ts';
-import { AMBER_HEX, CARD_HEX, CARD_STROKE_HEX, CORAL_HEX, CYAN_HEX, INK_HEX, LIME_HEX, PAPER, PAPER_HEX, SLATE, VIOLET_HEX } from '../palette.ts';
+import { AMBER_HEX, CARD_HEX, CARD_STROKE_HEX, CORAL_HEX, CYAN_HEX, INK, INK_HEX, LIME_HEX, PAPER, PAPER_HEX, SLATE, VIOLET_HEX } from '../palette.ts';
+import { PANEL_BAND, woodPanelKey } from '../art/PanelArt.ts';
+import { FONT_BODY, FONT_HEAD } from '../fonts.ts';
 
 const DEPTH = 30;
-const FONT_HEAD = '"Arial Black", Impact, sans-serif';
-const FONT_BODY = 'Arial, Helvetica, sans-serif';
 
 /** A left-edge accent so the three cards are distinguishable at a glance. */
 const ACCENT: Readonly<Record<UpgradeId, number>> = {
@@ -144,11 +144,25 @@ export class LevelUpOverlay {
     const unit = layout.unit;
     const def = upgradeDef(id);
     const top = layout.cardsY + index * (layout.cardH + layout.cardGap);
+    const centreX = layout.cardX + layout.cardW / 2;
+    const centreY = top + layout.cardH / 2;
 
-    const box = this.scene.add
-      .rectangle(layout.cardX, top, layout.cardW, layout.cardH, CARD_HEX, 1)
-      .setOrigin(0, 0)
-      .setStrokeStyle(Math.max(2, Math.round(2 * unit)), CARD_STROKE_HEX, 1)
+    // The plank is what the text below is laid out against: every label sits
+    // on a band of it rather than at a hard-coded offset, so the card keeps
+    // its shape on any screen. Should no plank ever be cut, the card falls
+    // back to the flat rectangle it used before, and those same bands are
+    // still sensible places for the lines to go.
+    const panel = woodPanelKey(this.scene);
+    const box: Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle = panel
+      ? this.scene.add
+          .image(centreX, centreY, panel)
+          .setDisplaySize(layout.cardW, layout.cardH)
+      : this.scene.add
+          .rectangle(centreX, centreY, layout.cardW, layout.cardH, CARD_HEX, 1)
+          .setStrokeStyle(Math.max(2, Math.round(2 * unit)), CARD_STROKE_HEX, 1);
+
+    box
+      .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH + 1)
       .setInteractive({ useHandCursor: true });
@@ -158,18 +172,21 @@ export class LevelUpOverlay {
       this.scene.add
         .rectangle(layout.cardX, top, 6 * unit, layout.cardH, ACCENT[id], 1)
         .setOrigin(0, 0)
+        // A carved edge around the stripe: it is the card's colour cue, and
+        // the pale accents (a heal's white, say) would sink into pale timber.
+        .setStrokeStyle(Math.max(1, Math.round(2 * unit)), INK_HEX, 1)
         .setScrollFactor(0)
         .setDepth(DEPTH + 2),
     );
 
     this.add(
       this.scene.add
-        .text(layout.cardX + 20 * unit, top + layout.cardH * 0.34, def.name, {
+        .text(layout.cardX + 20 * unit, top + layout.cardH * PANEL_BAND.header, def.name, {
           fontFamily: FONT_HEAD,
           fontSize: `${Math.max(15, 19 * unit)}px`,
-          color: PAPER,
-          stroke: '#0b0f1a',
-          strokeThickness: 3,
+          // Ink, not white: the old title sat on a dark stain, and on the
+          // light theme's mid-toned board white would disappear.
+          color: INK,
         })
         .setOrigin(0, 0.5)
         .setScrollFactor(0)
@@ -178,10 +195,12 @@ export class LevelUpOverlay {
 
     this.add(
       this.scene.add
-        .text(layout.cardX + 20 * unit, top + layout.cardH * 0.68, def.blurb, {
+        .text(layout.cardX + 20 * unit, top + layout.cardH * PANEL_BAND.body, def.blurb, {
           fontFamily: FONT_BODY,
           fontSize: `${Math.max(12, 15 * unit)}px`,
-          color: SLATE,
+          // The field is the palest board on the card, so its text can go as
+          // dark as the palette allows.
+          color: INK,
         })
         .setOrigin(0, 0.5)
         .setScrollFactor(0)
@@ -192,10 +211,12 @@ export class LevelUpOverlay {
     if (label) {
       this.add(
         this.scene.add
-          .text(layout.cardX + layout.cardW - 18 * unit, top + layout.cardH * 0.34, label, {
+          .text(layout.cardX + layout.cardW - 18 * unit, top + layout.cardH * PANEL_BAND.header, label, {
             fontFamily: FONT_HEAD,
             fontSize: `${Math.max(13, 16 * unit)}px`,
-            color: ACCENT[id] === PAPER_HEX ? PAPER : SLATE,
+            // Ink rather than the accent: bright colours wash out on pale
+            // wood. The stripe carries the card's colour instead.
+            color: INK,
           })
           .setOrigin(1, 0.5)
           .setScrollFactor(0)
@@ -210,14 +231,14 @@ export class LevelUpOverlay {
         this.scene.add
           .text(
             layout.cardX + layout.cardW - 18 * unit,
-            top + layout.cardH * 0.84,
+            top + layout.cardH * PANEL_BAND.footer,
             rarity.label,
             {
               fontFamily: FONT_HEAD,
               fontSize: `${Math.max(11, 13 * unit)}px`,
               color: `#${rarity.hex.toString(16).padStart(6, '0')}`,
-              stroke: '#0b0f1a',
-              strokeThickness: 3,
+              stroke: INK,
+              strokeThickness: 4,
             },
           )
           .setOrigin(1, 0.5)

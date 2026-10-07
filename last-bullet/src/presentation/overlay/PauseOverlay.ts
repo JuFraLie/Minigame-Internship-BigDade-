@@ -1,10 +1,9 @@
 import Phaser from 'phaser';
 import type { OverlayLayout } from '../layout/Layout.ts';
 import { CARD_HEX, CYAN, CYAN_HEX, INK_HEX, PAPER, SLATE } from '../palette.ts';
+import { FONT_BODY, FONT_HEAD } from '../fonts.ts';
 
 const DEPTH = 35;
-const FONT_HEAD = '"Arial Black", Impact, sans-serif';
-const FONT_BODY = 'Arial, Helvetica, sans-serif';
 
 /**
  * Pause. It resumes, and nothing else.

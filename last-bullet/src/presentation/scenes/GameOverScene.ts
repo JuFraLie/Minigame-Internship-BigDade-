@@ -4,9 +4,7 @@ import { computeResultLayout, type ResultLayout } from '../layout/Layout.ts';
 import { bakeLandArt, floorKey, queueLandArt } from '../art/LandArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { AMBER, CARD_HEX, CYAN_HEX, PAPER, SLATE, SLATE_HEX } from '../palette.ts';
-
-const FONT_HEAD = '"Arial Black", Impact, sans-serif';
-const FONT_BODY = 'Arial, Helvetica, sans-serif';
+import { FONT_BODY, FONT_HEAD, queueGameFont } from '../fonts.ts';
 
 interface GameOverData {
   ctx: SceneContextPort;
@@ -72,6 +70,7 @@ export class GameOverScene extends Phaser.Scene {
    * pack is already in the texture cache by the time a round can end.
    */
   preload(): void {
+    queueGameFont(this);
     queueLandArt(this);
   }
 

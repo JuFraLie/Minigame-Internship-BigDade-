@@ -12,9 +12,7 @@ import {
 import { bakeLandArt, floorKey, queueLandArt } from '../art/LandArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { AMBER, CARD_HEX, CYAN, CYAN_HEX, PAPER, SLATE } from '../palette.ts';
-
-const FONT_HEAD = '"Arial Black", Impact, sans-serif';
-const FONT_BODY = 'Arial, Helvetica, sans-serif';
+import { FONT_BODY, FONT_HEAD, queueGameFont } from '../fonts.ts';
 
 /** One of the five zombies circling the hero: drawn, aimed, and kept walking. */
 interface HeroEnemy {
@@ -53,8 +51,12 @@ export class MainMenuScene extends Phaser.Scene {
     super('MainMenu');
   }
 
-  /** The walk pack and the ground are fetched before `create`, to bake in one go. */
+  /**
+   * The typeface the labels rasterise with, plus the walk pack and the ground
+   * - all fetched before `create` so the scene can bake in one go.
+   */
   preload(): void {
+    queueGameFont(this);
     queueCharacterArt(this);
     queueLandArt(this);
   }

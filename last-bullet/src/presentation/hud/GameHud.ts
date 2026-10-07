@@ -3,9 +3,8 @@ import type { WorldFrame } from '../../core/types.ts';
 import { MAX_CHAMBER, PLAYER_MAX_HP } from '../../core/config.ts';
 import type { HudLayout } from '../layout/Layout.ts';
 import { AMBER, INK_HEX, LIME_HEX, PAPER, SLATE, SLATE_HEX } from '../palette.ts';
+import { FONT_BODY, FONT_HEAD } from '../fonts.ts';
 
-const FONT_HEAD = '"Arial Black", Impact, sans-serif';
-const FONT_BODY = 'Arial, Helvetica, sans-serif';
 const DEPTH_HUD = 20;
 
 /**

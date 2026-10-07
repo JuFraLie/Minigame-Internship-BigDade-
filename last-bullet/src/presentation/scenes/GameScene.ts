@@ -6,6 +6,8 @@ import type { SessionPort } from '../../ports/SessionPort.ts';
 import { computeHudLayout, computeOverlayLayout } from '../layout/Layout.ts';
 import { bakeCharacterArt, queueCharacterArt } from '../art/CharacterArt.ts';
 import { bakeLandArt, queueLandArt } from '../art/LandArt.ts';
+import { bakeWoodPanel } from '../art/PanelArt.ts';
+import { queueGameFont } from '../fonts.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { GameHud } from '../hud/GameHud.ts';
 import { LevelUpOverlay } from '../overlay/LevelUpOverlay.ts';
@@ -58,12 +60,15 @@ export class GameScene extends Phaser.Scene {
     this.ctx = data.ctx;
   }
 
-  /**
-   * Normally the Play Screen has already fetched the walk pack; asking again
-   * only queues the frames that never arrived, so entering the round without
-   * ever seeing that screen still gets the art.
-   */
   preload(): void {
+    /**
+     * Normally the Play Screen has already fetched the walk pack; asking again
+     * only queues what never arrived, so entering the round without ever
+     * seeing that screen still gets the art. The typeface rides along for the
+     * same reason - this scene has to stand on its own. The cards' plank
+     * needs no request: it is drawn, not shipped (see `PanelArt`).
+     */
+    queueGameFont(this);
     queueCharacterArt(this);
     queueLandArt(this);
   }
@@ -258,10 +263,15 @@ export class GameScene extends Phaser.Scene {
 
   private applyLayout = (): void => {
     const { width, height } = this.scale;
+    const overlay = computeOverlayLayout(width, height);
+
+    // The cards' plank is cut to the card's real size, so it is laid before
+    // the overlays are and recut whenever a resize changes that size.
+    bakeWoodPanel(this, overlay.cardW, overlay.cardH);
 
     this.hud.applyLayout(computeHudLayout(width, height));
-    this.levelUp.applyLayout(computeOverlayLayout(width, height));
-    this.pauseOverlay.applyLayout(computeOverlayLayout(width, height));
+    this.levelUp.applyLayout(overlay);
+    this.pauseOverlay.applyLayout(overlay);
     this.session.setViewSize(width, height);
     this.zone?.setSize(width, height);
   };
