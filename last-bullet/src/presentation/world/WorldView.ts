@@ -102,11 +102,16 @@ export class WorldView {
   create(): void {
     const { width, height } = this.scene.scale;
 
-    // The floor is a world object, not a backdrop: it is re-centred under the
-    // camera every frame (see `reportCamera`), so it always covers the screen
-    // while its pattern stays put in the arena - walking has to be visible.
+    // The floor covers the screen, not the arena: pinned at the top-left and
+    // left to fill whatever the camera can see. The arena lives in its
+    // *pattern* instead - `reportCamera` scrolls the texture by the camera's
+    // own scroll, so the ground stays put in the world while the player walks
+    // across it. A background that travelled with the player would show no
+    // movement at all.
     this.floor = this.scene.add
-      .tileSprite(width / 2, height / 2, width, height, floorKey(this.scene))
+      .tileSprite(0, 0, width, height, floorKey(this.scene))
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
       .setDepth(DEPTH_FLOOR);
 
     this.player = this.scene.add.image(0, 0, 'player').setDepth(DEPTH_PLAYER);
@@ -229,24 +234,31 @@ export class WorldView {
 
   private reportCamera = (): void => {
     if (!this.camera) return;
-    const { scrollX, scrollY, width, height, zoom } = this.camera;
+    const { scrollX, scrollY, zoom } = this.camera;
     this.viewport.updateCamera(scrollX, scrollY, zoom);
 
-    // Called from the camera's pre-render, so the scroll read here is the one
-    // this frame is actually drawn with: the floor sits centred on exactly
-    // what the player can see, its pattern anchored to the arena instead of
-    // to the screen.
+    // Called from the camera's pre-render, so this is the scroll the frame is
+    // actually drawn with.
     //
-    // The floor's *size* is reconciled against the camera here too, rather
-    // than on a resize event. The design space is re-derived from the window
-    // (see main.ts) and that can land before this scene ever registers a
-    // listener - a floor sized once in `create()` would keep covering only
+    // The floor is nailed to the screen (see `create`), so its size follows
+    // the canvas rather than an event: the design space is re-derived from the
+    // window (see main.ts) and that can land before any listener is
+    // registered - a floor sized once in `create()` would keep covering only
     // the window's size at boot, and whatever it was short on would show the
     // page background instead of the ground.
     const floor = this.floor;
     if (!floor) return;
+    const { width, height } = this.scene.scale;
     if (floor.width !== width || floor.height !== height) floor.setSize(width, height);
-    floor.setPosition(scrollX + width / 2, scrollY + height / 2);
+
+    // The pattern is what carries the world lock. Scrolling the texture by the
+    // camera's scroll cancels the camera's own movement, so a screen pixel
+    // keeps showing the same patch of arena: the ground stays where the world
+    // put it and the player walks across it, instead of the ground trailing
+    // along behind them. Only written when it actually changes, because the
+    // setter marks the whole floor dirty and forces a repaint.
+    if (floor.tilePositionX !== scrollX) floor.tilePositionX = scrollX;
+    if (floor.tilePositionY !== scrollY) floor.tilePositionY = scrollY;
   };
 
   private syncPlayer(frame: WorldFrame): void {
