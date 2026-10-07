@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { SceneContextPort } from '../../ports/SceneContextPort.ts';
 import { computeResultLayout, type ResultLayout } from '../layout/Layout.ts';
+import { bakeLandArt, floorKey, queueLandArt } from '../art/LandArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { AMBER, CARD_HEX, CYAN_HEX, PAPER, SLATE, SLATE_HEX } from '../palette.ts';
 
@@ -42,7 +43,7 @@ export class GameOverScene extends Phaser.Scene {
   private layout!: ResultLayout;
   private leaving = false;
 
-  private grid?: Phaser.GameObjects.TileSprite;
+  private floor?: Phaser.GameObjects.TileSprite;
   private title?: Phaser.GameObjects.Text;
   private scoreLabel?: Phaser.GameObjects.Text;
   private scoreValue?: Phaser.GameObjects.Text;
@@ -65,12 +66,22 @@ export class GameOverScene extends Phaser.Scene {
     this.leaving = false;
   }
 
+  /**
+   * The ground is asked for here as well, so the panel never depends on some
+   * other scene having fetched it; a repeat request costs nothing, since the
+   * pack is already in the texture cache by the time a round can end.
+   */
+  preload(): void {
+    queueLandArt(this);
+  }
+
   create(): void {
     generateTextures(this);
+    bakeLandArt(this);
 
     const { width, height } = this.scale;
-    this.grid = this.add
-      .tileSprite(width / 2, height / 2, width, height, 'grid')
+    this.floor = this.add
+      .tileSprite(width / 2, height / 2, width, height, floorKey(this))
       .setScrollFactor(0)
       .setDepth(-10);
 
@@ -198,7 +209,9 @@ export class GameOverScene extends Phaser.Scene {
     this.layout = computeResultLayout(width, height);
     const { unit, titleY, scoreLabelY, scoreValueY, statsY, retryY, exitY } = this.layout;
 
-    this.grid?.setPosition(width / 2, height / 2).setDisplaySize(width, height);
+    // `setSize`, not `setDisplaySize`: the pattern must keep its world scale,
+    // or a resize would stretch the ground tiles off-square.
+    this.floor?.setPosition(width / 2, height / 2).setSize(width, height);
 
     this.title?.setPosition(width / 2, titleY).setFontSize(Math.max(34, 56 * unit));
     this.scoreLabel

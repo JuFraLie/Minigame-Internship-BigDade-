@@ -5,6 +5,7 @@ import type { SceneContextPort } from '../../ports/SceneContextPort.ts';
 import type { SessionPort } from '../../ports/SessionPort.ts';
 import { computeHudLayout, computeOverlayLayout } from '../layout/Layout.ts';
 import { bakeCharacterArt, queueCharacterArt } from '../art/CharacterArt.ts';
+import { bakeLandArt, queueLandArt } from '../art/LandArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { GameHud } from '../hud/GameHud.ts';
 import { LevelUpOverlay } from '../overlay/LevelUpOverlay.ts';
@@ -64,11 +65,13 @@ export class GameScene extends Phaser.Scene {
    */
   preload(): void {
     queueCharacterArt(this);
+    queueLandArt(this);
   }
 
   create(): void {
     generateTextures(this);
     bakeCharacterArt(this);
+    bakeLandArt(this);
     this.paused = false;
     this.finishing = false;
 

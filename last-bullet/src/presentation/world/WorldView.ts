@@ -8,9 +8,10 @@ import {
   WALK_FPS,
   WALK_STRIDE,
 } from '../art/CharacterArt.ts';
+import { floorKey } from '../art/LandArt.ts';
 import { ENEMY_TEXTURE_RADIUS, RING_RADIUS } from '../art/TextureGenerator.ts';
 
-const DEPTH_GRID = -10;
+const DEPTH_FLOOR = -10;
 const DEPTH_GLOW = 1;
 const DEPTH_BULLET = 3;
 const DEPTH_ENEMY = 4;
@@ -55,7 +56,7 @@ export class WorldView {
   private readonly viewport: ViewportPort;
   private readonly input: InputPort;
 
-  private grid?: Phaser.GameObjects.TileSprite;
+  private floor?: Phaser.GameObjects.TileSprite;
   private player?: Phaser.GameObjects.Image;
   /**
    * Where the player stood last frame, and the distance walked since: the
@@ -77,8 +78,6 @@ export class WorldView {
   private stickBase?: Phaser.GameObjects.Image;
   private stickKnob?: Phaser.GameObjects.Image;
   private camera?: Phaser.Cameras.Scene2D.Camera;
-  private viewWidth = 0;
-  private viewHeight = 0;
 
   private readonly enemies: Phaser.GameObjects.Image[] = [];
   private readonly flying: Phaser.GameObjects.Image[] = [];
@@ -102,15 +101,13 @@ export class WorldView {
 
   create(): void {
     const { width, height } = this.scene.scale;
-    this.viewWidth = width;
-    this.viewHeight = height;
 
     // The floor is a world object, not a backdrop: it is re-centred under the
     // camera every frame (see `reportCamera`), so it always covers the screen
     // while its pattern stays put in the arena - walking has to be visible.
-    this.grid = this.scene.add
-      .tileSprite(width / 2, height / 2, width, height, 'grid')
-      .setDepth(DEPTH_GRID);
+    this.floor = this.scene.add
+      .tileSprite(width / 2, height / 2, width, height, floorKey(this.scene))
+      .setDepth(DEPTH_FLOOR);
 
     this.player = this.scene.add.image(0, 0, 'player').setDepth(DEPTH_PLAYER);
 
@@ -147,10 +144,12 @@ export class WorldView {
       this.blasts.push({ image, life: 0, scale: 1 });
     }
 
-    // Fires before the cameras render, so the scroll we report is the one the
-    // frame is actually drawn with.
-    this.scene.events.on(Phaser.Scenes.Events.PRE_RENDER, this.reportCamera, this);
-    this.scene.events.on(Phaser.Scale.Events.RESIZE, this.resize, this);
+    // The camera's own pre-render, not the scene's: the scene event fires
+    // *before* `camera.preRender()` settles the scroll (the follow lerp runs
+    // there), while this one fires inside the renderer, after that and before
+    // a single child is drawn. Parking the floor anywhere else leaves it
+    // however far the camera moved that frame - a strip of bare background.
+    this.camera.on(Phaser.Cameras.Scene2D.Events.PRE_RENDER, this.reportCamera, this);
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
   }
 
@@ -223,32 +222,31 @@ export class WorldView {
   }
 
   teardown(): void {
-    const events = this.scene.events;
-    events.off(Phaser.Scenes.Events.PRE_RENDER, this.reportCamera, this);
-    events.off(Phaser.Scale.Events.RESIZE, this.resize, this);
+    this.camera?.off(Phaser.Cameras.Scene2D.Events.PRE_RENDER, this.reportCamera, this);
   }
 
   // -------------------------------------------------------------------------
 
   private reportCamera = (): void => {
     if (!this.camera) return;
-    this.viewport.updateCamera(this.camera.scrollX, this.camera.scrollY, this.camera.zoom);
+    const { scrollX, scrollY, width, height, zoom } = this.camera;
+    this.viewport.updateCamera(scrollX, scrollY, zoom);
 
-    // Fires before the cameras render, so this frame's camera position is the
-    // one the floor is parked with: centred on what the player can see, its
-    // pattern anchored to the arena instead of to the screen.
-    this.grid?.setPosition(
-      this.camera.scrollX + this.viewWidth / 2,
-      this.camera.scrollY + this.viewHeight / 2,
-    );
-  };
-
-  /** The floor has to cover the new screen; the camera parks it again next frame. */
-  private resize = (gameSize: Phaser.Structs.Size): void => {
-    if (!this.grid) return;
-    this.viewWidth = gameSize.width;
-    this.viewHeight = gameSize.height;
-    this.grid.setDisplaySize(gameSize.width, gameSize.height);
+    // Called from the camera's pre-render, so the scroll read here is the one
+    // this frame is actually drawn with: the floor sits centred on exactly
+    // what the player can see, its pattern anchored to the arena instead of
+    // to the screen.
+    //
+    // The floor's *size* is reconciled against the camera here too, rather
+    // than on a resize event. The design space is re-derived from the window
+    // (see main.ts) and that can land before this scene ever registers a
+    // listener - a floor sized once in `create()` would keep covering only
+    // the window's size at boot, and whatever it was short on would show the
+    // page background instead of the ground.
+    const floor = this.floor;
+    if (!floor) return;
+    if (floor.width !== width || floor.height !== height) floor.setSize(width, height);
+    floor.setPosition(scrollX + width / 2, scrollY + height / 2);
   };
 
   private syncPlayer(frame: WorldFrame): void {

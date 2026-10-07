@@ -9,6 +9,7 @@ import {
   WALK_FRAMES,
   type CharacterId,
 } from '../art/CharacterArt.ts';
+import { bakeLandArt, floorKey, queueLandArt } from '../art/LandArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
 import { AMBER, CARD_HEX, CYAN, CYAN_HEX, PAPER, SLATE } from '../palette.ts';
 
@@ -37,7 +38,7 @@ export class MainMenuScene extends Phaser.Scene {
   private layout!: PlayLayout;
   private started = false;
 
-  private grid?: Phaser.GameObjects.TileSprite;
+  private floor?: Phaser.GameObjects.TileSprite;
   private title?: Phaser.GameObjects.Text;
   private subtitle?: Phaser.GameObjects.Text;
   private hint?: Phaser.GameObjects.Text;
@@ -52,21 +53,23 @@ export class MainMenuScene extends Phaser.Scene {
     super('MainMenu');
   }
 
-  /** The walk pack is fetched before `create` so it can be baked in one go. */
+  /** The walk pack and the ground are fetched before `create`, to bake in one go. */
   preload(): void {
     queueCharacterArt(this);
+    queueLandArt(this);
   }
 
   create(): void {
     generateTextures(this);
     bakeCharacterArt(this);
+    bakeLandArt(this);
     this.ctx = this.registry.get('ctx') as SceneContextPort;
     this.started = false;
     this.heroEnemies.length = 0;
 
     const { width, height } = this.scale;
-    this.grid = this.add
-      .tileSprite(width / 2, height / 2, width, height, 'grid')
+    this.floor = this.add
+      .tileSprite(width / 2, height / 2, width, height, floorKey(this))
       .setScrollFactor(0)
       .setDepth(-10);
 
@@ -204,7 +207,9 @@ export class MainMenuScene extends Phaser.Scene {
     this.layout = computePlayLayout(width, height);
     const { unit, titleY, hintY, heroY, playY } = this.layout;
 
-    this.grid?.setPosition(width / 2, height / 2).setDisplaySize(width, height);
+    // `setSize`, not `setDisplaySize`: the pattern must keep its world scale,
+    // or a resize would stretch the ground tiles off-square.
+    this.floor?.setPosition(width / 2, height / 2).setSize(width, height);
 
     this.title
       ?.setPosition(width / 2, titleY)
