@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { bakeHearts } from './HeartArt.ts';
 import {
   AMBER,
   CORAL,
@@ -66,17 +67,6 @@ const roundedRect = (
   ctx.arcTo(x + w, y + h, x, y + h, radius);
   ctx.arcTo(x, y + h, x, y, radius);
   ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-};
-
-const heartPath = (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void => {
-  const s = size / 24;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy + 9 * s);
-  ctx.bezierCurveTo(cx + 13 * s, cy + 1 * s, cx + 12 * s, cy - 9 * s, cx + 5 * s, cy - 9 * s);
-  ctx.bezierCurveTo(cx + 1 * s, cy - 9 * s, cx, cy - 5 * s, cx, cy - 5 * s);
-  ctx.bezierCurveTo(cx, cy - 5 * s, cx - 1 * s, cy - 9 * s, cx - 5 * s, cy - 9 * s);
-  ctx.bezierCurveTo(cx - 12 * s, cy - 9 * s, cx - 13 * s, cy + 1 * s, cx, cy + 9 * s);
   ctx.closePath();
 };
 
@@ -204,26 +194,8 @@ export const generateTextures = (scene: Phaser.Scene): void => {
   });
 
   // --- HUD hearts ---------------------------------------------------------
-  bake(scene, 'heart_on', 28, 26, (ctx) => {
-    heartPath(ctx, 14, 14, 24);
-    ctx.fillStyle = CORAL;
-    ctx.fill();
-    ctx.fillStyle = PAPER;
-    ctx.globalAlpha = 0.45;
-    ctx.beginPath();
-    ctx.arc(9, 8, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  });
-
-  bake(scene, 'heart_off', 28, 26, (ctx) => {
-    heartPath(ctx, 14, 14, 24);
-    ctx.strokeStyle = SLATE;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.55;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  });
+  // Drawn in their own module, where the pixel map lives (see `HeartArt`).
+  bakeHearts(scene);
 
   // --- floating stick -----------------------------------------------------
   bake(scene, 'stick_base', 132, 132, (ctx) => {

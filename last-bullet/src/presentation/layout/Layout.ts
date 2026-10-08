@@ -18,7 +18,9 @@ export interface PlayLayout {
   readonly unit: number;
   readonly topPad: number;
   readonly titleY: number;
+  /** Under the title, with enough gap that two 76 px strokes never touch. */
   readonly subtitleY: number;
+  /** Above the Play button, clear of the zombie ring that circles the hero. */
   readonly hintY: number;
   readonly heroY: number;
   readonly playY: number;
@@ -34,10 +36,19 @@ export interface HudLayout {
   readonly heartsX: number;
   readonly heartSize: number;
   readonly heartGap: number;
-  /** Centre of the wave readout, level with the hearts. */
+  /**
+   * Centre of the wave readout, on the score row rather than level with the
+   * hearts: a `NEXT 8` beside five hearts was running into the last one.
+   */
   readonly waveY: number;
   /** Centre of the big wave banner, well clear of the HUD. */
   readonly bannerY: number;
+  /**
+   * Centre of the breather countdown. Deliberately between the banner and the
+   * player - the camera pins the player to the middle of the screen, so a
+   * number parked on the centre point would cover the one thing being played.
+   */
+  readonly countdownY: number;
   readonly pauseX: number;
   readonly pauseY: number;
   readonly pauseSize: number;
@@ -128,6 +139,7 @@ export const computePlayLayout = (width: number, height: number): PlayLayout => 
   const unit = unitFor(width, height);
   const topPad = topPadFor(height, unit);
   const titleY = topPad + height * 0.13;
+  const playY = height * 0.82;
 
   return {
     width,
@@ -135,10 +147,14 @@ export const computePlayLayout = (width: number, height: number): PlayLayout => 
     unit,
     topPad,
     titleY,
-    subtitleY: titleY + 58 * unit,
-    hintY: titleY + 128 * unit,
+    // 76 px type needs more than the 58 it used to get: at that gap the
+    // stroke under "LAST" was landing on the caps of "BULLET".
+    subtitleY: titleY + 74 * unit,
+    // The how-to reads best next to the button it explains, and down there
+    // it is clear of the ring of zombies that closes in on the hero.
+    hintY: playY - 78 * unit,
     heroY: height * 0.5,
-    playY: height * 0.82,
+    playY,
   };
 };
 
@@ -157,8 +173,11 @@ export const computeHudLayout = (width: number, height: number): HudLayout => {
     heartsX: SIDE * unit,
     heartSize: 24 * unit,
     heartGap: 5 * unit,
-    waveY: heartsY,
-    bannerY: height * 0.3,
+    waveY: heartsY + 32 * unit,
+    // Up a touch from 0.3: the countdown below needs the room, and the banner
+    // still lands well under the XP bar.
+    bannerY: height * 0.27,
+    countdownY: height * 0.4,
     pauseX: width - SIDE * unit - pauseSize / 2,
     pauseY: heartsY,
     pauseSize,

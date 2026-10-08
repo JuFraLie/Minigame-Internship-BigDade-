@@ -51,6 +51,8 @@ export class GameScene extends Phaser.Scene {
 
   private paused = false;
   private finishing = false;
+  /** The last wave number seen in a frame; 0 until the first one arrives. */
+  private lastWave = 0;
 
   constructor() {
     super('Game');
@@ -79,32 +81,42 @@ export class GameScene extends Phaser.Scene {
     bakeLandArt(this);
     this.paused = false;
     this.finishing = false;
+    this.lastWave = 0;
 
     const events: WorldEventsPort = {
       onRunEnded: () => {
         // Polling `frame.running` in `update` is what opens the Result Panel;
         // the host reporter on the other side of the fan-out has already
-        // sent `endRound` by then.
+        // sent `endRound` by then. The stinger plays over the panel opening,
+        // and the music rewinds so a Retry starts the round on a fresh bar.
+        this.ctx.sound.gameOver();
+        this.ctx.sound.stopMusic();
       },
-      onLevelUp: () => {
-        // Same: `frame.offers` is what opens the card overlay.
+      // Polling `frame.offers` in `update` is what opens the card overlay;
+      // the cue only says the bar filled.
+      onLevelUp: () => this.ctx.sound.levelUp(),
+      onEnemyKilled: (event) => {
+        this.view?.burst(event.x, event.y);
+        this.ctx.sound.kill();
       },
-      onEnemyKilled: (event) => this.view?.burst(event.x, event.y),
-      onExplosion: (event) => this.view?.blast(event.x, event.y, event.radius),
-      onPlayerHit: () => this.cameras.main.shake(120, 0.0035),
-      onBulletFired: () => {
-        // Sound hook. Audio is an open question for the core developer, so
-        // nothing is wired here yet.
+      onExplosion: (event) => {
+        this.view?.blast(event.x, event.y, event.radius);
+        this.ctx.sound.explosion();
       },
-      onBulletPickedUp: () => {
-        // Same.
+      onPlayerHit: () => {
+        this.cameras.main.shake(120, 0.0035);
+        this.ctx.sound.playerHit();
       },
-      onUpgradeChosen: () => {
-        // Same.
-      },
+      onBulletFired: () => this.ctx.sound.shot(),
+      onBulletPickedUp: () => this.ctx.sound.pickup(),
+      onUpgradeChosen: () => this.ctx.sound.upgrade(),
     };
 
     this.session = this.ctx.createSession([events]);
+    // The music is one engine owned by the root, so this is a no-op on the
+    // first round (the Play gesture already started it) and the restart after
+    // a death, where `onRunEnded` rewound it.
+    this.ctx.sound.startMusic();
     this.view = new WorldView(this, this.ctx.viewport, this.session.input);
     this.view.create();
 
@@ -147,6 +159,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.paused) this.session.frame(delta);
 
     const frame = this.session.render.getFrame();
+    this.syncWaveCue(frame.wave);
     this.view.sync(frame);
     if (!this.paused) this.view.update(delta / 1000);
     this.hud.sync(frame);
@@ -250,15 +263,29 @@ export class GameScene extends Phaser.Scene {
 
   /** Pause resumes, and only resumes (AGENTS.md section 2). */
   private togglePause(): void {
+    if (this.finishing) return;
+    this.ctx.sound.ui();
     if (this.paused) {
       this.paused = false;
+      this.ctx.sound.resumeMusic();
       this.pauseOverlay.hide();
       return;
     }
-    if (this.finishing) return;
 
     this.paused = true;
+    this.ctx.sound.pauseMusic();
     this.pauseOverlay.show();
+  }
+
+  /**
+   * Sounds the horn when a wave's spawn lands - once per wave, never for the
+   * wave the round opened on, because the music's first downbeat already says
+   * the round has begun.
+   */
+  private syncWaveCue(wave: number): void {
+    if (wave <= this.lastWave) return;
+    if (this.lastWave > 0) this.ctx.sound.wave();
+    this.lastWave = wave;
   }
 
   private applyLayout = (): void => {

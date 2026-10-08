@@ -1,35 +1,57 @@
 import type Phaser from 'phaser';
 
 /**
- * The face of a level-up card: a light wood plank, *drawn* rather than shipped.
- * Nothing to fetch and nothing to 404 (AGENTS.md A3.4) - the same rule the
- * bullets and the hearts follow in `TextureGenerator`.
+ * The game's light-timber UI, *drawn* rather than shipped: the level-up card,
+ * and - through `bakePlank` - the Play button and the pause sign. Nothing to
+ * fetch and nothing to 404 (AGENTS.md A3.4), the same rule the bullets and
+ * the hearts follow in `TextureGenerator`.
  *
- * The plank keeps the row structure the cards were laid out against, so no
- * label moves: outline / header / seam / field / seam / footer / outline over
- * `PANEL_ROWS` rows. What changed is the theme - the old art was a dark stain,
- * this is pale timber, which means every line of text on a card is now ink on
- * light wood rather than white on dark.
+ * A plank is 27 rows: outline / header / seam / field / seam / footer /
+ * outline. The card lays every label against those bands; anything else
+ * centres its text on the field, which is 13 of the 27 rows and therefore the
+ * exact middle of the board. One cutter serves both jobs.
  *
- * Bands are expressed as fractions of the height, and the bake derives its
- * pixel boundaries from those same fractions, so the grain, the seams and the
- * text cannot drift apart when a resize recuts the plank.
+ * Bands are fractions of the height, and the bake derives its pixel
+ * boundaries from the same rows, so grain, seams and text cannot drift apart
+ * when a resize recuts the plank.
  */
 
-/** Texture key. Cut in `GameScene.applyLayout`, once per layout. */
+/** Texture key of the level-up card's plank, cut in `GameScene.applyLayout`. */
 export const PANEL_KEY = 'wood_panel';
 
-/** The plank is 27 rows tall - the structure the card text assumes. */
-export const PANEL_ROWS = 27;
+/** How a plank's 27 rows are spent. */
+const ROWS = {
+  /** Carved frame, top and bottom. */
+  edge: 1,
+  /** The board the card's title sits on. */
+  header: 5,
+  /** The pale bead between two boards. */
+  seam: 1,
+  /** The palest board: the card's blurb, and the middle of any button. */
+  field: 13,
+  /** The board the rarity tag sits on. */
+  footer: 5,
+} as const;
+
+/** Rows a plank is cut from: outline + boards + outline. */
+export const PANEL_ROWS =
+  ROWS.edge + ROWS.header + ROWS.seam + ROWS.field + ROWS.seam + ROWS.footer + ROWS.edge;
+
+/** Rows of the pale middle board - what a plank must be tall enough to carry. */
+export const FIELD_ROWS = ROWS.field;
+
+const HEADER_Y = ROWS.edge;
+const FIELD_Y = ROWS.edge + ROWS.header + ROWS.seam;
+const FOOTER_Y = FIELD_Y + ROWS.field + ROWS.seam;
 
 /**
  * Centre of each band as a fraction of the plank's height. `LevelUpOverlay`
- * puts its lines here; the bake paints the bands from the same numbers.
+ * puts its lines here; the bake paints the bands from the same rows.
  */
 export const PANEL_BAND = {
-  header: 3.5 / PANEL_ROWS,
-  body: 13.5 / PANEL_ROWS,
-  footer: 23.5 / PANEL_ROWS,
+  header: (HEADER_Y + ROWS.header / 2) / PANEL_ROWS,
+  body: (FIELD_Y + ROWS.field / 2) / PANEL_ROWS,
+  footer: (FOOTER_Y + ROWS.footer / 2) / PANEL_ROWS,
 } as const;
 
 /**
@@ -41,7 +63,7 @@ export const PANEL_BAND = {
  *    title, the footer the rarity tag;
  *  - `seam` is the pale bead between the boards, lighter than either;
  *  - `outline` is the darkest thing on the card, a carved edge that keeps the
- *    plank off the dimmed arena behind it;
+ *    plank off whatever is dimmed behind it;
  *  - `grain` is a translucent wash: timber, not noise, and never opaque
  *    enough to sit under a label as a mark.
  */
@@ -54,7 +76,7 @@ export const WOOD = {
 } as const;
 
 /**
- * Grain spans, as fractions of the band they sit in. Fixed rather than
+ * Grain spans, as fractions of the board they sit in. Fixed rather than
  * random: the plank is recut on every resize, and random grain would flicker
  * a new pattern each time the phone moved. The spans are uneven on purpose -
  * evenly spaced lines read as scanlines, not as timber.
@@ -65,14 +87,24 @@ const GRAIN = [
   { y: 0.79, from: 0.13, to: 0.55 },
 ] as const;
 
-/** Board rows, as `[first, lastExclusive)` of `PANEL_ROWS`. */
+/** An identity bar down a plank's left edge - what an action wears. */
+export interface PlankAccent {
+  /** Palette colour, taken the way a rectangle takes it. */
+  readonly color: number;
+  /** Width in pixels: the caller has the screen unit, the plank does not. */
+  readonly width: number;
+}
+
+/** Boards, `[first, lastExclusive)` of `PANEL_ROWS`, in the order they lie. */
 const BOARDS = [
-  { top: 1, bottom: 6, fill: WOOD.plank },
-  { top: 6, bottom: 7, fill: WOOD.seam },
-  { top: 7, bottom: 20, fill: WOOD.field },
-  { top: 20, bottom: 21, fill: WOOD.seam },
-  { top: 21, bottom: 26, fill: WOOD.plank },
+  { top: HEADER_Y, bottom: HEADER_Y + ROWS.header, fill: WOOD.plank },
+  { top: HEADER_Y + ROWS.header, bottom: FIELD_Y, fill: WOOD.seam },
+  { top: FIELD_Y, bottom: FIELD_Y + ROWS.field, fill: WOOD.field },
+  { top: FIELD_Y + ROWS.field, bottom: FOOTER_Y, fill: WOOD.seam },
+  { top: FOOTER_Y, bottom: PANEL_ROWS - ROWS.edge, fill: WOOD.plank },
 ] as const;
+
+const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
 
 const drawGrain = (
   ctx: CanvasRenderingContext2D,
@@ -94,9 +126,14 @@ const drawGrain = (
   }
 };
 
-const drawPanel = (ctx: CanvasRenderingContext2D, width: number, height: number): void => {
+const drawPanel = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  accent?: PlankAccent,
+): void => {
   // The frame is painted first and the timber laid inside it, so the edge
-  // stays even even when the card's height is not a whole number of rows.
+  // stays even even when the height is not a whole number of rows.
   const border = Math.max(2, Math.round(height / PANEL_ROWS));
   ctx.fillStyle = WOOD.outline;
   ctx.fillRect(0, 0, width, height);
@@ -113,30 +150,59 @@ const drawPanel = (ctx: CanvasRenderingContext2D, width: number, height: number)
     // Grain belongs to the boards; the seams between them stay clean.
     if (board.fill !== WOOD.seam) drawGrain(ctx, x, top, innerWidth, boardHeight, index);
   });
+
+  if (accent) {
+    // Painted last, over the frame - where a card wears its own stripe. The
+    // accent is `accent.width` of colour; the dark line around it is the
+    // plank's own frame, redrawn so the bar reads as carved, not stuck on.
+    const frame = Math.max(1, Math.round(border / 2));
+    const bar = frame * 2 + Math.max(2, accent.width);
+    ctx.fillStyle = WOOD.outline;
+    ctx.fillRect(0, 0, bar, height);
+    ctx.fillStyle = css(accent.color);
+    ctx.fillRect(frame, frame, bar - frame * 2, height - frame * 2);
+  }
 };
 
 /**
- * Cuts the plank to the card's exact size, so it draws one-to-one with no
- * scaling artefacts. Called before the cards are laid out and again on every
- * resize that changes that size; a plank already the right shape is left
- * alone, so a resize that moves something else costs nothing.
+ * Cuts a plank of the given size under `key`, so it draws one-to-one with no
+ * scaling artefacts. A plank already that shape is left alone, so a resize
+ * that moves something else costs nothing; one that changed size is recut.
+ *
+ * A key's plank is fixed in *colour* as well as shape - callers bake once per
+ * layout with the same accent - because recutting to a new size is the only
+ * case this function bothers to redraw.
  */
-export const bakeWoodPanel = (scene: Phaser.Scene, width: number, height: number): void => {
+export const bakePlank = (
+  scene: Phaser.Scene,
+  key: string,
+  width: number,
+  height: number,
+  accent?: PlankAccent,
+): void => {
   const w = Math.max(PANEL_ROWS * 2, Math.round(width));
   const h = Math.max(PANEL_ROWS, Math.round(height));
 
-  const baked = scene.textures.exists(PANEL_KEY) ? scene.textures.get(PANEL_KEY) : null;
+  const baked = scene.textures.exists(key) ? scene.textures.get(key) : null;
   if (baked) {
     if (baked.source[0].width === w && baked.source[0].height === h) return;
-    scene.textures.remove(PANEL_KEY);
+    scene.textures.remove(key);
   }
 
-  const texture = scene.textures.createCanvas(PANEL_KEY, w, h);
+  const texture = scene.textures.createCanvas(key, w, h);
   if (!texture) return;
-  drawPanel(texture.getContext(), w, h);
+  drawPanel(texture.getContext(), w, h, accent);
   texture.refresh();
 };
 
-/** The key to draw with, or null when no plank could be cut at all. */
+/**
+ * The level-up card's plank: one key, because every card's labels are laid
+ * out against it. Cut in `GameScene.applyLayout`, once per layout.
+ */
+export const bakeWoodPanel = (scene: Phaser.Scene, width: number, height: number): void => {
+  bakePlank(scene, PANEL_KEY, width, height);
+};
+
+/** The card's key to draw with, or null when no plank could be cut at all. */
 export const woodPanelKey = (scene: Phaser.Scene): string | null =>
   scene.textures.exists(PANEL_KEY) ? PANEL_KEY : null;

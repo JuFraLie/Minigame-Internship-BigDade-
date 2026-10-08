@@ -11,6 +11,7 @@ import {
 } from '../src/presentation/art/CharacterArt.ts';
 import { LAND_BLOCK, LAND_CELL, LAND_VARIANTS, landArtFiles } from '../src/presentation/art/LandArt.ts';
 import { PANEL_BAND, PANEL_ROWS, WOOD } from '../src/presentation/art/PanelArt.ts';
+import { HEART_CELL, HEART_PIXELS } from '../src/presentation/art/HeartArt.ts';
 import { FONT_ART, FONT_BODY, FONT_FAMILY, FONT_HEAD } from '../src/presentation/fonts.ts';
 
 /** `public/`, where the walk pack ships with the build. */
@@ -77,6 +78,33 @@ describe('land pack', () => {
   test('the baked block is a whole number of tiles across', () => {
     assert.equal(LAND_BLOCK % LAND_CELL, 0, 'a partial tile at the edge would not tile');
     assert.ok(LAND_BLOCK > LAND_CELL, 'the block has to repeat, not be one tile');
+  });
+});
+
+/**
+ * The hearts are drawn, not shipped, so the map is the only thing that decides
+ * what the health readout looks like. What a screenshot cannot promise is
+ * checked here: that the blocks land exactly on the texture the HUD lays out,
+ * and that the heart is not lopsided.
+ */
+describe('heart', () => {
+  test('fills its 28 x 26 texture exactly', () => {
+    assert.equal(HEART_PIXELS[0].length * HEART_CELL, 28, 'the HUD lays hearts out at 28 wide');
+    assert.equal(HEART_PIXELS.length * HEART_CELL, 26, 'and 26 tall');
+  });
+
+  test('is a rectangular grid of filled cells and gaps', () => {
+    for (const row of HEART_PIXELS) {
+      assert.equal(row.length, HEART_PIXELS[0].length, `ragged row: ${row}`);
+      assert.match(row, /^[.X]+$/, `a cell that is neither block nor gap: ${row}`);
+    }
+    assert.ok(HEART_PIXELS.some((row) => row.includes('X')), 'an all-empty heart is no heart');
+  });
+
+  test('is mirrored down the middle, the way a heart has to be', () => {
+    for (const row of HEART_PIXELS) {
+      assert.equal(row, [...row].reverse().join(''), `not symmetric: ${row}`);
+    }
   });
 });
 

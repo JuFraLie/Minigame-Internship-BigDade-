@@ -1,9 +1,14 @@
 import Phaser from 'phaser';
 import type { OverlayLayout } from '../layout/Layout.ts';
-import { CARD_HEX, CYAN, CYAN_HEX, INK_HEX, PAPER, SLATE } from '../palette.ts';
+import { bakePlank, FIELD_ROWS, PANEL_ROWS } from '../art/PanelArt.ts';
+import { CYAN_HEX, INK, INK_HEX, SLATE } from '../palette.ts';
 import { FONT_BODY, FONT_HEAD } from '../fonts.ts';
 
 const DEPTH = 35;
+
+/** Only this overlay wears these two, so they are cut under its own keys. */
+const SIGN_PLANK = 'pause_sign';
+const RESUME_PLANK = 'resume_button';
 
 /**
  * Pause. It resumes, and nothing else.
@@ -56,6 +61,13 @@ export class PauseOverlay {
     const buttonW = Math.min(layout.width - 80 * unit, 280 * unit);
     const buttonH = 60 * unit;
     const buttonY = layout.height * 0.6;
+    const signY = layout.height * 0.38;
+    const signFont = Math.max(30, 46 * unit);
+    // A label centred on a plank lands on its field, which is `FIELD_ROWS` of
+    // `PANEL_ROWS` - so the sign is cut for the word it has to carry rather
+    // than guessed at.
+    const signH = Math.ceil((signFont * PANEL_ROWS * 1.15) / FIELD_ROWS);
+    const signW = Math.min(layout.width - 70 * unit, 340 * unit);
 
     // Screen-space, like the HUD: the camera is still following the player
     // behind the overlay, so world coordinates would put the panel off-screen.
@@ -67,23 +79,36 @@ export class PauseOverlay {
         .setInteractive(),
     );
 
+    // Cut before anything draws them: `add.image` resolves the texture on the
+    // spot, and every resize comes back through here via `applyLayout`.
+    bakePlank(this.scene, SIGN_PLANK, signW, signH);
+    bakePlank(this.scene, RESUME_PLANK, buttonW, buttonH, {
+      color: CYAN_HEX,
+      width: Math.round(6 * unit),
+    });
+
     this.add(
       this.scene.add
-        .text(layout.width / 2, layout.height * 0.38, 'PAUSED', {
-          fontFamily: FONT_HEAD,
-          fontSize: `${Math.max(30, 46 * unit)}px`,
-          color: PAPER,
-          stroke: '#0b0f1a',
-          strokeThickness: 7,
-        })
-        .setOrigin(0.5, 0.5)
+        .image(layout.width / 2, signY, SIGN_PLANK)
         .setScrollFactor(0)
         .setDepth(DEPTH + 1),
     );
 
+    this.add(
+      this.scene.add
+        .text(layout.width / 2, signY, 'PAUSED', {
+          fontFamily: FONT_HEAD,
+          fontSize: `${signFont}px`,
+          // Ink on the sign, the way every card carries its title.
+          color: INK,
+        })
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0)
+        .setDepth(DEPTH + 2),
+    );
+
     const box = this.scene.add
-      .rectangle(layout.width / 2, buttonY, buttonW, buttonH, CARD_HEX, 1)
-      .setStrokeStyle(Math.max(2, Math.round(3 * unit)), CYAN_HEX, 1)
+      .image(layout.width / 2, buttonY, RESUME_PLANK)
       .setScrollFactor(0)
       .setDepth(DEPTH + 1)
       .setInteractive({ useHandCursor: true });
@@ -93,9 +118,7 @@ export class PauseOverlay {
       .text(layout.width / 2, buttonY, 'RESUME', {
         fontFamily: FONT_HEAD,
         fontSize: `${Math.max(18, 24 * unit)}px`,
-        color: CYAN,
-        stroke: '#0b0f1a',
-        strokeThickness: 4,
+        color: INK,
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)

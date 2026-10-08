@@ -10,9 +10,13 @@ import {
   type CharacterId,
 } from '../art/CharacterArt.ts';
 import { bakeLandArt, floorKey, queueLandArt } from '../art/LandArt.ts';
+import { bakePlank } from '../art/PanelArt.ts';
 import { generateTextures } from '../art/TextureGenerator.ts';
-import { AMBER, CARD_HEX, CYAN, CYAN_HEX, PAPER, SLATE } from '../palette.ts';
+import { AMBER, CYAN_HEX, INK, PAPER, SLATE } from '../palette.ts';
 import { FONT_BODY, FONT_HEAD, queueGameFont } from '../fonts.ts';
+
+/** The Play button wears its own plank, cut to this scene's button size. */
+const PLAY_PLANK = 'play_plank';
 
 /** One of the five zombies circling the hero: drawn, aimed, and kept walking. */
 interface HeroEnemy {
@@ -40,7 +44,7 @@ export class MainMenuScene extends Phaser.Scene {
   private title?: Phaser.GameObjects.Text;
   private subtitle?: Phaser.GameObjects.Text;
   private hint?: Phaser.GameObjects.Text;
-  private playBox?: Phaser.GameObjects.Rectangle;
+  private playBox?: Phaser.GameObjects.Image;
   private playLabel?: Phaser.GameObjects.Text;
 
   private glow?: Phaser.GameObjects.Image;
@@ -70,6 +74,9 @@ export class MainMenuScene extends Phaser.Scene {
     this.heroEnemies.length = 0;
 
     const { width, height } = this.scale;
+    // The layout has to exist before the Play button does: the button's plank
+    // is cut to the button's size, and only the layout knows that size.
+    this.layout = computePlayLayout(width, height);
     this.floor = this.add
       .tileSprite(width / 2, height / 2, width, height, floorKey(this))
       .setScrollFactor(0)
@@ -107,17 +114,16 @@ export class MainMenuScene extends Phaser.Scene {
 
     this.buildHero();
 
-    this.playBox = this.add
-      .rectangle(0, 0, 240, 66, CARD_HEX, 1)
-      .setStrokeStyle(4, CYAN_HEX, 1)
-      .setInteractive({ useHandCursor: true });
+    // Cut before it is drawn: `add.image` resolves the texture on the spot.
+    this.cutPlayPlank();
+    this.playBox = this.add.image(0, 0, PLAY_PLANK).setInteractive({ useHandCursor: true });
     this.playLabel = this.add
       .text(0, 0, 'PLAY', {
         fontFamily: FONT_HEAD,
         fontSize: '30px',
-        color: CYAN,
-        stroke: '#0b0f1a',
-        strokeThickness: 6,
+        // Ink on pale timber, like every other label in the light theme; the
+        // cyan the button used to shout in is now its accent stripe.
+        color: INK,
       })
       .setOrigin(0.5, 0.5);
 
@@ -197,6 +203,13 @@ export class MainMenuScene extends Phaser.Scene {
     if (this.started) return;
     this.started = true;
 
+    // The first gesture of the session, so the audio context is resumed here
+    // or a mobile WebView would keep every cue silent. The music then runs
+    // under every scene that follows: it is one engine, owned by the root.
+    this.ctx.sound.unlock();
+    this.ctx.sound.ui();
+    this.ctx.sound.startMusic();
+
     // The bridge was verified before any game code ran; this is the one moment
     // the host is told the player actually pressed Play (AGENTS.md A4.2).
     this.ctx.host.launch();
@@ -207,7 +220,7 @@ export class MainMenuScene extends Phaser.Scene {
   private applyLayout(): void {
     const { width, height } = this.scale;
     this.layout = computePlayLayout(width, height);
-    const { unit, titleY, hintY, heroY, playY } = this.layout;
+    const { unit, titleY, subtitleY, hintY, heroY, playY } = this.layout;
 
     // `setSize`, not `setDisplaySize`: the pattern must keep its world scale,
     // or a resize would stretch the ground tiles off-square.
@@ -217,7 +230,7 @@ export class MainMenuScene extends Phaser.Scene {
       ?.setPosition(width / 2, titleY)
       .setFontSize(Math.max(44, 76 * unit));
     this.subtitle
-      ?.setPosition(width / 2, titleY + 62 * unit)
+      ?.setPosition(width / 2, subtitleY)
       .setFontSize(Math.max(44, 76 * unit));
     this.hint
       ?.setPosition(width / 2, hintY)
@@ -239,11 +252,35 @@ export class MainMenuScene extends Phaser.Scene {
       poseCharacter(enemy.image, enemy.kind, enemy.dx, enemy.dy, 0, Math.atan2(enemy.dy, enemy.dx));
     });
 
-    this.playBox
-      ?.setPosition(width / 2, playY)
-      .setSize(Math.min(width - 80 * unit, 250 * unit), 66 * unit);
+    // Recut first: the plank is the button's size, so a resize changes the
+    // texture as well as where the button stands.
+    this.cutPlayPlank();
+    this.playBox?.setPosition(width / 2, playY);
     this.playLabel
       ?.setPosition(width / 2, playY)
       .setFontSize(Math.max(22, 30 * unit));
+  }
+
+  /**
+   * Cuts the Play button's plank to the button's size, then points the button
+   * at it: a recut replaces the texture, and an image keeps the frame it was
+   * built with, so without re-resolving it would draw the plank it started
+   * from - at the new size, which is worse than not resizing at all.
+   */
+  private cutPlayPlank(): void {
+    const { width } = this.scale;
+    const { unit } = this.layout;
+    const w = Math.min(width - 80 * unit, 250 * unit);
+    const h = 66 * unit;
+    bakePlank(this, PLAY_PLANK, w, h, {
+      color: CYAN_HEX,
+      width: Math.round(6 * unit),
+    });
+    // The recut resized the plank, so the button has to be re-pointed at the
+    // new texture: an image keeps the frame it was built with. Its hit area is
+    // a rectangle measured once, at `setInteractive()` - without this the
+    // button would be drawn bigger than it is tappable.
+    this.playBox?.setTexture(PLAY_PLANK);
+    if (this.playBox?.input) this.playBox.input.hitArea.setSize(w, h);
   }
 }

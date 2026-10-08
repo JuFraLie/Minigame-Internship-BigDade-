@@ -1,6 +1,7 @@
 import type { WorldEventsPort } from '../core/types.ts';
 import type { ReportPort } from './ReportPort.ts';
 import type { SessionPort } from './SessionPort.ts';
+import type { SoundPort } from './SoundPort.ts';
 import type { ViewportPort } from './ViewportPort.ts';
 
 /**
@@ -16,6 +17,8 @@ export interface SceneContextPort {
   readonly host: ReportPort;
   /** Screen-to-world mapping, reported to by the renderer each frame. */
   readonly viewport: ViewportPort;
+  /** Every cue the player hears: the sound-effects bus and the music loop. */
+  readonly sound: SoundPort;
   /** Wires a fresh game world for a single round. */
   createSession(listeners: readonly WorldEventsPort[]): SessionPort;
 }

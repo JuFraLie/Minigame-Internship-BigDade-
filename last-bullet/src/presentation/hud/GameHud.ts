@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { WorldFrame } from '../../core/types.ts';
 import { MAX_CHAMBER, PLAYER_MAX_HP } from '../../core/config.ts';
 import type { HudLayout } from '../layout/Layout.ts';
-import { AMBER, INK_HEX, LIME_HEX, PAPER, SLATE, SLATE_HEX } from '../palette.ts';
+import { AMBER, CORAL, INK_HEX, LIME_HEX, PAPER, SLATE, SLATE_HEX } from '../palette.ts';
 import { FONT_BODY, FONT_HEAD } from '../fonts.ts';
 
 const DEPTH_HUD = 20;
@@ -18,9 +18,10 @@ const BANNER_FADE_IN = 0.3;
 
 /**
  * The in-round HUD: live score, wave, hearts, XP bar and the chamber readout,
- * plus the mid-screen wave banner. Every object of it is pinned to the screen
- * - the camera follows the player, so a world-space HUD would slide off the
- * display as soon as the round started moving.
+ * plus the mid-screen wave banner and the breather's big countdown. Every
+ * object of it is pinned to the screen - the camera follows the player, so a
+ * world-space HUD would slide off the display as soon as the round started
+ * moving.
  *
  * Text objects are only written when their string actually changes - Phaser
  * re-rasterises a text texture on `setText`, and at 50 FPS that would be the
@@ -39,6 +40,7 @@ export class GameHud {
   private pips: Phaser.GameObjects.Image[] = [];
   private waveLabel!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
+  private countdown!: Phaser.GameObjects.Text;
   private score!: Phaser.GameObjects.Text;
   private level!: Phaser.GameObjects.Text;
   private xpBack!: Phaser.GameObjects.Rectangle;
@@ -49,6 +51,8 @@ export class GameHud {
   private lastWave = '';
   private lastBanner = '';
   private lastPhase: WorldFrame['phase'] | null = null;
+  private lastCountdown = '';
+  private countdownDanger = false;
   private lastScore = '';
   private lastLevel = '';
   private lastHp = -1;
@@ -84,6 +88,9 @@ export class GameHud {
     this.banner
       .setPosition(layout.width / 2, layout.bannerY)
       .setFontSize(Math.max(26, 40 * unit));
+    this.countdown
+      .setPosition(layout.width / 2, layout.countdownY)
+      .setFontSize(Math.max(58, 108 * unit));
     this.score
       .setPosition(layout.scoreX, layout.scoreY)
       .setFontSize(Math.max(18, 25 * unit))
@@ -113,6 +120,7 @@ export class GameHud {
     this.lastWave = '';
     this.lastBanner = '';
     this.lastPhase = null;
+    this.lastCountdown = '';
     this.lastScore = '';
     this.lastLevel = '';
   }
@@ -131,6 +139,7 @@ export class GameHud {
     }
 
     this.syncBanner(frame);
+    this.syncCountdown(frame);
 
     const score = frame.score.toLocaleString('en-US');
     if (score !== this.lastScore) {
@@ -197,6 +206,38 @@ export class GameHud {
     this.banner.setVisible(alpha > 0).setAlpha(alpha);
   }
 
+  /**
+   * The breather's seconds, big and centred: the number the player watches to
+   * know when the next wave lands. It sits below the banner - which is still
+   * announcing the wave behind it - and above the player, who the camera pins
+   * to the middle of the screen. Hidden during a fight, where there is
+   * nothing left to count down to.
+   *
+   * The last three seconds turn coral: the only colour change in the HUD, and
+   * it is spent on the moment the player has to be somewhere else.
+   */
+  private syncCountdown(frame: WorldFrame): void {
+    const left = frame.phase === 'breather' ? Math.ceil(frame.breatherLeft) : 0;
+    if (left <= 0) {
+      this.countdown.setVisible(false);
+      return;
+    }
+
+    const text = String(left);
+    if (text !== this.lastCountdown) {
+      this.lastCountdown = text;
+      this.countdown.setText(text);
+    }
+
+    const danger = left <= 3;
+    if (danger !== this.countdownDanger) {
+      this.countdownDanger = danger;
+      this.countdown.setColor(danger ? CORAL : PAPER);
+    }
+
+    this.countdown.setVisible(true);
+  }
+
   // -------------------------------------------------------------------------
 
   private build(): void {
@@ -226,6 +267,19 @@ export class GameHud {
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
       .setDepth(DEPTH_HUD)
+      .setVisible(false);
+
+    this.countdown = this.scene.add
+      .text(0, 0, '', {
+        fontFamily: FONT_HEAD,
+        fontSize: '108px',
+        color: PAPER,
+        stroke: '#0b0f1a',
+        strokeThickness: 10,
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_HUD + 1)
       .setVisible(false);
 
     this.score = this.scene.add
@@ -340,8 +394,8 @@ export class GameHud {
   }
 }
 
-/** `WAVE 7` in a fight, `NEXT 8 · 3` while the next wave is brewing. */
+/** `WAVE 7` in a fight, `NEXT 8` while the next wave is brewing. */
 const waveLabelFor = (frame: WorldFrame): string =>
   frame.phase === 'breather'
-    ? `NEXT ${frame.wave + 1} · ${Math.ceil(frame.breatherLeft)}`
+    ? `NEXT ${frame.wave + 1}`
     : `WAVE ${frame.wave}`;

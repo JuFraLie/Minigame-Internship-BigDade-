@@ -1,3 +1,4 @@
+import { AudioEngine } from '../adapters/audio/AudioEngine.ts';
 import { BridgeAdapter } from '../adapters/bridge/BridgeAdapter.ts';
 import { BridgeReporter } from '../adapters/bridge/BridgeReporter.ts';
 import { FrameClock } from '../adapters/clock/FrameClock.ts';
@@ -12,6 +13,7 @@ import type { WorldEventsPort } from '../core/types.ts';
 import type { ReportPort } from '../ports/ReportPort.ts';
 import type { SceneContextPort } from '../ports/SceneContextPort.ts';
 import type { SessionPort } from '../ports/SessionPort.ts';
+import type { SoundPort } from '../ports/SoundPort.ts';
 import type { ViewportPort } from '../ports/ViewportPort.ts';
 import { FanOutEvents } from './FanOutEvents.ts';
 
@@ -32,6 +34,8 @@ export class CompositionRoot implements SceneContextPort {
   readonly host: ReportPort;
   /** Screen-to-world mapping; shared, because the camera outlives a round. */
   readonly viewport: ViewportPort;
+  /** Every cue the player hears; one engine, so the loop survives the scenes. */
+  readonly sound: SoundPort;
 
   /** Reports the finished round to the host as soon as the world ends it. */
   private readonly reporter: WorldEventsPort;
@@ -42,6 +46,7 @@ export class CompositionRoot implements SceneContextPort {
     this.viewport = this.viewportAdapter;
     this.host = new BridgeAdapter();
     this.reporter = new BridgeReporter(this.host);
+    this.sound = new AudioEngine();
   }
 
   createSession(listeners: readonly WorldEventsPort[]): SessionPort {
