@@ -3,22 +3,32 @@ import {
   BULLET_RANGE,
   CRAWL_SPEED,
   CRAWL_SPEED_STEP,
+  DREAD_FLOOR,
+  DREAD_STEP,
   EXPLOSIVE_RADIUS,
+  EXPLOSIVE_RADIUS_STEP,
   FIRE_RANGE,
+  GRIT_STEP,
   HEAVY_ROUND_SLOWDOWN,
+  HOMING_STEP,
+  INVULNERABLE_SECONDS,
   LONG_BARREL_STEP,
   MAX_CHAMBER,
   PLAYER_SPEED,
+  QUICK_LEARNER_STEP,
   RETURN_SPEED,
   RETURN_SPEED_STEP,
   SCORE_PER_LEVEL,
   SCORE_PER_WAVE,
+  SHOCKWAVE_STEP,
   SHOT_DELAY,
   SHOT_DELAY_FACTOR,
   SPEED_RAMP_FROM_WAVE,
   SPEED_RAMP_MAX,
   SPEED_RAMP_STEP,
   SPRINT_STEP,
+  SWEEP_RADIUS,
+  THORNS_STEP,
   VARIANT_CHANCE_MAX,
   VARIANT_CHANCE_START,
   VARIANT_CHANCE_STEP,
@@ -84,10 +94,16 @@ export interface UpgradeState {
   sprint: number;
   mend: number;
   heavyRound: number;
+  quickLearner: number;
+  grit: number;
   boomerang: number;
+  shockwave: number;
   explosive: number;
   secondWind: number;
   bloodFrenzy: number;
+  homing: number;
+  thorns: number;
+  dread: number;
 }
 
 export const initialUpgrades = (): UpgradeState => ({
@@ -98,10 +114,16 @@ export const initialUpgrades = (): UpgradeState => ({
   sprint: 0,
   mend: 0,
   heavyRound: 0,
+  quickLearner: 0,
+  grit: 0,
   boomerang: 0,
+  shockwave: 0,
   explosive: 0,
   secondWind: 0,
   bloodFrenzy: 0,
+  homing: 0,
+  thorns: 0,
+  dread: 0,
 });
 
 export interface UpgradeDef {
@@ -112,7 +134,7 @@ export interface UpgradeDef {
   readonly max: number;
   /** Which rarity bucket this card is rolled from (GDD section 7). */
   readonly rarity: Rarity;
-  /** First wave it may be offered at all; Legendaries unlock at 10, 12, 14. */
+  /** First wave it may be offered at all; Legendaries unlock from wave 10 on. */
   readonly unlockWave: number;
   /** Mend only shows up while a heart can actually be restored. */
   readonly needsDamage: boolean;
@@ -123,8 +145,20 @@ export interface UpgradeDef {
  * lives here; `availableUpgrades` is the single gate that enforces the caps,
  * the wave unlock and the Mend condition, so the world only ever has to decide
  * *which* eligible card a slot rolls - never whether one is legal.
+ *
+ * The deck is deliberately half open-ended and half finite: `Infinity` cards
+ * are the stack sinks a long run keeps paying into (Magnet, Mend, Quick
+ * Learner, Explosive Round), while every card with a number is meant to be
+ * *finished* - the player should always be able to tell a card they are still
+ * building from one they have taken as far as it goes.
+ *
+ * Nothing in here conflicts with anything else either: where two cards touch
+ * the same idea they are made to multiply instead of cancel, the clearest
+ * case being Boomerang and Magnet, which together sweep rounds up on the way
+ * home - see `sweepRadiusFor`.
  */
 export const UPGRADES: readonly UpgradeDef[] = [
+  // --- commons: the cards a level-up leans on --------------------------------
   {
     id: 'extraChamber',
     name: 'EXTRA CHAMBER',
@@ -189,6 +223,25 @@ export const UPGRADES: readonly UpgradeDef[] = [
     needsDamage: false,
   },
   {
+    id: 'quickLearner',
+    name: 'QUICK LEARNER',
+    blurb: '+1 XP from every kill',
+    max: Infinity, // levels feed cards, so this one never stops mattering
+    rarity: 'common',
+    unlockWave: 1,
+    needsDamage: false,
+  },
+  {
+    id: 'grit',
+    name: 'GRIT',
+    blurb: 'Longer invulnerability window',
+    max: 3,
+    rarity: 'common',
+    unlockWave: 1,
+    needsDamage: false,
+  },
+  // --- super rares: both the round trip and the crowd control ---------------
+  {
     id: 'boomerang',
     name: 'BOOMERANG',
     blurb: 'Bullets fly back to you',
@@ -198,12 +251,22 @@ export const UPGRADES: readonly UpgradeDef[] = [
     needsDamage: false,
   },
   {
+    id: 'shockwave',
+    name: 'SHOCKWAVE',
+    blurb: 'Kills shove the horde back',
+    max: 3,
+    rarity: 'superRare',
+    unlockWave: SUPER_RARE_FROM_WAVE,
+    needsDamage: false,
+  },
+  // --- legendaries: the cards that change the shape of a run ----------------
+  {
     id: 'explosive',
     name: 'EXPLOSIVE ROUND',
     blurb: 'Bullets explode on impact',
-    max: 1,
+    max: Infinity, // the blast is a stack sink: every stack widens it
     rarity: 'legendary',
-    unlockWave: 10, // each Legendary opens at its own wave, 10 to 14
+    unlockWave: 10, // each Legendary opens at its own wave, 10 to 18
     needsDamage: false,
   },
   {
@@ -222,6 +285,33 @@ export const UPGRADES: readonly UpgradeDef[] = [
     max: 1,
     rarity: 'legendary',
     unlockWave: 14,
+    needsDamage: false,
+  },
+  {
+    id: 'homing',
+    name: 'HOMING ROUND',
+    blurb: 'Bullets curve toward the horde',
+    max: 3,
+    rarity: 'legendary',
+    unlockWave: 16,
+    needsDamage: false,
+  },
+  {
+    id: 'thorns',
+    name: 'THORNS',
+    blurb: 'Contact costs them 2 damage',
+    max: 3,
+    rarity: 'legendary',
+    unlockWave: 16,
+    needsDamage: false,
+  },
+  {
+    id: 'dread',
+    name: 'DREAD',
+    blurb: 'Zombies move 7% slower',
+    max: 5,
+    rarity: 'legendary',
+    unlockWave: 18,
     needsDamage: false,
   },
 ];
@@ -281,7 +371,51 @@ export const crawlSpeedFor = (state: UpgradeState): number =>
 export const returnSpeedFor = (state: UpgradeState): number =>
   RETURN_SPEED * (1 + RETURN_SPEED_STEP * state.boomerang);
 export const boomerangEnabled = (state: UpgradeState): boolean => state.boomerang > 0;
-/** 0 without Explosive Round, the blast radius with it. */
+/** 0 without Explosive Round, the blast radius with it - wider with every stack. */
 export const explosiveRadiusFor = (state: UpgradeState): number =>
-  state.explosive > 0 ? EXPLOSIVE_RADIUS : 0;
+  state.explosive > 0
+    ? EXPLOSIVE_RADIUS + EXPLOSIVE_RADIUS_STEP * (state.explosive - 1)
+    : 0;
 export const bloodFrenzyEnabled = (state: UpgradeState): boolean => state.bloodFrenzy > 0;
+
+/**
+ * Quick Learner: what a kill is worth once the bonus is added, so XP stays a
+ * whole number and the HUD never has to print a fraction of a level.
+ */
+export const killXpFor = (state: UpgradeState, base: number): number =>
+  base + QUICK_LEARNER_STEP * state.quickLearner;
+
+/** Grit: how long a hit leaves the survivor untouchable. */
+export const invulnWindowFor = (state: UpgradeState): number =>
+  INVULNERABLE_SECONDS + GRIT_STEP * state.grit;
+
+/** Thorns: what touching the survivor costs the body that did it. */
+export const thornsDamageFor = (state: UpgradeState): number => THORNS_STEP * state.thorns;
+
+/**
+ * Dread: the horde's pace as a share of the speed it was spawned with. The
+ * floor keeps the card a slowdown and never a wall - a crowd that cannot
+ * reach you is a crowd you cannot shoot.
+ */
+export const dreadPaceFor = (state: UpgradeState): number =>
+  Math.max(DREAD_FLOOR, 1 - DREAD_STEP * state.dread);
+
+/** Homing Round: how far per second a shot may bend toward its target. */
+export const homingTurnFor = (state: UpgradeState): number => HOMING_STEP * state.homing;
+
+/** Shockwave: how far a kill shoves every body standing near it. */
+export const shockwavePushFor = (state: UpgradeState): number =>
+  SHOCKWAVE_STEP * state.shockwave;
+
+/**
+ * Boomerang and Magnet *together*: the reach of the sweep a round performs on
+ * its way home.
+ *
+ * Either card alone only moves its own round - Boomerang brings the round that
+ * flew back, Magnet crawls in the round that fell within reach - so a round
+ * lying out in the horde is beyond both. Both together is the only way to
+ * collect it without walking into the crowd to fetch it, which is what makes
+ * the pair worth more than the sum of its parts.
+ */
+export const sweepRadiusFor = (state: UpgradeState): number =>
+  state.boomerang > 0 && state.magnet > 0 ? SWEEP_RADIUS : 0;

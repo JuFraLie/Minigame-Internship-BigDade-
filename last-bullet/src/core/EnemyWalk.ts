@@ -29,8 +29,13 @@ export class EnemyWalk {
    * travel. Erratic runners sway on top of the homing vector; everybody is
    * capped by the room actually left ahead, not just by the clock, so a
    * zombie walks into the crowd rather than through it.
+   *
+   * `pace` is a share of the speed each body was spawned with: the world
+   * hands it over with the rest of the numbers this class deliberately does
+   * not look up for itself, which is how Dread slows the horde without the
+   * walk ever knowing the card exists.
    */
-  step(dt: number, px: number, py: number): void {
+  step(dt: number, px: number, py: number, pace = 1): void {
     const bodies = this.pool.items;
     for (let i = 0; i < bodies.length; i++) {
       const enemy = bodies[i];
@@ -54,7 +59,7 @@ export class EnemyWalk {
       }
 
       // Capped by the room actually left ahead, not just by the clock.
-      const wanted = enemy.speed * dt;
+      const wanted = enemy.speed * pace * dt;
       const step = Math.min(wanted, this.freeStep(enemy, ux, uy, wanted, px, py));
       enemy.x += ux * step;
       enemy.y += uy * step;
@@ -121,6 +126,38 @@ export class EnemyWalk {
       if (d >= reach) continue;
       enemy.x = x + (dx / d) * reach;
       enemy.y = y + (dy / d) * reach;
+    }
+  }
+
+  /**
+   * Shockwave's shove: every body within `reach` of `(x, y)` is moved out
+   * along the line it already stands on, hardest at the centre and not at
+   * all on the rim - a push, not a teleport, so a kill reads as a pulse
+   * travelling through the crowd rather than as everybody relocating.
+   *
+   * It moves bodies only. The settlement pass of the very next step is what
+   * puts any body that landed somewhere it should not - inside the survivor,
+   * inside a neighbour - back out of it, which is why the world applies these
+   * shoves at the head of a step rather than in the middle of one.
+   */
+  pushFrom(x: number, y: number, reach: number, force: number): void {
+    if (reach <= 0 || force <= 0) return;
+
+    const bodies = this.pool.items;
+    const reachSq = reach * reach;
+    for (let i = 0; i < bodies.length; i++) {
+      const enemy = bodies[i];
+      if (!enemy.alive) continue;
+
+      const dx = enemy.x - x;
+      const dy = enemy.y - y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq <= 0 || dSq >= reachSq) continue; // the centre itself has no way to face
+
+      const d = Math.sqrt(dSq);
+      const push = force * (1 - d / reach);
+      enemy.x += (dx / d) * push;
+      enemy.y += (dy / d) * push;
     }
   }
 

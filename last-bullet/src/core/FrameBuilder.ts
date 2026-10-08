@@ -125,10 +125,16 @@ export class FrameBuilder {
     stacks.sprint = progression.stacks.sprint;
     stacks.mend = progression.stacks.mend;
     stacks.heavyRound = progression.stacks.heavyRound;
+    stacks.quickLearner = progression.stacks.quickLearner;
+    stacks.grit = progression.stacks.grit;
     stacks.boomerang = progression.stacks.boomerang;
+    stacks.shockwave = progression.stacks.shockwave;
     stacks.explosive = progression.stacks.explosive;
     stacks.secondWind = progression.stacks.secondWind;
     stacks.bloodFrenzy = progression.stacks.bloodFrenzy;
+    stacks.homing = progression.stacks.homing;
+    stacks.thorns = progression.stacks.thorns;
+    stacks.dread = progression.stacks.dread;
     frame.offers = progression.pending;
 
     const player = frame.player;

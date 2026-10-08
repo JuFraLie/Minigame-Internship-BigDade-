@@ -8,6 +8,7 @@ import type { RandomPort } from '../ports/RandomPort.ts';
 import {
   availableUpgrades,
   initialUpgrades,
+  killXpFor,
   rarityPool,
   scoreFor,
   xpNeededForLevel,
@@ -73,7 +74,8 @@ export class Progression {
     this.killsValue += 1;
     this.points += ENEMY_STATS[enemy.kind].points;
     // XP is banked the instant it dies: nothing drops, nothing is collected.
-    this.xpValue += enemy.xp;
+    // Quick Learner raises what the kill is worth; nothing else touches it.
+    this.xpValue += killXpFor(this.ups, enemy.xp);
   }
 
   /** Test-suite hook: stacks only, never a card's side effect. */
@@ -142,12 +144,14 @@ export class Progression {
 
   /**
    * Three cards, rolled one slot at a time (Game Design Document, section 7):
-   * 5 % for a Legendary, a further 3 % for a Super Rare, the rest Common.
+   * 8 % for a Legendary, a further 5 % for a Super Rare, the rest Common.
    *
    * Every tier falls back to the next commonest one it can still fill, so a
    * late round whose commons are all capped never wastes a slot - and never
    * offers a card the wave has not unlocked, because `availableUpgrades`
-   * gates by `unlockWave` before any of this runs.
+   * gates by `unlockWave` before any of this runs. A roll that lands on a
+   * tier with nothing unlocked in it yet simply walks down to the one that
+   * has, which is why the odds can sit above the cards actually on offer.
    */
   private rollOffers(hp: number, wave: number): UpgradeId[] {
     const legal = availableUpgrades(this.ups, hp, PLAYER_MAX_HP, wave);

@@ -4,7 +4,7 @@ import { upgradeDef, type UpgradeDef } from '../../core/rules.ts';
 import type { RenderPort } from '../../ports/RenderPort.ts';
 import type { UpgradePort } from '../../ports/UpgradePort.ts';
 import type { OverlayLayout } from '../layout/Layout.ts';
-import { AMBER_HEX, CARD_HEX, CARD_STROKE_HEX, CORAL_HEX, CYAN_HEX, INK, INK_HEX, LIME_HEX, PAPER, PAPER_HEX, SLATE, VIOLET_HEX } from '../palette.ts';
+import { AMBER_HEX, CARD_HEX, CARD_STROKE_HEX, CORAL_HEX, CYAN_HEX, INK, INK_HEX, LIME_HEX, MOSS_HEX, PAPER, PAPER_HEX, SLATE, VIOLET_HEX } from '../palette.ts';
 import { PANEL_BAND, woodPanelKey } from '../art/PanelArt.ts';
 import { FONT_BODY, FONT_HEAD } from '../fonts.ts';
 
@@ -19,10 +19,16 @@ const ACCENT: Readonly<Record<UpgradeId, number>> = {
   sprint: CYAN_HEX,
   mend: PAPER_HEX,
   heavyRound: AMBER_HEX,
+  quickLearner: LIME_HEX,
+  grit: CORAL_HEX,
   boomerang: VIOLET_HEX,
+  shockwave: AMBER_HEX,
   explosive: AMBER_HEX,
   secondWind: CYAN_HEX,
   bloodFrenzy: CORAL_HEX,
+  homing: CYAN_HEX,
+  thorns: MOSS_HEX,
+  dread: VIOLET_HEX,
 };
 
 /**

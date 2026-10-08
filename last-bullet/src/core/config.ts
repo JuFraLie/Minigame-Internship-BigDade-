@@ -79,13 +79,47 @@ export const SECOND_WIND_PUSH = 240;
 /** Invulnerability granted by the revive, longer than a plain hit. */
 export const SECOND_WIND_INVULN = 1.5;
 
+// --- upgrade effects --------------------------------------------------------
+
+/** Quick Learner: flat extra XP handed over by every kill, per stack. */
+export const QUICK_LEARNER_STEP = 1;
+/** Grit: seconds added to the post-hit invulnerability window, per stack. */
+export const GRIT_STEP = 0.15;
+/** Thorns: what a body pays the instant it touches the survivor, per stack. */
+export const THORNS_STEP = 2;
+/** Dread: the share of its own pace the horde loses, per stack. */
+export const DREAD_STEP = 0.07;
+/** Dread's floor: the horde may be slowed, never stopped. */
+export const DREAD_FLOOR = 0.5;
+/** Homing Round: how fast a shot may bend toward a target, radians/second. */
+export const HOMING_STEP = 2.4;
+/** How far out a shot looks for something to bend toward. */
+export const HOMING_RANGE = 320;
+/** Shockwave: how far a kill reaches, and how far its shove carries, per stack. */
+export const SHOCKWAVE_REACH = 120;
+export const SHOCKWAVE_STEP = 55;
+/**
+ * Boomerang + Magnet, and only with both: the reach of the sweep a round on
+ * its way home performs over the rounds still lying about.
+ */
+export const SWEEP_RADIUS = 56;
+/** Explosive Round: blast radius added by each stack past the first. */
+export const EXPLOSIVE_RADIUS_STEP = 28;
+
 // --- card rarity ------------------------------------------------------------
 
-/** First wave a Super Rare card may be drawn, and its chance per card slot. */
+/**
+ * First wave a Super Rare card may be drawn, and its chance per card slot.
+ *
+ * The deck grew from eleven cards to seventeen, so the two rarer buckets were
+ * opened up a little with it: the chance is per *slot*, and each slot still
+ * falls back to the commonest tier it can fill, so a roll that lands before
+ * anything rare is unlocked simply deals a Common instead of wasting the slot.
+ */
 export const SUPER_RARE_FROM_WAVE = 12;
-export const SUPER_RARE_CHANCE = 0.03;
+export const SUPER_RARE_CHANCE = 0.05;
 /** Chance of a Legendary card per slot, once at least one is unlocked. */
-export const LEGENDARY_CHANCE = 0.05;
+export const LEGENDARY_CHANCE = 0.08;
 
 // --- entities --------------------------------------------------------------
 

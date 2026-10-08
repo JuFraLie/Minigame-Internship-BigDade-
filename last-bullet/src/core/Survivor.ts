@@ -81,13 +81,17 @@ export class Survivor {
    * fatal one - the round is over, but the last frame still reads as a body
    * that has just been hit.
    *
+   * `window` is handed in rather than read from the stacks, like every other
+   * number this body is given: Grit widens it, and whether it should is a fact
+   * about the cards, not about the survivor.
+   *
    * Second Wind (legendary): when `canRevive` and the hit would have been
    * fatal, the card is burned instead of the run - three hearts, a longer
    * window, and `revived` so it can only happen once. Score, wave, level and
    * upgrades carry on untouched, so this is a revive inside the round and
    * never a restart.
    */
-  hit(damage: number, canRevive: boolean): HitOutcome {
+  hit(damage: number, canRevive: boolean, window = INVULNERABLE_SECONDS): HitOutcome {
     this.hp = Math.max(0, this.hp - damage);
 
     if (this.hp <= 0 && canRevive) {
@@ -97,7 +101,7 @@ export class Survivor {
       return 'revived';
     }
 
-    this.window = INVULNERABLE_SECONDS;
+    this.window = window;
     return this.hp <= 0 ? 'down' : 'wounded';
   }
 }

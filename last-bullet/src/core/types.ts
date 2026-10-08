@@ -39,7 +39,7 @@ export type WavePhase = 'fight' | 'breather';
  * How hard a card is to find (Game Design Document, section 7).
  *
  * Rarity only decides *when a slot rolls one*: it never changes what the card
- * does. The rolls themselves live in `GameWorld.rollOffers`.
+ * does. The rolls themselves live in `Progression.rollOffers`.
  */
 export type Rarity = 'common' | 'superRare' | 'legendary';
 
@@ -51,10 +51,16 @@ export type UpgradeId =
   | 'sprint'
   | 'mend'
   | 'heavyRound'
+  | 'quickLearner'
+  | 'grit'
   | 'boomerang'
+  | 'shockwave'
   | 'explosive'
   | 'secondWind'
-  | 'bloodFrenzy';
+  | 'bloodFrenzy'
+  | 'homing'
+  | 'thorns'
+  | 'dread';
 
 // ---------------------------------------------------------------------------
 // View snapshots - what the renderer is allowed to see

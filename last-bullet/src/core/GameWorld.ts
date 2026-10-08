@@ -1,14 +1,26 @@
 import type { RandomPort } from '../ports/RandomPort.ts';
 import type { RenderPort } from '../ports/RenderPort.ts';
 import type { UpgradePort } from '../ports/UpgradePort.ts';
-import { ENEMY_CAP, PLAYER_MAX_HP, PLAYER_RADIUS, SECOND_WIND_PUSH } from './config.ts';
+import {
+  ENEMY_CAP,
+  PLAYER_MAX_HP,
+  PLAYER_RADIUS,
+  SECOND_WIND_PUSH,
+  SHOCKWAVE_REACH,
+} from './config.ts';
 import { CrowdField } from './CrowdField.ts';
 import { EnemyWalk } from './EnemyWalk.ts';
 import { EnemyPool, MAX_ENEMY_RADIUS } from './entities.ts';
 import { distSq } from './geometry.ts';
 import { FrameBuilder, type FrameRound } from './FrameBuilder.ts';
 import { Progression } from './Progression.ts';
-import { moveSpeedFor } from './rules.ts';
+import {
+  dreadPaceFor,
+  invulnWindowFor,
+  moveSpeedFor,
+  shockwavePushFor,
+  thornsDamageFor,
+} from './rules.ts';
 import { Survivor } from './Survivor.ts';
 import type { UpgradeId, Vec2, WorldEventsPort, WorldFrame } from './types.ts';
 import { WaveSpawner } from './WaveSpawner.ts';
@@ -61,6 +73,16 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
   // --- scratch -------------------------------------------------------------
   /** Candidates for the contact test, reused so a step allocates nothing. */
   private readonly contact: number[] = [];
+  /**
+   * Shockwave shoves banked during a step, as `x, y, reach, force` runs.
+   *
+   * A kill mid-step may not move the crowd on the spot: the contact test runs
+   * after the shots, and a body shoved onto the survivor on the way would cost
+   * a heart for someone else's death. They are paid out at the head of the
+   * next step instead, where the settlement pass runs over them before
+   * anybody can be touched.
+   */
+  private readonly shoves: number[] = [];
   /** Reused record, so `getFrame()` never allocates either. */
   private readonly round: FrameRound = { running: true, win: false, time: 0 };
   private dirty = true;
@@ -208,6 +230,10 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
     if (!this.running || this.progression.pending !== null) return;
     this.dirty = true;
 
+    // First thing: whatever the last step's kills shoved, settled before
+    // anything is allowed to read a position - see `shoves`.
+    this.applyShoves();
+
     this.time += dt;
 
     // Wave 1 waits for the first step so the spawn ring is already the real
@@ -227,7 +253,7 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
     // one is "who stands where before anyone moves" - the walk below needs it
     // to tell an open path from a blocked one, spawns included.
     this.field.rebuild(this.enemies.items);
-    this.walk.step(dt, this.survivor.x, this.survivor.y);
+    this.walk.step(dt, this.survivor.x, this.survivor.y, dreadPaceFor(this.progression.stacks));
 
     // Now "where everyone ended up", so the crowd can be settled against the
     // real field, and once more afterwards: the bullet, contact and target
@@ -250,10 +276,18 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
    * Where the horde meets the survivor: the first body close enough to touch
    * costs a heart, opens the invulnerability window and reports the hit.
    *
-   * Second Wind (legendary) is decided here too, because whether a fatal hit
-   * ends the round is a fact about the *round* - the survivor only says what
-   * the blow did, and this is where the crowd gets shoved clear of the body
-   * it just saved.
+   * Two cards are decided here too, both because they are facts about the
+   * *round* rather than about the body:
+   *
+   *   Second Wind  whether a fatal hit ends the run - the survivor only says
+   *                what the blow did, and this is where the crowd gets shoved
+   *                clear of the body it just saved.
+   *   Thorns       what the body that landed the touch pays for it, settled
+   *                before the hit is reported so a listener reading the frame
+   *                sees both halves of the exchange at once.
+   *
+   * Grit is not decided here - it only widens the window the survivor opens,
+   * which is passed in like every other number this class hands the body.
    */
   private checkContact(): void {
     if (this.survivor.invulnerable) return;
@@ -267,6 +301,8 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
       list,
     );
 
+    const spikes = thornsDamageFor(this.progression.stacks);
+
     for (let i = 0; i < list.length; i++) {
       const enemy = this.enemies.items[list[i]];
       if (!enemy.alive) continue;
@@ -274,7 +310,18 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
       if (distSq(enemy.x, enemy.y, this.survivor.x, this.survivor.y) > reach * reach) continue;
 
       const canRevive = !this.survivor.reviveSpent && this.progression.stacks.secondWind > 0;
-      const outcome = this.survivor.hit(enemy.damage, canRevive);
+      const outcome = this.survivor.hit(
+        enemy.damage,
+        canRevive,
+        invulnWindowFor(this.progression.stacks),
+      );
+
+      // Thorns: the round is still running, so the touch is answered - a body
+      // that dies of it is accounted for exactly like any other kill.
+      if (spikes > 0 && outcome !== 'down') {
+        enemy.hp -= spikes;
+        if (enemy.hp <= 0) this.onEnemyDown(list[i]);
+      }
 
       if (outcome === 'revived') {
         this.walk.repelFrom(this.survivor.x, this.survivor.y, SECOND_WIND_PUSH);
@@ -290,9 +337,9 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
 
   /**
    * `KillSink`: a body's hp reached zero. Release it, pay for it, tell the
-   * gun to make good on its Blood Frenzy promise, and only then report it -
-   * in that order, so a listener that reads the frame sees the kill already
-   * banked.
+   * gun to make good on its Blood Frenzy promise, bank Shockwave's shove for
+   * the next step, and only then report it - in that order, so a listener
+   * that reads the frame sees the kill already banked.
    */
   onEnemyDown(slot: number): void {
     const enemy = this.enemies.release(slot);
@@ -300,7 +347,22 @@ export class GameWorld implements RenderPort, UpgradePort, KillSink {
 
     this.progression.bankKill(enemy);
     this.weapon.onKill();
+
+    // Shockwave (super rare): the body's last position is the epicentre.
+    // Queued, never applied here - see `shoves` for why.
+    const push = shockwavePushFor(this.progression.stacks);
+    if (push > 0) this.shoves.push(enemy.x, enemy.y, SHOCKWAVE_REACH, push);
+
     this.events.onEnemyKilled({ kind: enemy.kind, x: enemy.x, y: enemy.y, value: enemy.xp });
+  }
+
+  /** Pays every shove banked during the last step; see `shoves`. */
+  private applyShoves(): void {
+    const list = this.shoves;
+    for (let i = 0; i < list.length; i += 4) {
+      this.walk.pushFrom(list[i], list[i + 1], list[i + 2], list[i + 3]);
+    }
+    list.length = 0;
   }
 
   // -------------------------------------------------------------------------

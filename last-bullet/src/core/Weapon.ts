@@ -1,4 +1,4 @@
-import { BULLET_CAP, BULLET_RADIUS, BULLET_SPEED, PLAYER_RADIUS } from './config.ts';
+import { BULLET_CAP, BULLET_RADIUS, BULLET_SPEED, HOMING_RANGE, PLAYER_RADIUS } from './config.ts';
 import type { CrowdField } from './CrowdField.ts';
 import {
   BulletPool,
@@ -19,9 +19,11 @@ import {
   crawlSpeedFor,
   explosiveRadiusFor,
   fireRangeFor,
+  homingTurnFor,
   pickupRadiusFor,
   returnSpeedFor,
   shotDelayFor,
+  sweepRadiusFor,
 } from './rules.ts';
 import type { WorldEventsPort } from './types.ts';
 
@@ -201,6 +203,10 @@ export class Weapon {
   // --- flight --------------------------------------------------------------
 
   private flight(bullet: Bullet, slot: number, dt: number): void {
+    // Homing bends the flight *before* it is taken, so the step below moves
+    // the round along the direction it was just steered into.
+    this.home(bullet, dt);
+
     const nx = bullet.x + bullet.vx * dt;
     const ny = bullet.y + bullet.vy * dt;
 
@@ -221,7 +227,67 @@ export class Weapon {
     }
   }
 
+  /**
+   * Homing Round (legendary): turn the flight toward whatever stands closest
+   * to it, by at most `homingTurnFor` radians this step.
+   *
+   * The speed never changes - only the direction - so the shot still covers
+   * exactly the range it was promised, and the same cap that keeps a shot
+   * from snapping around keeps steering from turning into a homing missile
+   * that chases a zombie in circles.
+   */
+  private home(bullet: Bullet, dt: number): void {
+    const turn = homingTurnFor(this.progression.stacks);
+    if (turn <= 0) return;
+
+    const target = this.nearestTo(bullet, HOMING_RANGE);
+    if (target < 0) return;
+
+    const enemy = this.enemies.items[target];
+    const wanted = Math.atan2(enemy.y - bullet.y, enemy.x - bullet.x);
+    const flying = Math.atan2(bullet.vy, bullet.vx);
+    let diff = wanted - flying;
+    if (diff > Math.PI) diff -= Math.PI * 2;
+    else if (diff < -Math.PI) diff += Math.PI * 2;
+
+    const cap = turn * dt;
+    const applied = diff > cap ? cap : diff < -cap ? -cap : diff;
+    if (applied === 0) return;
+
+    const angle = flying + applied;
+    bullet.vx = Math.cos(angle) * BULLET_SPEED;
+    bullet.vy = Math.sin(angle) * BULLET_SPEED;
+    bullet.angle = angle;
+  }
+
+  /** Index of the live body closest to `bullet` inside `range`, or -1. */
+  private nearestTo(bullet: Bullet, range: number): number {
+    const list = this.candidates;
+    list.length = 0;
+    this.field.queryCircle(bullet.x, bullet.y, range, list);
+
+    let best = -1;
+    let bestSq = range * range;
+    const enemies = this.enemies.items;
+    for (let i = 0; i < list.length; i++) {
+      const index = list[i];
+      const enemy = enemies[index];
+      if (!enemy.alive) continue;
+      const d = distSq(enemy.x, enemy.y, bullet.x, bullet.y);
+      if (d <= bestSq) {
+        bestSq = d;
+        best = index;
+      }
+    }
+    return best;
+  }
+
   private returnHome(bullet: Bullet, slot: number, dt: number): void {
+    // Swept first, so the whole way home - the last stride included - is
+    // covered: one stride is always shorter than the sweep, so the discs the
+    // round passes over overlap and nothing slips through between two steps.
+    this.sweep(bullet);
+
     const dx = this.survivor.x - bullet.x;
     const dy = this.survivor.y - bullet.y;
     const d2 = dx * dx + dy * dy;
@@ -239,6 +305,33 @@ export class Weapon {
     bullet.y += uy * Math.min(returnSpeedFor(this.progression.stacks) * dt, d);
     // Nothing is harmed on the way home: the bullet has had its one hit.
     bullet.angle = Math.atan2(uy, ux);
+  }
+
+  /**
+   * Boomerang + Magnet, and neither on its own: the round on its way home
+   * picks up every stray lying within `SWEEP_RADIUS` of the line it flies.
+   *
+   * This is the pair the two cards were missing. Boomerang alone only ever
+   * brings back the round that flew, and Magnet alone can only reach what is
+   * inside the pickup radius - a round that fell out in the horde is beyond
+   * both, and the only way to fetch it was to walk in after it. Together the
+   * return trip does the fetching.
+   */
+  private sweep(bullet: Bullet): void {
+    const radius = sweepRadiusFor(this.progression.stacks);
+    if (radius <= 0) return;
+
+    const radiusSq = radius * radius;
+    const items = this.bullets.items;
+    for (let i = 0; i < items.length; i++) {
+      const stray = items[i];
+      if (!stray.alive || stray.state !== 'ground') continue;
+
+      const dx = stray.x - bullet.x;
+      const dy = stray.y - bullet.y;
+      if (dx * dx + dy * dy > radiusSq) continue;
+      this.tryCollect(stray, i);
+    }
   }
 
   /**

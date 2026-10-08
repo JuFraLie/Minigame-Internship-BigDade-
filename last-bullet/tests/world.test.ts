@@ -10,14 +10,21 @@ import {
   bulletRangeFor,
   chamberFor,
   crawlSpeedFor,
+  dreadPaceFor,
   explosiveRadiusFor,
   fireRangeFor,
+  homingTurnFor,
   initialUpgrades,
+  invulnWindowFor,
+  killXpFor,
   moveSpeedFor,
   pickupRadiusFor,
   rarityPool,
   scoreFor,
+  shockwavePushFor,
   shotDelayFor,
+  sweepRadiusFor,
+  thornsDamageFor,
   upgradeDef,
   UPGRADES,
   variantChanceFor,
@@ -35,21 +42,31 @@ import {
   BULLET_SPEED,
   CRAWL_SPEED,
   CRAWL_SPEED_STEP,
+  DREAD_FLOOR,
+  DREAD_STEP,
   ENEMY_CAP,
   ENEMY_STATS,
   EXPLOSIVE_RADIUS,
+  EXPLOSIVE_RADIUS_STEP,
   FIRE_RANGE,
+  GRIT_STEP,
   HEAVY_ROUND_SLOWDOWN,
+  HOMING_STEP,
+  INVULNERABLE_SECONDS,
   LONG_BARREL_STEP,
   PLAYER_MAX_HP,
   PLAYER_RADIUS,
   PLAYER_SPEED,
+  QUICK_LEARNER_STEP,
   SECOND_WIND_HEARTS,
   SECOND_WIND_PUSH,
+  SHOCKWAVE_STEP,
   SHOT_DELAY,
   SPAWN_LAG,
   SPAWN_RING_MARGIN,
   SUPER_RARE_FROM_WAVE,
+  SWEEP_RADIUS,
+  THORNS_STEP,
   WAVE_CAP,
 } from '../src/core/config.ts';
 import type {
@@ -470,12 +487,17 @@ describe('upgrade stacking and caps', () => {
     assert.ok(cards(stacks({ extraChamber: 4 })).includes('extraChamber'));
   });
 
-  test('Quick Hands, Long Barrel and Sprint stop at 4, Boomerang at 3', () => {
+  test('Quick Hands, Long Barrel and Sprint stop at 4, Boomerang and Shockwave at 3', () => {
     for (const [id, max] of [
       ['quickHands', 4],
       ['longBarrel', 4],
       ['sprint', 4],
       ['boomerang', 3],
+      ['shockwave', 3],
+      ['grit', 3],
+      ['homing', 3],
+      ['thorns', 3],
+      ['dread', 5],
     ] as const) {
       assert.ok(!cards(stacks({ [id]: max })).includes(id), `${id} must be gone at ${max} stacks`);
       assert.ok(
@@ -485,7 +507,33 @@ describe('upgrade stacking and caps', () => {
     }
   });
 
-  test('Magnet is the one stacker that never stops', () => {
+  test('four cards never stop, and the rest are all sealed at a number', () => {
+    const openEnded = UPGRADES.filter((def) => def.max === Infinity)
+      .map((def) => def.id)
+      .sort();
+    assert.deepEqual(
+      openEnded,
+      ['explosive', 'magnet', 'mend', 'quickLearner'],
+      'the stack sinks a long run keeps paying into',
+    );
+
+    // Every other card is finite, so the deck as a whole is half the cards
+    // you finish and half the ones you never can.
+    assert.equal(openEnded.length + UPGRADES.filter((def) => def.max < Infinity).length, UPGRADES.length);
+    for (const def of UPGRADES) {
+      if (def.max === Infinity) continue;
+      assert.ok(
+        !cards(stacks({ [def.id]: def.max })).includes(def.id),
+        `${def.id} is sealed at ${def.max}`,
+      );
+      assert.ok(
+        cards(stacks({ [def.id]: def.max - 1 })).includes(def.id),
+        `${def.id} is still offered one short of its cap`,
+      );
+    }
+  });
+
+  test('Magnet is the stacker that never stops', () => {
     assert.equal(upgradeDef('magnet').max, Infinity, 'the pull has no ceiling');
 
     // Well past where every other stacker would have been sealed.
@@ -497,10 +545,9 @@ describe('upgrade stacking and caps', () => {
     );
   });
 
-  test('Heavy Round, Explosive, Second Wind and Blood Frenzy are taken once', () => {
+  test('Heavy Round, Second Wind and Blood Frenzy are taken once', () => {
     const taken = [
       ['heavyRound', { ...initialUpgrades(), heavyRound: 1 }],
-      ['explosive', { ...initialUpgrades(), explosive: 1 }],
       ['secondWind', { ...initialUpgrades(), secondWind: 1 }],
       ['bloodFrenzy', { ...initialUpgrades(), bloodFrenzy: 1 }],
     ] as const;
@@ -509,6 +556,24 @@ describe('upgrade stacking and caps', () => {
       assert.equal(state[id], 1, `${id} is a one-take card`);
       assert.ok(!cards(state).includes(id), `${id} must never be offered twice`);
     }
+  });
+
+  test('Explosive Round is the Legendary that never stops: the blast widens', () => {
+    const one = stacks({ explosive: 1 });
+
+    assert.equal(explosiveRadiusFor(one), EXPLOSIVE_RADIUS, 'the first stack is the base blast');
+
+    const wide = stacks({ explosive: 4 });
+    assert.equal(
+      explosiveRadiusFor(wide),
+      EXPLOSIVE_RADIUS + 3 * EXPLOSIVE_RADIUS_STEP,
+      'every stack past the first widens it by the documented step',
+    );
+    assert.ok(explosiveRadiusFor(wide) > explosiveRadiusFor(one), 'and it keeps growing');
+    assert.ok(
+      cards(wide).includes('explosive'),
+      'so it is still on offer long after every finite card is sealed',
+    );
   });
 
   test('Mend only shows up while a heart can be restored', () => {
@@ -538,6 +603,66 @@ describe('upgrade stacking and caps', () => {
     // The blast belongs to Explosive Round alone.
     assert.equal(explosiveRadiusFor(fresh), 0);
     assert.equal(explosiveRadiusFor(stacks({ explosive: 1 })), EXPLOSIVE_RADIUS);
+  });
+
+  test('the newer cards promise numbers that move with their stacks', () => {
+    const fresh = initialUpgrades();
+
+    // Quick Learner: a whole extra point of XP per kill, so the bar never
+    // has to show a fraction of a level.
+    assert.equal(killXpFor(fresh, 1), 1, 'an unstacked kill is worth exactly what it was');
+    assert.equal(killXpFor(stacks({ quickLearner: 3 }), 1), 1 + 3 * QUICK_LEARNER_STEP);
+    assert.equal(killXpFor(stacks({ quickLearner: 2 }), 5), 5 + 2 * QUICK_LEARNER_STEP);
+
+    // Grit: the same window, held open longer.
+    assert.equal(invulnWindowFor(fresh), INVULNERABLE_SECONDS);
+    assert.equal(
+      invulnWindowFor(stacks({ grit: 3 })),
+      INVULNERABLE_SECONDS + 3 * GRIT_STEP,
+    );
+
+    // Thorns and Shockwave: nothing at zero stacks, the documented step each.
+    assert.equal(thornsDamageFor(fresh), 0);
+    assert.equal(thornsDamageFor(stacks({ thorns: 2 })), 2 * THORNS_STEP);
+    assert.equal(shockwavePushFor(fresh), 0);
+    assert.equal(shockwavePushFor(stacks({ shockwave: 3 })), 3 * SHOCKWAVE_STEP);
+
+    // Dread: slower, never stopped - a crowd that cannot reach you is one
+    // you cannot shoot, so the pace has a floor.
+    assert.equal(dreadPaceFor(fresh), 1);
+    assert.equal(dreadPaceFor(stacks({ dread: 1 })), 1 - DREAD_STEP);
+    assert.equal(dreadPaceFor(stacks({ dread: 5 })), 1 - 5 * DREAD_STEP);
+    assert.equal(dreadPaceFor(stacks({ dread: 999 })), DREAD_FLOOR, 'the floor holds');
+
+    // Homing: no bend at all until the card is taken.
+    assert.equal(homingTurnFor(fresh), 0);
+    assert.equal(homingTurnFor(stacks({ homing: 2 })), 2 * HOMING_STEP);
+  });
+
+  test('Boomerang and Magnet only sweep together - the pair neither has alone', () => {
+    const fresh = initialUpgrades();
+
+    assert.equal(sweepRadiusFor(fresh), 0, 'with neither card there is no sweep');
+    assert.equal(
+      sweepRadiusFor(stacks({ boomerang: 3 })),
+      0,
+      'Boomerang alone only brings its own round home',
+    );
+    assert.equal(
+      sweepRadiusFor(stacks({ magnet: 9 })),
+      0,
+      'Magnet alone only reaches what is already inside the pickup radius',
+    );
+    assert.equal(
+      sweepRadiusFor(stacks({ boomerang: 1, magnet: 1 })),
+      SWEEP_RADIUS,
+      'together they sweep the rounds lying out in the horde',
+    );
+    assert.equal(
+      sweepRadiusFor(stacks({ boomerang: 3, magnet: 9 })),
+      SWEEP_RADIUS,
+      'and it is a reach, not a stat: the stacks only make the trip faster',
+    );
   });
 
   test('the shot starts short, and only Long Barrel reaches further', () => {
@@ -605,20 +730,26 @@ describe('upgrade stacking and caps', () => {
       sprint: 4,
       mend: 99,
       heavyRound: 1,
+      quickLearner: 99,
+      grit: 3,
       boomerang: 3,
-      explosive: 1,
+      shockwave: 3,
+      explosive: 99,
       secondWind: 1,
       bloodFrenzy: 1,
+      homing: 3,
+      thorns: 3,
+      dread: 5,
     } satisfies UpgradeState;
 
     // Every card that has a cap is taken and Mend is out at full health;
-    // only the uncapped Magnet is left. The gate must answer with an array
-    // rather than throw, and that array holds exactly the one live card.
+    // only the three cards that never stop are left. The gate must answer
+    // with an array rather than throw, and that array holds exactly those.
     assert.deepEqual(
       availableUpgrades(everything, PLAYER_MAX_HP, PLAYER_MAX_HP, OPEN_WAVE).map(
         (def) => def.id,
       ),
-      ['magnet'],
+      ['magnet', 'quickLearner', 'explosive'],
     );
   });
 });
@@ -628,27 +759,31 @@ describe('rarity and wave gating', () => {
   const idsAt = (wave: number, state = initialUpgrades(), hp = PLAYER_MAX_HP): UpgradeId[] =>
     availableUpgrades(state, hp, PLAYER_MAX_HP, wave).map((def) => def.id);
 
-  test('the deck is bucketed into commons, one Super Rare, three Legendaries', () => {
+  test('the deck is bucketed into nine commons, two Super Rares, six Legendaries', () => {
     const common = rarityPool(UPGRADES, 'common')
       .map((def) => def.id)
       .sort();
     assert.deepEqual(common, [
       'extraChamber',
+      'grit',
       'heavyRound',
       'longBarrel',
       'magnet',
       'mend',
       'quickHands',
+      'quickLearner',
       'sprint',
     ]);
     assert.deepEqual(
       rarityPool(UPGRADES, 'superRare').map((def) => def.id),
-      ['boomerang'],
+      ['boomerang', 'shockwave'],
     );
     assert.deepEqual(
       rarityPool(UPGRADES, 'legendary').map((def) => def.id),
-      ['explosive', 'secondWind', 'bloodFrenzy'],
+      ['explosive', 'secondWind', 'bloodFrenzy', 'homing', 'thorns', 'dread'],
     );
+    assert.equal(rarityPool(UPGRADES, 'common').length, 9);
+    assert.equal(rarityPool(UPGRADES, 'legendary').length, 6);
     assert.equal(
       rarityPool(UPGRADES, 'common').length +
         rarityPool(UPGRADES, 'superRare').length +
@@ -662,10 +797,21 @@ describe('rarity and wave gating', () => {
     for (let wave = 1; wave <= 9; wave++) {
       const ids = idsAt(wave);
       assert.ok(ids.includes('sprint'), `the commons are always there at wave ${wave}`);
-      assert.ok(!ids.includes('boomerang'), 'Boomerang stays sealed until its wave');
-      assert.ok(!ids.includes('explosive'), 'as do the Legendaries');
-      assert.ok(!ids.includes('secondWind'));
-      assert.ok(!ids.includes('bloodFrenzy'));
+      assert.ok(ids.includes('grit'), `and so are the newer ones, at wave ${wave}`);
+      // Nothing rare opens before wave 10 - the two Super Rares and the four
+      // Legendaries that arrive after Explosive Round are all still sealed.
+      for (const id of [
+        'boomerang',
+        'shockwave',
+        'explosive',
+        'secondWind',
+        'bloodFrenzy',
+        'homing',
+        'thorns',
+        'dread',
+      ] as const) {
+        assert.ok(!ids.includes(id), `${id} stays sealed until its wave`);
+      }
     }
   });
 
@@ -675,9 +821,20 @@ describe('rarity and wave gating', () => {
     assert.ok(idsAt(10).includes('explosive'), 'Explosive Round from wave 10');
     assert.ok(!idsAt(11).includes('boomerang') && !idsAt(11).includes('secondWind'));
     assert.ok(idsAt(12).includes('boomerang'), 'Boomerang from wave 12');
+    assert.ok(idsAt(12).includes('shockwave'), 'Shockwave from wave 12, with its bucket');
     assert.ok(idsAt(12).includes('secondWind'), 'Second Wind from wave 12');
     assert.ok(!idsAt(13).includes('bloodFrenzy'));
     assert.ok(idsAt(14).includes('bloodFrenzy'), 'Blood Frenzy from wave 14');
+    assert.ok(!idsAt(15).includes('homing') && !idsAt(15).includes('thorns'));
+    assert.ok(idsAt(16).includes('homing'), 'Homing Round from wave 16');
+    assert.ok(idsAt(16).includes('thorns'), 'Thorns from wave 16');
+    assert.ok(!idsAt(17).includes('dread'));
+    assert.ok(idsAt(18).includes('dread'), 'Dread from wave 18, last card in the deck');
+    assert.equal(
+      idsAt(20).length,
+      UPGRADES.length - 1, // Mend, at full health
+      'by wave 20 the whole deck but Mend is on the table',
+    );
   });
 
   test('a long run never offers a card its wave or its cap forbids', () => {
@@ -852,8 +1009,12 @@ describe('bullet state machine', () => {
       },
       30 * 90,
       engage,
-      // Never a second chamber and never the blast: both would blur the count.
-      (offers) => offers.find((id) => id !== 'extraChamber' && id !== 'explosive') ?? offers[0],
+      // Never a second chamber, never the blast and never Thorns: all three
+      // would put a second body in the hurt count without a second bullet.
+      (offers) =>
+        offers.find(
+          (id) => id !== 'extraChamber' && id !== 'explosive' && id !== 'thorns',
+        ) ?? offers[0],
     );
 
     assert.ok(hurt.size > 0, 'the run shot and landed something');
@@ -1021,8 +1182,11 @@ describe('cards in play', () => {
       },
       30 * 90,
       engage,
-      // Never a second chamber: two bullets in the air would blur the count.
-      (offers) => offers.find((id) => id !== 'extraChamber') ?? offers[0],
+      // Never a second chamber, never a second blast (each stack widens it)
+      // and never Thorns - any of the three would blur the count.
+      (offers) =>
+        offers.find((id) => id !== 'extraChamber' && id !== 'explosive' && id !== 'thorns') ??
+        offers[0],
     );
 
     assert.ok(events.explosions.length > 0, 'the card actually fires');
@@ -1122,11 +1286,18 @@ describe('level-up handshake', () => {
       'sprint',
       'mend',
       'heavyRound',
+      'quickLearner',
+      'grit',
       'boomerang',
+      'shockwave',
       'explosive',
       'secondWind',
       'bloodFrenzy',
+      'homing',
+      'thorns',
+      'dread',
     ];
+    assert.equal(allIds.length, UPGRADES.length, 'the list below still describes the deck');
     const notOffered = allIds.find((id) => !offers.includes(id));
     assert.ok(notOffered, 'three cards cannot cover the whole deck');
     assert.equal(world.choose(notOffered), false, 'a card that was not offered');
