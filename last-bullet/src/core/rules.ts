@@ -15,7 +15,6 @@ import {
   LONG_BARREL_STEP,
   MAX_CHAMBER,
   PLAYER_SPEED,
-  QUICK_LEARNER_STEP,
   RETURN_SPEED,
   RETURN_SPEED_STEP,
   SCORE_PER_LEVEL,
@@ -94,7 +93,6 @@ export interface UpgradeState {
   sprint: number;
   mend: number;
   heavyRound: number;
-  quickLearner: number;
   grit: number;
   boomerang: number;
   shockwave: number;
@@ -114,7 +112,6 @@ export const initialUpgrades = (): UpgradeState => ({
   sprint: 0,
   mend: 0,
   heavyRound: 0,
-  quickLearner: 0,
   grit: 0,
   boomerang: 0,
   shockwave: 0,
@@ -146,11 +143,11 @@ export interface UpgradeDef {
  * the wave unlock and the Mend condition, so the world only ever has to decide
  * *which* eligible card a slot rolls - never whether one is legal.
  *
- * The deck is deliberately half open-ended and half finite: `Infinity` cards
- * are the stack sinks a long run keeps paying into (Magnet, Mend, Quick
- * Learner, Explosive Round), while every card with a number is meant to be
- * *finished* - the player should always be able to tell a card they are still
- * building from one they have taken as far as it goes.
+ * The deck is deliberately half open-ended and finite: `Infinity` cards are
+ * the stack sinks a long run keeps paying into (Magnet, Mend, Explosive
+ * Round), while every card with a number is meant to be *finished* - the
+ * player should always be able to tell a card they are still building from
+ * one they have taken as far as it goes.
  *
  * Nothing in here conflicts with anything else either: where two cards touch
  * the same idea they are made to multiply instead of cancel, the clearest
@@ -218,15 +215,6 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'HEAVY ROUND',
     blurb: '2 damage, slower shots',
     max: 1,
-    rarity: 'common',
-    unlockWave: 1,
-    needsDamage: false,
-  },
-  {
-    id: 'quickLearner',
-    name: 'QUICK LEARNER',
-    blurb: '+1 XP from every kill',
-    max: Infinity, // levels feed cards, so this one never stops mattering
     rarity: 'common',
     unlockWave: 1,
     needsDamage: false,
@@ -377,13 +365,6 @@ export const explosiveRadiusFor = (state: UpgradeState): number =>
     ? EXPLOSIVE_RADIUS + EXPLOSIVE_RADIUS_STEP * (state.explosive - 1)
     : 0;
 export const bloodFrenzyEnabled = (state: UpgradeState): boolean => state.bloodFrenzy > 0;
-
-/**
- * Quick Learner: what a kill is worth once the bonus is added, so XP stays a
- * whole number and the HUD never has to print a fraction of a level.
- */
-export const killXpFor = (state: UpgradeState, base: number): number =>
-  base + QUICK_LEARNER_STEP * state.quickLearner;
 
 /** Grit: how long a hit leaves the survivor untouchable. */
 export const invulnWindowFor = (state: UpgradeState): number =>

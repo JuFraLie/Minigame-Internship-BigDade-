@@ -16,7 +16,6 @@ import {
   homingTurnFor,
   initialUpgrades,
   invulnWindowFor,
-  killXpFor,
   moveSpeedFor,
   pickupRadiusFor,
   rarityPool,
@@ -57,7 +56,6 @@ import {
   PLAYER_MAX_HP,
   PLAYER_RADIUS,
   PLAYER_SPEED,
-  QUICK_LEARNER_STEP,
   SECOND_WIND_HEARTS,
   SECOND_WIND_PUSH,
   SHOCKWAVE_STEP,
@@ -507,18 +505,18 @@ describe('upgrade stacking and caps', () => {
     }
   });
 
-  test('four cards never stop, and the rest are all sealed at a number', () => {
+  test('three cards never stop, and the rest are all sealed at a number', () => {
     const openEnded = UPGRADES.filter((def) => def.max === Infinity)
       .map((def) => def.id)
       .sort();
     assert.deepEqual(
       openEnded,
-      ['explosive', 'magnet', 'mend', 'quickLearner'],
+      ['explosive', 'magnet', 'mend'],
       'the stack sinks a long run keeps paying into',
     );
 
-    // Every other card is finite, so the deck as a whole is half the cards
-    // you finish and half the ones you never can.
+    // Every other card is finite, so the deck splits into the three cards you
+    // never finish and the thirteen you always can.
     assert.equal(openEnded.length + UPGRADES.filter((def) => def.max < Infinity).length, UPGRADES.length);
     for (const def of UPGRADES) {
       if (def.max === Infinity) continue;
@@ -607,12 +605,6 @@ describe('upgrade stacking and caps', () => {
 
   test('the newer cards promise numbers that move with their stacks', () => {
     const fresh = initialUpgrades();
-
-    // Quick Learner: a whole extra point of XP per kill, so the bar never
-    // has to show a fraction of a level.
-    assert.equal(killXpFor(fresh, 1), 1, 'an unstacked kill is worth exactly what it was');
-    assert.equal(killXpFor(stacks({ quickLearner: 3 }), 1), 1 + 3 * QUICK_LEARNER_STEP);
-    assert.equal(killXpFor(stacks({ quickLearner: 2 }), 5), 5 + 2 * QUICK_LEARNER_STEP);
 
     // Grit: the same window, held open longer.
     assert.equal(invulnWindowFor(fresh), INVULNERABLE_SECONDS);
@@ -730,7 +722,6 @@ describe('upgrade stacking and caps', () => {
       sprint: 4,
       mend: 99,
       heavyRound: 1,
-      quickLearner: 99,
       grit: 3,
       boomerang: 3,
       shockwave: 3,
@@ -743,13 +734,13 @@ describe('upgrade stacking and caps', () => {
     } satisfies UpgradeState;
 
     // Every card that has a cap is taken and Mend is out at full health;
-    // only the three cards that never stop are left. The gate must answer
+    // only the two cards that never stop are left. The gate must answer
     // with an array rather than throw, and that array holds exactly those.
     assert.deepEqual(
       availableUpgrades(everything, PLAYER_MAX_HP, PLAYER_MAX_HP, OPEN_WAVE).map(
         (def) => def.id,
       ),
-      ['magnet', 'quickLearner', 'explosive'],
+      ['magnet', 'explosive'],
     );
   });
 });
@@ -759,7 +750,7 @@ describe('rarity and wave gating', () => {
   const idsAt = (wave: number, state = initialUpgrades(), hp = PLAYER_MAX_HP): UpgradeId[] =>
     availableUpgrades(state, hp, PLAYER_MAX_HP, wave).map((def) => def.id);
 
-  test('the deck is bucketed into nine commons, two Super Rares, six Legendaries', () => {
+  test('the deck is bucketed into eight commons, two Super Rares, six Legendaries', () => {
     const common = rarityPool(UPGRADES, 'common')
       .map((def) => def.id)
       .sort();
@@ -771,7 +762,6 @@ describe('rarity and wave gating', () => {
       'magnet',
       'mend',
       'quickHands',
-      'quickLearner',
       'sprint',
     ]);
     assert.deepEqual(
@@ -782,7 +772,7 @@ describe('rarity and wave gating', () => {
       rarityPool(UPGRADES, 'legendary').map((def) => def.id),
       ['explosive', 'secondWind', 'bloodFrenzy', 'homing', 'thorns', 'dread'],
     );
-    assert.equal(rarityPool(UPGRADES, 'common').length, 9);
+    assert.equal(rarityPool(UPGRADES, 'common').length, 8);
     assert.equal(rarityPool(UPGRADES, 'legendary').length, 6);
     assert.equal(
       rarityPool(UPGRADES, 'common').length +
@@ -1286,7 +1276,6 @@ describe('level-up handshake', () => {
       'sprint',
       'mend',
       'heavyRound',
-      'quickLearner',
       'grit',
       'boomerang',
       'shockwave',

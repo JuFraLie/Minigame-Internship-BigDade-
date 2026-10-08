@@ -19,7 +19,6 @@ const ACCENT: Readonly<Record<UpgradeId, number>> = {
   sprint: CYAN_HEX,
   mend: PAPER_HEX,
   heavyRound: AMBER_HEX,
-  quickLearner: LIME_HEX,
   grit: CORAL_HEX,
   boomerang: VIOLET_HEX,
   shockwave: AMBER_HEX,

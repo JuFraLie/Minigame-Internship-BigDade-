@@ -125,7 +125,6 @@ export class FrameBuilder {
     stacks.sprint = progression.stacks.sprint;
     stacks.mend = progression.stacks.mend;
     stacks.heavyRound = progression.stacks.heavyRound;
-    stacks.quickLearner = progression.stacks.quickLearner;
     stacks.grit = progression.stacks.grit;
     stacks.boomerang = progression.stacks.boomerang;
     stacks.shockwave = progression.stacks.shockwave;

@@ -8,7 +8,6 @@ import type { RandomPort } from '../ports/RandomPort.ts';
 import {
   availableUpgrades,
   initialUpgrades,
-  killXpFor,
   rarityPool,
   scoreFor,
   xpNeededForLevel,
@@ -74,8 +73,7 @@ export class Progression {
     this.killsValue += 1;
     this.points += ENEMY_STATS[enemy.kind].points;
     // XP is banked the instant it dies: nothing drops, nothing is collected.
-    // Quick Learner raises what the kill is worth; nothing else touches it.
-    this.xpValue += killXpFor(this.ups, enemy.xp);
+    this.xpValue += enemy.xp;
   }
 
   /** Test-suite hook: stacks only, never a card's side effect. */
@@ -144,7 +142,7 @@ export class Progression {
 
   /**
    * Three cards, rolled one slot at a time (Game Design Document, section 7):
-   * 8 % for a Legendary, a further 5 % for a Super Rare, the rest Common.
+   * 6 % for a Legendary, a further 4 % for a Super Rare, the rest Common.
    *
    * Every tier falls back to the next commonest one it can still fill, so a
    * late round whose commons are all capped never wastes a slot - and never

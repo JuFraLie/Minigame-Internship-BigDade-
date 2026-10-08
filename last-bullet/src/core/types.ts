@@ -51,7 +51,6 @@ export type UpgradeId =
   | 'sprint'
   | 'mend'
   | 'heavyRound'
-  | 'quickLearner'
   | 'grit'
   | 'boomerang'
   | 'shockwave'
