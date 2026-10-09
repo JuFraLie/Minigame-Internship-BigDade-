@@ -31,9 +31,8 @@ interface HeroEnemy {
  * The Play Screen (AGENTS.md section 2): title plus a Play button, and tapping
  * anywhere on it also starts the round. Gameplay never starts on its own.
  *
- * The how-to is exactly two sentences, because the controls are not
- * self-evident: dragging is obvious, auto-fire and the walk-to-reload loop are
- * not.
+ * The how-to is exactly one sentence: the controls are self-evident, the
+ * walk-to-reload loop is not.
  */
 export class MainMenuScene extends Phaser.Scene {
   private ctx!: SceneContextPort;
@@ -103,10 +102,14 @@ export class MainMenuScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5);
 
     this.hint = this.add
-      .text(0, 0, 'Drag or W A S D to move. Your bullet fires itself, so pick it up again!', {
+      .text(0, 0, 'Your bullet fires itself, so pick it up again!', {
         fontFamily: FONT_BODY,
         fontSize: '17px',
         color: SLATE,
+        // The same ink outline every other label wears, so the hint sits on
+        // the floor tiles instead of floating in them.
+        stroke: '#0b0f1a',
+        strokeThickness: 4,
         align: 'center',
         lineSpacing: 7,
       })
