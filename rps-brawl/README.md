@@ -23,10 +23,32 @@ following `AGENTS.md` (effective 2026-09-26).
 
 ```bash
 npm install
-npm run dev      # dev server
-npm test         # unit tests (node --test --experimental-strip-types)
-npm run build    # type-check + static bundle in dist/
+npm run dev        # dev server
+npm test           # unit tests (node --test --experimental-strip-types)
+npm run build      # type-check + embedded WebView bundle in dist/
+npm run build:web  # type-check + standalone web bundle in dist/ (Vercel)
 ```
+
+## Deploying to Vercel
+
+The game ships in two build flavours (see the note in `vite.config.ts`):
+
+| Command | `IS_DEVELOPMENT_MODE` | Target |
+| --- | --- | --- |
+| `npm run build` | rewritten to `false` by the `release-bridge-flag` plugin | embedded in the Manado Post WebView, where the host injects `window.MpPostMessage` |
+| `npm run build:web` | stays `true` (`--mode standalone`) | any plain browser — no host bridge, so `waitForBridge()` resolves immediately and every `webviewSignal*` call no-ops via optional chaining |
+
+`vercel.json` runs `npm run build:web` and publishes `dist/`; hashed files
+under `/assets/` get `immutable` caching, `/` is always revalidated.
+
+Setup with the Git integration:
+
+1. Import the repository in Vercel and set **Root Directory** to `rps-brawl` —
+   the git root is the parent folder that holds several games.
+2. Keep the Vite framework preset; no environment variables are needed.
+3. Deploy. The output is a static single page: no functions, no SPA rewrites.
+
+CLI alternative: run `npx vercel` from `rps-brawl/` (`--prod` for production).
 
 ## Architecture (strict hexagonal, enforced by tests)
 
