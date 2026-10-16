@@ -19,11 +19,20 @@ function releaseBridgeFlag(): Plugin {
   };
 }
 
-export default defineConfig({
-  base: './',
-  plugins: [releaseBridgeFlag()],
-  build: {
-    outDir: 'dist',
-    target: 'es2020',
-  },
+export default defineConfig(({ mode }) => {
+  // A standalone web deployment (e.g. Vercel) runs in a plain browser where no
+  // MPArcade WebView injects `window.MpPostMessage`. Leaving IS_DEVELOPMENT_MODE
+  // = true there lets waitForBridge() resolve immediately so the game boots;
+  // every webviewSignal* call no-ops via optional chaining. Only the embedded
+  // WebView build (default mode) flips the flag to false.
+  const standalone = mode === 'standalone';
+
+  return {
+    base: './',
+    plugins: standalone ? [] : [releaseBridgeFlag()],
+    build: {
+      outDir: 'dist',
+      target: 'es2020',
+    },
+  };
 });
