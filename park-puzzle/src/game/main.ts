@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { designSize, renderScale, VIEWPORT_CHANGED } from '../render/viewport.ts';
+import { THEME } from '../render/theme.ts';
 import { GameView } from '../render/gameView.ts';
 import { Game } from './scenes/Game.ts';
 import { GameOver } from './scenes/GameOver.ts';
@@ -29,7 +30,7 @@ export const StartGame = (parent: string): Phaser.Game => {
         width: width * density,
         height: height * density,
         parent,
-        backgroundColor: '#1d2530',
+        backgroundColor: THEME.bgCss,
         // Nearest-neighbour sampling, so the flat art stays crisp instead of being
         // bilinearly smeared. Textures decide this individually in the Canvas renderer
         // (`!frame.source.scaleMode`), so this is only the fallback for anything that does

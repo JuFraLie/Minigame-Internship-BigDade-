@@ -7,14 +7,8 @@ import type { BoardLayout } from './layout.ts';
 import { measureViewport } from './viewport.ts';
 import { LIVES } from '../core/config.ts';
 import { addText } from './text.ts';
+import { THEME } from './theme.ts';
 import { createButton } from './widgets.ts';
-
-const ROAD_COLOR = 0x364049;
-const ROAD_EDGE = 0x47525f;
-const LOT_COLOR = 0x4a5665;
-const LOT_EDGE = 0x5b6878;
-const LOT_LINE = 0x66727f;
-const LANE_LINE = 0xe8b45c;
 
 /** Blocked-car nudge: three quarter-cycles over a third of a second, then it settles. */
 const SHAKE_MS = 320;
@@ -67,8 +61,8 @@ export class GameView {
 
         this.hud = scene.add.container(0, 0);
         this.scoreText = addText(scene, 0, 0, '0', { fontSize: '30px', fontStyle: 'bold' });
-        this.comboText = addText(scene, 0, 0, '', { fontSize: '18px', fontStyle: 'bold', color: '#ffd166' });
-        this.livesText = addText(scene, 0, 0, '', { fontSize: '26px', fontStyle: 'bold', color: '#ff6b6b' });
+        this.comboText = addText(scene, 0, 0, '', { fontSize: '18px', fontStyle: 'bold', color: THEME.text.accent });
+        this.livesText = addText(scene, 0, 0, '', { fontSize: '26px', fontStyle: 'bold', color: THEME.text.danger });
         this.hud.add([this.scoreText, this.comboText, this.livesText]);
 
         this.hud.add(
@@ -78,8 +72,7 @@ export class GameView {
                 width: 64,
                 height: 44,
                 label: 'II',
-                fill: 0x3f4d5c,
-                stroke: 0x78828e,
+                variant: 'neutral',
                 fontSize: '20px',
                 onTap: onPause,
             }),
@@ -177,9 +170,9 @@ export class GameView {
         // The road: inset a hair so the page colour frames the slab instead of it
         // bleeding to a sharp corner against the background.
         const inset = 1;
-        g.fillStyle(ROAD_COLOR, 1);
+        g.fillStyle(THEME.board.road, 1);
         g.fillRoundedRect(inset, inset, width - inset * 2, height - inset * 2, cell * 0.42);
-        g.lineStyle(2, ROAD_EDGE, 1);
+        g.lineStyle(2, THEME.board.roadEdge, 1);
         g.strokeRoundedRect(inset, inset, width - inset * 2, height - inset * 2, cell * 0.42);
 
         // Lane markings: short rounded dashes down the middle of each road edge, with the
@@ -189,7 +182,7 @@ export class GameView {
         const gap = cell * 0.34;
         const corner = cell * 0.9;
 
-        g.fillStyle(LANE_LINE, 0.5);
+        g.fillStyle(THEME.board.lane, 0.5);
         for (let d = corner; d < width - corner; d += dash + gap) {
             g.fillRoundedRect(d, cell * 0.5 - mark / 2, dash, mark, mark / 2);
             g.fillRoundedRect(d, height - cell * 0.5 - mark / 2, dash, mark, mark / 2);
@@ -206,12 +199,12 @@ export class GameView {
         const lotW = cols * cell;
         const lotH = rows * cell;
 
-        g.fillStyle(LOT_COLOR, 1);
+        g.fillStyle(THEME.board.lot, 1);
         g.fillRoundedRect(lotX, lotY, lotW, lotH, cell * 0.2);
-        g.lineStyle(2, LOT_EDGE, 1);
+        g.lineStyle(2, THEME.board.lotEdge, 1);
         g.strokeRoundedRect(lotX, lotY, lotW, lotH, cell * 0.2);
 
-        g.lineStyle(1, LOT_LINE, 0.4);
+        g.lineStyle(1, THEME.board.lotLine, 0.4);
         for (let c = 1; c < cols; c++) {
             g.lineBetween(lotX + c * cell, lotY + 5, lotX + c * cell, lotY + lotH - 5);
         }
@@ -375,8 +368,11 @@ export class GameView {
         if (!texture) return;
 
         const ctx = texture.getContext();
-        ctx.strokeStyle = '#ffd166';
-        ctx.fillStyle = '#ffd166';
+        // The padlock sits over the lot, so it takes the danger colour rather than the old
+        // gold: on a pale apron a gold lock has almost no contrast, while red reads as
+        // "blocked" at a glance.
+        ctx.strokeStyle = THEME.text.danger;
+        ctx.fillStyle = THEME.text.danger;
         ctx.lineWidth = 3;
 
         // Shackle.
@@ -425,7 +421,7 @@ export class GameView {
 
             for (const cell of entry.cells) {
                 const { x, y } = this.ringCellRect(cell, snapshot.cols, snapshot.rows);
-                g.fillStyle(blocked ? 0xff4d4d : 0x8fb8ff, blocked ? pulse : 0.12);
+                g.fillStyle(blocked ? THEME.pulse.blocked : THEME.pulse.open, blocked ? pulse : 0.12);
                 g.fillRect(x + 3, y + 3, this.layout.cell - 6, this.layout.cell - 6);
             }
         }

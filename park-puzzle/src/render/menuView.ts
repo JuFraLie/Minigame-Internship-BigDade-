@@ -7,9 +7,8 @@ import { computeBoardLayout } from './layout.ts';
 import type { BoardLayout } from './layout.ts';
 import { measureViewport } from './viewport.ts';
 import { addText } from './text.ts';
+import { THEME } from './theme.ts';
 import { createButton } from './widgets.ts';
-
-const SKY = 0x1d2530;
 
 /**
  * The Play Screen (AGENTS.md §2).
@@ -32,7 +31,7 @@ export class MenuView {
         private readonly scene: Phaser.Scene,
         private readonly onStart: () => void,
     ) {
-        scene.cameras.main.setBackgroundColor(SKY);
+        scene.cameras.main.setBackgroundColor(THEME.bg);
         this.layout = computeBoardLayout(measureViewport(), 4, 4);
         this.build();
     }
@@ -62,7 +61,7 @@ export class MenuView {
             addText(scene, cx, height * 0.17, 'RING ROAD', {
                 fontSize: '52px',
                 fontStyle: 'bold',
-                color: '#ffd166',
+                color: THEME.text.accent,
                 align: 'center',
             }).setOrigin(0.5, 0.5),
         );
@@ -71,7 +70,7 @@ export class MenuView {
             addText(scene, cx, height * 0.17 + 54, 'PARKING', {
                 fontSize: '52px',
                 fontStyle: 'bold',
-                color: '#ffffff',
+                color: THEME.text.primary,
                 align: 'center',
             }).setOrigin(0.5, 0.5),
         );
@@ -82,7 +81,7 @@ export class MenuView {
                 cx,
                 height * 0.42,
                 'Tap a car to send it out onto the ring road.\nDo not hit the cars already circling the lot!',
-                { fontSize: '19px', color: '#c7d0da', align: 'center', wordWrapWidth: width - 48 },
+                { fontSize: '19px', color: THEME.text.muted, align: 'center', wordWrapWidth: width - 48 },
             ).setOrigin(0.5, 0.5),
         );
 
@@ -95,8 +94,7 @@ export class MenuView {
                 width: Math.min(280, width - 64),
                 height: 74,
                 label: 'PLAY',
-                fill: 0x2ecc71,
-                stroke: 0x27ae60,
+                variant: 'primary',
                 fontSize: '32px',
                 onTap: this.onStart,
             }),
@@ -120,16 +118,16 @@ export class MenuView {
 
         // Same flat slab the round draws: soft-cornered road, warmer lane dashes, lighter
         // bay-ruled lot. The Play Screen then teaches the real board, not an older one.
-        g.fillStyle(0x364049, 1);
+        g.fillStyle(THEME.board.road, 1);
         g.fillRoundedRect(x, y, width, height, cell * 0.42);
-        g.lineStyle(2, 0x47525f, 1);
+        g.lineStyle(2, THEME.board.roadEdge, 1);
         g.strokeRoundedRect(x, y, width, height, cell * 0.42);
 
         const mark = Math.max(2, cell * 0.07);
         const dash = cell * 0.3;
         const gap = cell * 0.34;
         const corner = cell * 0.9;
-        g.fillStyle(0xe8b45c, 0.5);
+        g.fillStyle(THEME.board.lane, 0.5);
         for (let d = corner; d < width - corner; d += dash + gap) {
             g.fillRoundedRect(x + d, y + cell * 0.5 - mark / 2, dash, mark, mark / 2);
             g.fillRoundedRect(x + d, y + height - cell * 0.5 - mark / 2, dash, mark, mark / 2);
@@ -139,12 +137,12 @@ export class MenuView {
             g.fillRoundedRect(x + width - cell * 0.5 - mark / 2, y + d, mark, dash, mark / 2);
         }
 
-        g.fillStyle(0x4a5665, 1);
+        g.fillStyle(THEME.board.lot, 1);
         g.fillRoundedRect(x + cell, y + cell, cols * cell, rows * cell, cell * 0.2);
-        g.lineStyle(2, 0x5b6878, 1);
+        g.lineStyle(2, THEME.board.lotEdge, 1);
         g.strokeRoundedRect(x + cell, y + cell, cols * cell, rows * cell, cell * 0.2);
 
-        g.lineStyle(1, 0x66727f, 0.4);
+        g.lineStyle(1, THEME.board.lotLine, 0.4);
         for (let c = 1; c < cols; c++) {
             g.lineBetween(
                 x + cell + c * cell,

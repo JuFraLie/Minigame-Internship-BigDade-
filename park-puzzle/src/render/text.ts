@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { THEME } from './theme.ts';
 
 /** Shared font stack: no web font is downloaded, so nothing blocks first paint. */
 const FONT = 'Arial, Helvetica, sans-serif';
@@ -25,7 +26,7 @@ export function addText(
             fontFamily: FONT,
             fontSize: options.fontSize ?? '24px',
             fontStyle: options.fontStyle ?? 'normal',
-            color: options.color ?? '#ffffff',
+            color: options.color ?? THEME.text.primary,
             align: options.align ?? 'left',
             wordWrap: options.wordWrapWidth ? { width: options.wordWrapWidth, useAdvancedWrap: true } : undefined,
         })

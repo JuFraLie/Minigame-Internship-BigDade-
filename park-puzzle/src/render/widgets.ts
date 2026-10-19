@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
+import { THEME } from './theme.ts';
 import { addText } from './text.ts';
+
+/** Which theme slot a button fills: its colours come from the palette, not the call site. */
+export type ButtonVariant = 'primary' | 'danger' | 'neutral';
 
 export interface ButtonOptions {
     x: number;
@@ -7,10 +11,9 @@ export interface ButtonOptions {
     width: number;
     height: number;
     label: string;
-    fill: number;
-    stroke: number;
+    /** Defaults to `primary` (filled green, white label). */
+    variant?: ButtonVariant;
     fontSize?: string;
-    textColor?: string;
     onTap: () => void;
 }
 
@@ -38,14 +41,19 @@ export function paintRoundedBox(
  */
 export function createButton(scene: Phaser.Scene, options: ButtonOptions): Phaser.GameObjects.Container {
     const { x, y, width, height } = options;
+    const variant = options.variant ?? 'primary';
+    const colors = THEME.button[variant];
+    // Filled variants carry their own contrast, so the label is white; the neutral pill is
+    // pale, so it takes the dark primary text instead.
+    const textColor = variant === 'neutral' ? THEME.text.primary : THEME.text.onFill;
 
     const graphics = scene.add.graphics();
-    paintRoundedBox(graphics, -width / 2, -height / 2, width, height, height / 2, options.fill, options.stroke);
+    paintRoundedBox(graphics, -width / 2, -height / 2, width, height, height / 2, colors.fill, colors.stroke);
 
     const label = addText(scene, 0, 0, options.label, {
         fontSize: options.fontSize ?? '24px',
         fontStyle: 'bold',
-        color: options.textColor ?? '#ffffff',
+        color: textColor,
         align: 'center',
     }).setOrigin(0.5, 0.5);
 

@@ -3,10 +3,8 @@ import type { RoundResult } from '../app/roundSession.ts';
 import { computeBoardLayout } from './layout.ts';
 import { measureViewport } from './viewport.ts';
 import { addText } from './text.ts';
+import { THEME } from './theme.ts';
 import { createButton, paintRoundedBox } from './widgets.ts';
-
-const WIN_BG = 0x16342a;
-const LOSE_BG = 0x3a1d22;
 
 export interface ResultActions {
     /** Win only: the next level. */
@@ -35,10 +33,10 @@ export class ResultPanel {
         const cx = width / 2;
 
         this.container = scene.add.container(0, 0).setDepth(100);
-        scene.cameras.main.setBackgroundColor(result.win ? WIN_BG : LOSE_BG);
+        scene.cameras.main.setBackgroundColor(result.win ? THEME.result.winBg : THEME.result.loseBg);
 
         const dim = scene.add.graphics();
-        dim.fillStyle(0x0b0f14, 0.72);
+        dim.fillStyle(THEME.panel.dim, THEME.panel.dimAlphaSoft);
         dim.fillRect(0, 0, width, height);
         this.container.add(dim);
 
@@ -46,7 +44,7 @@ export class ResultPanel {
             addText(scene, cx, height * 0.2, result.win ? 'LOT CLEARED' : 'OUT OF FENDERS', {
                 fontSize: '40px',
                 fontStyle: 'bold',
-                color: result.win ? '#2ecc71' : '#ff6b6b',
+                color: result.win ? THEME.text.primary : THEME.text.danger,
                 align: 'center',
             }).setOrigin(0.5, 0.5),
         );
@@ -54,21 +52,21 @@ export class ResultPanel {
         this.container.add(
             addText(scene, cx, height * 0.2 + 44, `LEVEL ${result.level}`, {
                 fontSize: '20px',
-                color: '#9fb0c0',
+                color: THEME.text.muted,
                 align: 'center',
             }).setOrigin(0.5, 0.5),
         );
 
         const panelWidth = Math.min(340, width - 56);
         const panel = scene.add.graphics();
-        paintRoundedBox(panel, cx - panelWidth / 2, height * 0.36, panelWidth, 210, 20, 0x232d39, 0x3f4d5c);
+        paintRoundedBox(panel, cx - panelWidth / 2, height * 0.36, panelWidth, 210, 20, THEME.panel.fill, THEME.panel.stroke);
         this.container.add(panel);
 
         this.container.add(
             addText(scene, cx, height * 0.42, String(result.score), {
                 fontSize: '54px',
                 fontStyle: 'bold',
-                color: '#ffd166',
+                color: THEME.text.accent,
                 align: 'center',
             }).setOrigin(0.5, 0.5),
         );
@@ -79,7 +77,7 @@ export class ResultPanel {
                 cx,
                 height * 0.52,
                 `${result.cleared} of ${result.totalCars} cars cleared   •   best combo x${result.maxCombo}`,
-                { fontSize: '17px', color: '#9fb0c0', align: 'center', wordWrapWidth: panelWidth - 24 },
+                { fontSize: '17px', color: THEME.text.muted, align: 'center', wordWrapWidth: panelWidth - 24 },
             ).setOrigin(0.5, 0.5),
         );
 
@@ -90,8 +88,7 @@ export class ResultPanel {
                   width: panelWidth - 40,
                   height: 70,
                   label: 'NEXT LEVEL',
-                  fill: 0x2ecc71,
-                  stroke: 0x27ae60,
+                  variant: 'primary',
                   fontSize: '28px',
                   onTap: () => actions.onNextLevel(),
               })
@@ -101,8 +98,7 @@ export class ResultPanel {
                   width: panelWidth - 40,
                   height: 70,
                   label: 'RETRY',
-                  fill: 0xe67e22,
-                  stroke: 0xd35400,
+                  variant: 'danger',
                   fontSize: '28px',
                   onTap: () => actions.onRetry(),
               });
@@ -115,8 +111,7 @@ export class ResultPanel {
                 width: panelWidth - 40,
                 height: 60,
                 label: 'EXIT',
-                fill: 0x3f4d5c,
-                stroke: 0x78828e,
+                variant: 'neutral',
                 fontSize: '24px',
                 onTap: () => actions.onExit(),
             }),

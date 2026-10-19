@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { addText } from './text.ts';
+import { THEME } from './theme.ts';
 import { createButton, paintRoundedBox } from './widgets.ts';
 import { measureViewport } from './viewport.ts';
 
@@ -41,7 +42,7 @@ export class PauseOverlay {
         const { width, height } = measureViewport();
 
         const dim = scene.add.graphics().setDepth(DEPTH);
-        dim.fillStyle(0x0b0f14, 0.78);
+        dim.fillStyle(THEME.panel.dim, THEME.panel.dimAlpha);
         dim.fillRect(0, 0, width, height);
         dim.setInteractive(
             new Phaser.Geom.Rectangle(0, 0, width, height),
@@ -59,14 +60,14 @@ export class PauseOverlay {
             panelWidth,
             220,
             20,
-            0x232d39,
-            0x3f4d5c,
+            THEME.panel.fill,
+            THEME.panel.stroke,
         );
 
         const title = addText(scene, width / 2, height / 2 - 58, 'PAUSED', {
             fontSize: '34px',
             fontStyle: 'bold',
-            color: '#ffd166',
+            color: THEME.text.primary,
             align: 'center',
         })
             .setOrigin(0.5, 0.5)
@@ -78,8 +79,7 @@ export class PauseOverlay {
             width: panelWidth - 64,
             height: 66,
             label: 'RESUME',
-            fill: 0x2ecc71,
-            stroke: 0x27ae60,
+            variant: 'primary',
             fontSize: '26px',
             onTap: onResume,
         }).setDepth(DEPTH + 3);

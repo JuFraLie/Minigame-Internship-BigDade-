@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
+import { THEME } from './theme.ts';
 
 /**
  * Scene-to-scene fades.
  *
  * Every screen change in this game used to be a hard cut, which on a touch device reads
  * as a dropped frame rather than as a change of screen. Each transition is therefore two
- * halves: the outgoing scene fades to black and only then hands over, and the incoming
- * scene fades back up from it, so the change reads as one continuous dimming.
+ * halves: the outgoing scene fades to the page colour and only then hands over, and the
+ * incoming scene fades back up from it, so the change reads as one continuous dimming.
  *
  * The fade is driven by `Camera.fadeEffect`, which the camera advances from its own update
  * and draws over the finished frame in `postRenderCanvas`. It is not a tween, so there is
@@ -17,7 +18,7 @@ import Phaser from 'phaser';
 export const FADE_MS = 170;
 
 /**
- * Fades this scene to black, then switches to `key`.
+ * Fades this scene to the page colour, then switches to `key`.
  *
  * The switch happens on `FADE_OUT_COMPLETE`, never immediately: the outgoing scene stays
  * on screen for the whole ramp, so its last frame is what dims away instead of vanishing
@@ -35,16 +36,18 @@ export function fadeOutAndStart(scene: Phaser.Scene, key: string, data?: object)
     camera.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
         scene.scene.start(key, data);
     });
-    camera.fadeOut(FADE_MS, 0, 0, 0);
+    const { r, g, b } = THEME.fade;
+    camera.fadeOut(FADE_MS, r, g, b);
 }
 
 /**
- * Fades a freshly entered scene up from black. Call once at the end of `create()`.
+ * Fades a freshly entered scene up from the page colour. Call once at the end of `create()`.
  *
- * This is also the reason every scene calls it: a camera remembers the black it faded out
- * to, so without an explicit fade back the second visit to a screen would start solid
- * black and stay that way.
+ * This is also the reason every scene calls it: a camera remembers the colour it faded out
+ * to, so without an explicit fade back the second visit to a screen would start solid on
+ * that colour and stay that way.
  */
 export function fadeIn(scene: Phaser.Scene): void {
-    scene.cameras.main.fadeIn(FADE_MS, 0, 0, 0);
+    const { r, g, b } = THEME.fade;
+    scene.cameras.main.fadeIn(FADE_MS, r, g, b);
 }
