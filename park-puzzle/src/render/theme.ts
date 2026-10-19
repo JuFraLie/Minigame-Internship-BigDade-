@@ -102,4 +102,37 @@ export const THEME = {
         winBg: 0xe3f5ea,
         loseBg: 0xfdeaea,
     },
+
+    /**
+     * The Play Screen only — the one screen that leaves the light chrome behind for an
+     * arcade dusk sky, so its colours live apart from the light theme above. Everything
+     * on it is chunky: one dark outline (`ink`) on every shape, amber plates, cream ink.
+     */
+    menu: {
+        /** Sky wash, top → bottom. Drawn as stepped bands: Canvas has no gradient fill. */
+        sky: [0x121436, 0x3a2069, 0x7a2f74],
+        /** Sunburst wedges turning slowly behind the logo. */
+        ray: 0xffb25c,
+        /** Twinkle specks over the sky. */
+        star: 0xffe9a8,
+        /** The single outline colour every chunk on this screen wears. */
+        ink: 0x191034,
+        inkCss: '#191034',
+        /** The darker ink a drop shadow uses, so a shadow reads under the outline. */
+        shadowCss: '#0d0922',
+        /** Logo and button label ink. */
+        logoInk: '#fff6e6',
+        /** Amber plate under the second title line, and the how-to tab. */
+        plate: 0xff8c1a,
+        /** Sticker card behind the how-to. */
+        card: 0xfff7e8,
+        cardInkCss: '#2b2440',
+        /** How-to step badges, alternating orange / green. */
+        badge: [0xff7a29, 0x2ea85f],
+        /** Pressable green, top half (highlight) and bottom half (body). */
+        goTop: 0x4ad97f,
+        goBottom: 0x1f9d55,
+        /** Hint under the button. */
+        hintCss: '#ffd9a1',
+    },
 } as const;
