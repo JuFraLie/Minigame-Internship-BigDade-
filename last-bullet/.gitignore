@@ -7,7 +7,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 node_modules
-dist
+# dist/ is committed on purpose: GitHub Pages serves the built game from
+# last-bullet/dist/ (same pattern as dungeon-runner and whack-a-monster).
 dist-ssr
 *.local
 
