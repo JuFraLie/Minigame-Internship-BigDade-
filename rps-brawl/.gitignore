@@ -1,4 +1,6 @@
 node_modules/
-dist/
+# dist/ is committed on purpose: GitHub Pages serves the built game from
+# rps-brawl/dist/ (same pattern as dungeon-runner, last-bullet, serpent_rogue
+# and whack-a-monster). Always build it with `npm run build:web`.
 *.local
 .vite/
