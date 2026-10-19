@@ -8,7 +8,7 @@ import type { BoardLayout } from './layout.ts';
 import { measureViewport } from './viewport.ts';
 import { addText } from './text.ts';
 import { THEME } from './theme.ts';
-import { createButton } from './widgets.ts';
+import { createButton, paintRoundedBox } from './widgets.ts';
 
 /**
  * The Play Screen (AGENTS.md §2).
@@ -57,35 +57,71 @@ export class MenuView {
             return object;
         };
 
+        // Title block: the road is the noun that never changes, the parking the accent
+        // under it, and a short amber rule closes the lockup off.
+        const titleY = height * 0.13;
         collect(
-            addText(scene, cx, height * 0.17, 'RING ROAD', {
-                fontSize: '52px',
+            addText(scene, cx, titleY, 'RING ROAD', {
+                fontSize: '46px',
+                fontStyle: 'bold',
+                color: THEME.text.primary,
+                align: 'center',
+            }).setOrigin(0.5, 0.5),
+        );
+        collect(
+            addText(scene, cx, titleY + 48, 'PARKING', {
+                fontSize: '46px',
                 fontStyle: 'bold',
                 color: THEME.text.accent,
                 align: 'center',
             }).setOrigin(0.5, 0.5),
         );
 
-        collect(
-            addText(scene, cx, height * 0.17 + 54, 'PARKING', {
-                fontSize: '52px',
-                fontStyle: 'bold',
-                color: THEME.text.primary,
-                align: 'center',
-            }).setOrigin(0.5, 0.5),
-        );
+        const accentBar = scene.add.graphics();
+        paintRoundedBox(accentBar, cx - 32, titleY + 84, 64, 6, 3, THEME.text.accentNumber, THEME.text.accentNumber);
+        collect(accentBar);
 
-        collect(
-            addText(
-                scene,
-                cx,
-                height * 0.42,
-                'Tap a car to send it out onto the ring road.\nDo not hit the cars already circling the lot!',
-                { fontSize: '19px', color: THEME.text.muted, align: 'center', wordWrapWidth: width - 48 },
-            ).setOrigin(0.5, 0.5),
-        );
+        // How-to: two numbered rows inside a white card instead of a loose paragraph, so
+        // the rules read as steps rather than as a caption someone can skip.
+        const cardX = 24;
+        const cardW = width - 48;
+        const cardY = height * 0.27;
+        const cardH = 116;
+        const card = scene.add.graphics();
+        paintRoundedBox(card, cardX, cardY, cardW, cardH, 18, THEME.panel.fill, THEME.panel.stroke);
+        collect(card);
 
-        this.buildDemoBoard(content, cx, height * 0.63);
+        const steps = [
+            'Tap a car to send it out onto the ring road.',
+            "Don't hit the cars already circling the lot!",
+        ];
+        steps.forEach((line, i) => {
+            const rowY = cardY + 34 + i * 46;
+
+            const badge = scene.add.graphics();
+            badge.fillStyle(THEME.text.accentNumber, 1);
+            badge.fillCircle(cardX + 30, rowY, 13);
+            collect(badge);
+            collect(
+                addText(scene, cardX + 30, rowY, String(i + 1), {
+                    fontSize: '15px',
+                    fontStyle: 'bold',
+                    color: THEME.text.onFill,
+                    align: 'center',
+                }).setOrigin(0.5, 0.5),
+            );
+
+            collect(
+                addText(scene, cardX + 56, rowY, line, {
+                    fontSize: '15px',
+                    color: THEME.text.muted,
+                    wordWrapWidth: cardW - 72,
+                    align: 'left',
+                }).setOrigin(0, 0.5),
+            );
+        });
+
+        this.buildDemoBoard(content, cx, height * 0.62);
 
         content.add(
             createButton(scene, {
@@ -98,6 +134,14 @@ export class MenuView {
                 fontSize: '32px',
                 onTap: this.onStart,
             }),
+        );
+
+        collect(
+            addText(scene, cx, height * 0.935, 'Tap anywhere to start', {
+                fontSize: '14px',
+                color: THEME.text.muted,
+                align: 'center',
+            }).setOrigin(0.5, 0.5),
         );
     }
 

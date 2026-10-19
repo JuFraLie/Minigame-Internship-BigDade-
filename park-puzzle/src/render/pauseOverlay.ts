@@ -51,21 +51,31 @@ export class PauseOverlay {
         this.dim = dim;
         this.objects.push(dim);
 
-        const panelWidth = Math.min(320, width - 56);
+        // A bottom sheet rather than a centred card: it sits in thumb reach, and the
+        // rounded top corners with a drag handle read as "pull me back up" at a glance.
+        const sheetWidth = width - 24;
+        const sheetHeight = 250;
+        const sheetX = 12;
+        const sheetY = height - sheetHeight - 16;
+
         const panel = scene.add.graphics().setDepth(DEPTH + 1);
         paintRoundedBox(
             panel,
-            width / 2 - panelWidth / 2,
-            height / 2 - 110,
-            panelWidth,
-            220,
-            20,
+            sheetX,
+            sheetY,
+            sheetWidth,
+            sheetHeight,
+            { tl: 26, tr: 26, bl: 18, br: 18 },
             THEME.panel.fill,
             THEME.panel.stroke,
         );
 
-        const title = addText(scene, width / 2, height / 2 - 58, 'PAUSED', {
-            fontSize: '34px',
+        const handle = scene.add.graphics().setDepth(DEPTH + 2);
+        handle.fillStyle(THEME.panel.stroke, 1);
+        handle.fillRoundedRect(width / 2 - 26, sheetY + 12, 52, 6, 3);
+
+        const title = addText(scene, width / 2, sheetY + 52, 'PAUSED', {
+            fontSize: '30px',
             fontStyle: 'bold',
             color: THEME.text.primary,
             align: 'center',
@@ -73,19 +83,27 @@ export class PauseOverlay {
             .setOrigin(0.5, 0.5)
             .setDepth(DEPTH + 2);
 
+        const subtitle = addText(scene, width / 2, sheetY + 88, 'The ring is frozen — take your time.', {
+            fontSize: '14px',
+            color: THEME.text.muted,
+            align: 'center',
+        })
+            .setOrigin(0.5, 0.5)
+            .setDepth(DEPTH + 2);
+
         const button = createButton(scene, {
             x: width / 2,
-            y: height / 2 + 40,
-            width: panelWidth - 64,
-            height: 66,
+            y: sheetY + 178,
+            width: sheetWidth - 48,
+            height: 62,
             label: 'RESUME',
             variant: 'primary',
-            fontSize: '26px',
+            fontSize: '24px',
             onTap: onResume,
         }).setDepth(DEPTH + 3);
 
-        this.objects.push(panel, title, button);
-        this.dropping.push(panel, title, button);
+        this.objects.push(panel, handle, title, subtitle, button);
+        this.dropping.push(panel, handle, title, subtitle, button);
 
         this.enter();
     }
@@ -93,8 +111,8 @@ export class PauseOverlay {
     /**
      * Fades the overlay up over the frozen board.
      *
-     * The dim layer just fades; everything on top of it also drops in from slightly above,
-     * which reads as a sheet sliding to a halt rather than a cut. The RESUME hit area is
+     * The dim layer just fades; everything on top of it also rises in from slightly below,
+     * which is how a bottom sheet arrives rather than a cut. The RESUME hit area is
      * left live throughout — the tween moves the object, not its box, and it only lasts a
      * sixth of a second.
      */
@@ -110,7 +128,7 @@ export class PauseOverlay {
         for (const target of this.dropping) {
             const y = target.y;
             target.setAlpha(0);
-            target.y = y - 18;
+            target.y = y + 18;
             this.scene.tweens.add({
                 targets: target,
                 alpha: 1,

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import type { WorldSnapshot } from '../core/world.ts';
-import { directionVector, ringCellAt } from '../core/ring.ts';
+import type { WorldSnapshot, RingCarView } from '../core/world.ts';
+import { directionVector, ringCellAt, ringPointContinuous } from '../core/ring.ts';
 import { ensureCarTexture, REFERENCE_CELL, useNearest } from './carTextures.ts';
 import { cellToScreen, computeBoardLayout } from './layout.ts';
 import type { BoardLayout } from './layout.ts';
@@ -8,7 +8,7 @@ import { measureViewport } from './viewport.ts';
 import { LIVES } from '../core/config.ts';
 import { addText } from './text.ts';
 import { THEME } from './theme.ts';
-import { createButton } from './widgets.ts';
+import { createButton, paintRoundedBox } from './widgets.ts';
 
 /** Blocked-car nudge: three quarter-cycles over a third of a second, then it settles. */
 const SHAKE_MS = 320;
@@ -39,10 +39,14 @@ export class GameView {
 
     private readonly pulse: Phaser.GameObjects.Graphics;
     private readonly hud: Phaser.GameObjects.Container;
+    /** Chip cards behind the HUD texts — one graphics, cleared and repainted as they change. */
+    private readonly chips: Phaser.GameObjects.Graphics;
 
+    private readonly scoreCaption: Phaser.GameObjects.Text;
     private readonly scoreText: Phaser.GameObjects.Text;
     private readonly comboText: Phaser.GameObjects.Text;
-    private readonly livesText: Phaser.GameObjects.Text;
+    private readonly fendersText: Phaser.GameObjects.Text;
+    private readonly levelText: Phaser.GameObjects.Text;
 
     /** Score last drawn, so a change can be told apart from the initial 0. */
     private lastScore = 0;
@@ -60,25 +64,58 @@ export class GameView {
         this.buildBoard(cols, rows);
 
         this.hud = scene.add.container(0, 0);
-        this.scoreText = addText(scene, 0, 0, '0', { fontSize: '30px', fontStyle: 'bold' });
-        this.comboText = addText(scene, 0, 0, '', { fontSize: '18px', fontStyle: 'bold', color: THEME.text.accent });
-        this.livesText = addText(scene, 0, 0, '', { fontSize: '26px', fontStyle: 'bold', color: THEME.text.danger });
-        this.hud.add([this.scoreText, this.comboText, this.livesText]);
+
+        // Chip cards sit behind the texts in the container, so they always render under.
+        this.chips = scene.add.graphics();
+        this.hud.add(this.chips);
+
+        this.scoreCaption = addText(scene, 0, 0, 'SCORE', {
+            fontSize: '10px',
+            fontStyle: 'bold',
+            color: THEME.text.muted,
+        });
+        this.scoreText = addText(scene, 0, 0, '0', {
+            fontSize: '26px',
+            fontStyle: 'bold',
+            color: THEME.text.primary,
+        });
+        this.comboText = addText(scene, 0, 0, '', {
+            fontSize: '13px',
+            fontStyle: 'bold',
+            color: THEME.text.accent,
+        });
+        this.fendersText = addText(scene, 0, 0, '', {
+            fontSize: '15px',
+            fontStyle: 'bold',
+            color: THEME.text.danger,
+        });
+        this.levelText = addText(scene, 0, 0, '', {
+            fontSize: '14px',
+            fontStyle: 'bold',
+            color: THEME.text.primary,
+        });
+        this.hud.add([
+            this.scoreCaption,
+            this.scoreText,
+            this.comboText,
+            this.fendersText,
+            this.levelText,
+        ]);
 
         this.hud.add(
             createButton(scene, {
                 x: 0,
                 y: 0,
                 width: 64,
-                height: 44,
+                height: 40,
                 label: 'II',
                 variant: 'neutral',
-                fontSize: '20px',
+                fontSize: '17px',
                 onTap: onPause,
             }),
         );
 
-        this.placeHud();
+        this.layoutHud();
     }
 
     /**
@@ -92,16 +129,11 @@ export class GameView {
         const { cols, rows } = this.layout;
         this.layout = computeBoardLayout(measureViewport(), cols, rows);
         this.buildBoard(cols, rows);
-        this.placeHud();
+        this.layoutHud();
     }
 
     /**
-     * Three right-aligned rows fit the `HUD_HEIGHT` budget: fenders and level on top, the
-     * pause pill under it. The pill used to start at `top + 56` while the fender line still
-     * ran to `top + 42`, so the two overlapped and the pill covered the level readout.
-     */
-    /**
-     * Lays the HUD out.
+     * Lays the HUD out and paints the chip cards behind the readouts.
      *
      * Depth is set here rather than left to insertion order: the pulse is built before the
      * board and the board before the HUD, and at a shared depth of 0 that put the opaque
@@ -109,20 +141,46 @@ export class GameView {
      * depends on was being painted over every frame. Pinning the layers makes the stacking
      * survive a rebuild instead of depending on the order the constructor happens to add
      * things in.
+     *
+     * Called once per layout AND once per value change from `drawHud`: the chip widths
+     * hug their texts, so a score that grows by a digit repaints its own card.
      */
-    private placeHud(): void {
+    private layoutHud(): void {
         this.hud.setDepth(80);
 
         const top = Math.max(this.layout.viewport.safeTop, this.layout.viewport.height * 0.08);
         const inset = 16;
+        const g = this.chips;
+        g.clear();
 
-        this.scoreText.setPosition(inset, top + 8);
-        this.comboText.setPosition(inset, top + 46);
-        this.livesText.setPosition(this.layout.viewport.width - inset, top + 8);
-        this.livesText.setOrigin(1, 0);
+        // Score chip, top-left: small caption over the big number.
+        const scorePadX = 13;
+        const scoreW = Math.max(92, Math.max(this.scoreCaption.width, this.scoreText.width) + scorePadX * 2);
+        paintRoundedBox(g, inset, top, scoreW, 56, 16, THEME.chip.fill, THEME.chip.stroke, 1, 2);
+        this.scoreCaption.setPosition(inset + scorePadX, top + 7);
+        this.scoreText.setPosition(inset + scorePadX, top + 20);
 
+        // Fenders and level chip, top-right.
+        const levelW = this.levelText.width;
+        const fendersW = this.fendersText.width;
+        const livesChipW = Math.max(92, fendersW + 10 + levelW + 26);
+        const livesChipX = this.layout.viewport.width - inset - livesChipW;
+        paintRoundedBox(g, livesChipX, top, livesChipW, 40, 14, THEME.chip.fill, THEME.chip.stroke, 1, 2);
+        this.fendersText.setPosition(livesChipX + 13, top + 11);
+        this.levelText.setPosition(livesChipX + livesChipW - 13, top + 11).setOrigin(1, 0);
+
+        // Combo chip under the score — accent wash, only while it says something.
+        if (this.comboText.text) {
+            const comboW = this.comboText.width + 24;
+            paintRoundedBox(g, inset, top + 62, comboW, 26, 13, THEME.chip.accentFill, THEME.chip.accentStroke, 1, 2);
+            this.comboText.setPosition(inset + 12, top + 68).setVisible(true);
+        } else {
+            this.comboText.setVisible(false);
+        }
+
+        // Pause pill under the fender chip — the last child in the container.
         const pause = this.hud.list[this.hud.list.length - 1] as Phaser.GameObjects.Container;
-        pause.setPosition(this.layout.viewport.width - inset - 32, top + 66);
+        pause.setPosition(this.layout.viewport.width - inset - 32, top + 52);
     }
 
     /**
@@ -268,9 +326,9 @@ export class GameView {
         for (const car of snapshot.ring) {
             seenOnRing.add(car.id);
             const sprite = this.carSprite(this.ringCars, car.id, car.color, car.length);
-            const centre = this.lotPoint(car.x - (car.dx * (car.length - 1)) / 2, car.y - (car.dy * (car.length - 1)) / 2);
+            const { centre, angle } = this.ringPose(snapshot.cols, snapshot.rows, car);
             sprite.setPosition(centre.x, centre.y);
-            sprite.setRotation(angleOf(car.dx, car.dy));
+            sprite.setRotation(angle);
             sprite.setScale(this.layout.cell / REFERENCE_CELL);
             sprite.setAlpha(1);
             sprite.setDepth(40);
@@ -278,6 +336,59 @@ export class GameView {
 
         this.prune(this.cars, seenOnLot);
         this.prune(this.ringCars, seenOnRing);
+    }
+
+    /**
+     * Where a ring car is drawn: the chord from its tail cell to its nose cell, clamped
+     * so the rotated body always stays on the slab.
+     *
+     * The old pose rigidly hung the whole body off the nose using the segment direction,
+     * and the frame the nose crossed a corner cell that direction snapped 90° — swinging
+     * the body sideways across the road and, for a moment, clean off the slab.
+     *
+     * Both endpoints of the chord come from `ringPointContinuous`, which turns corners
+     * through the corner cell's centre instead of walking off the edge, so the chord
+     * spans exactly the cells the simulation says the car occupies: straights are
+     * straight, and at a corner the car tilts through the turn the way a real one does.
+     *
+     * A tilted body's bounding box grows past its endpoints (widest at 45°), so the
+     * centre is then projected back inside the board rectangle — the clamp only ever
+     * binds at corners, where it pulls the car a fifth of a cell toward the inside of
+     * the turn rather than let a corner of the sprite hang over the tarmac's edge.
+     */
+    private ringPose(
+        cols: number,
+        rows: number,
+        car: RingCarView,
+    ): { centre: { x: number; y: number }; angle: number } {
+        const nose = ringPointContinuous(cols, rows, car.pos);
+        const tail = ringPointContinuous(cols, rows, car.pos - (car.length - 1));
+
+        // Length-1 vehicles have no chord to measure — fall back to the local direction.
+        const dx = nose.x - tail.x;
+        const dy = nose.y - tail.y;
+        const angle = dx === 0 && dy === 0 ? Math.atan2(nose.dy, nose.dx) : Math.atan2(dy, dx);
+
+        const centreX = (nose.x + tail.x) / 2;
+        const centreY = (nose.y + tail.y) / 2;
+        const centre = this.lotPoint(centreX, centreY);
+
+        // Screen-space half-extents of the tilted body (0.9 fill along, 0.88 across).
+        const halfLength = (car.length * 0.9) / 2;
+        const cos = Math.abs(Math.cos(angle));
+        const sin = Math.abs(Math.sin(angle));
+        const halfW = (halfLength * cos + 0.44 * sin) * this.layout.cell;
+        const halfH = (halfLength * sin + 0.44 * cos) * this.layout.cell;
+
+        const left = this.layout.x + halfW;
+        const right = this.layout.x + this.layout.width - halfW;
+        const top = this.layout.y + halfH;
+        const bottom = this.layout.y + this.layout.height - halfH;
+
+        if (left <= right) centre.x = Math.min(right, Math.max(left, centre.x));
+        if (top <= bottom) centre.y = Math.min(bottom, Math.max(top, centre.y));
+
+        return { centre, angle };
     }
 
     /**
@@ -368,11 +479,10 @@ export class GameView {
         if (!texture) return;
 
         const ctx = texture.getContext();
-        // The padlock sits over the lot, so it takes the danger colour rather than the old
-        // gold: on a pale apron a gold lock has almost no contrast, while red reads as
-        // "blocked" at a glance.
-        ctx.strokeStyle = THEME.text.danger;
-        ctx.fillStyle = THEME.text.danger;
+        // The padlock sits on the black parking apron, so it takes the bright gold accent —
+        // the one colour in the palette chosen to sing against asphalt.
+        ctx.strokeStyle = THEME.lock;
+        ctx.fillStyle = THEME.lock;
         ctx.lineWidth = 3;
 
         // Shackle.
@@ -436,19 +546,31 @@ export class GameView {
     // ---- HUD --------------------------------------------------------------------
 
     private drawHud(snapshot: WorldSnapshot, level: number): void {
-        this.scoreText.setText(String(snapshot.score));
-        if (snapshot.score !== this.lastScore) this.popScore(snapshot.score);
+        const score = String(snapshot.score);
+        const fenders =
+            '■'.repeat(Math.max(0, snapshot.lives)) + '□'.repeat(Math.max(0, LIVES - snapshot.lives));
+        const levelLabel = `LV ${level}`;
 
-        if (snapshot.multiplier > 1) {
-            this.comboText.setText(`x${snapshot.multiplier} COMBO`);
-        } else if (snapshot.busActive) {
-            this.comboText.setText('BUS ON THE RING');
-        } else {
-            this.comboText.setText('');
+        let combo = '';
+        if (snapshot.multiplier > 1) combo = `x${snapshot.multiplier} COMBO`;
+        else if (snapshot.busActive) combo = 'BUS ON THE RING';
+
+        // Chips hug their texts, so they are repainted only when a value actually moved —
+        // score digits, a spent fender or a level-up are the rare frames that pay for it.
+        if (
+            score !== this.scoreText.text ||
+            combo !== this.comboText.text ||
+            fenders !== this.fendersText.text ||
+            levelLabel !== this.levelText.text
+        ) {
+            this.scoreText.setText(score);
+            this.comboText.setText(combo);
+            this.fendersText.setText(fenders);
+            this.levelText.setText(levelLabel);
+            this.layoutHud();
         }
 
-        const fenders = '■'.repeat(Math.max(0, snapshot.lives)) + '□'.repeat(Math.max(0, LIVES - snapshot.lives));
-        this.livesText.setText(`${fenders}   LV ${level}`);
+        if (snapshot.score !== this.lastScore) this.popScore(snapshot.score);
     }
 
     /**

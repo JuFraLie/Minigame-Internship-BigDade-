@@ -1,16 +1,15 @@
 /**
  * The game's light theme, in one place.
  *
- * Every screen draws its pixels from these tokens, so the palette is changed by editing
- * this file rather than by chasing hex literals through the views. Two conventions hold
- * the light theme together:
+ * The light theme holds two ideas:
  *
- * - Surfaces get lighter as they come forward: page < road < lot < card. The board is a
- *   pale slate slab and the parking apron is the lightest thing on it, so the bays read
- *   as "the place cars go" without a single label.
- * - Text and strokes are dark slate, never white, so they keep their contrast against
- *   the pale surfaces. White is only used as a *label on a filled button*, where the
- *   button itself is what carries the contrast.
+ * - The app chrome — page, cards, buttons — is light: pale surfaces, dark slate text.
+ * - The board itself is black asphalt, the real colour of a road, so the cars and the
+ *   yellow lane markings pop exactly the way they do on a real ring road.
+ *
+ * Text and strokes are dark slate, never white, so they keep their contrast against
+ * the pale chrome. White is only used as a *label on a filled button*, where the
+ * button itself is what carries the contrast.
  *
  * Numbers are `0xrrggbb` for Graphics fills/strokes and `#rrggbb` strings for text and
  * camera backgrounds — the two forms are kept as parallel pairs so a colour can never
@@ -31,28 +30,42 @@ export const THEME = {
         muted: '#5c6b7d',
         /** Label on a filled (primary/danger) button, where the fill carries contrast. */
         onFill: '#ffffff',
+        /** The same label ink as a number, for Graphics strokes over a filled badge. */
+        onFillNumber: 0xffffff,
         /** Loss / fenders-remaining red. */
         danger: '#d64545',
+        /** The same red as a number, for Graphics fills (the loss badge). */
+        dangerNumber: 0xd64545,
         /** Accent: title flourish, combo, score, the padlock. */
         accent: '#d97706',
+        /** The same accent as a number, for Graphics fills (badges, rules, dividers). */
+        accentNumber: 0xd97706,
     },
 
     board: {
-        /** The ring road slab. */
-        road: 0xd9dfe8,
-        roadEdge: 0xc2cbd8,
-        /** Lane dashes down each road edge — a warm amber survives on pale slate. */
-        lane: 0xe8a13a,
-        /** The parking apron inside the ring, ruled into bays. */
-        lot: 0xf7f9fc,
-        lotEdge: 0xd5dce7,
-        lotLine: 0xc9d2de,
+        /** The ring road slab: black asphalt, the one dark surface in a light UI. */
+        road: 0x1e2126,
+        roadEdge: 0x3a414a,
+        /** Lane dashes down each road edge — classic warm road-marking yellow. */
+        lane: 0xe8b45c,
+        /** The parking apron inside the ring, a shade lighter than the road. */
+        lot: 0x2c323a,
+        lotEdge: 0x4c5665,
+        lotLine: 0x97a2b0,
     },
 
-    /** Entry-window pulses over the ring cells a car needs. */
+    /** Entry-window pulses over the ring cells a car needs. Tuned to read on black. */
     pulse: {
         blocked: 0xff4d4d,
-        open: 0x3b82f6,
+        open: 0x7fb0ff,
+    },
+
+    /** The padlock over a blocked car: bright gold, the one accent that lives on black. */
+    lock: '#ffd166',
+
+    /** Vehicles: the light rim baked around every body so it reads on the black road. */
+    vehicle: {
+        outline: '#f4f7fb',
     },
 
     button: {
@@ -73,6 +86,15 @@ export const THEME = {
         dimAlpha: 0.5,
         /** Lighter veil for the Result Panel, whose tinted backdrop must stay readable. */
         dimAlphaSoft: 0.28,
+    },
+
+    /** HUD chips — small white cards floating over the asphalt board. */
+    chip: {
+        fill: 0xffffff,
+        stroke: 0xd3dae4,
+        /** Combo/bus highlight chip: a wash of the accent colour. */
+        accentFill: 0xfdf0d5,
+        accentStroke: 0xe8c98a,
     },
 
     /** Result Panel backdrops — a tint of the outcome, not a full colour change. */

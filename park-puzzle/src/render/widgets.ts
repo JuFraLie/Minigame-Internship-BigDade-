@@ -17,21 +17,25 @@ export interface ButtonOptions {
     onTap: () => void;
 }
 
-/** Rounded box painter shared by buttons and panels. */
+/** Corner radii for a rounded box, or a single number for all four. */
+export type CornerRadii = number | { tl?: number; tr?: number; br?: number; bl?: number };
+
+/** Rounded box painter shared by buttons, panels and chips. */
 export function paintRoundedBox(
     graphics: Phaser.GameObjects.Graphics,
     x: number,
     y: number,
     width: number,
     height: number,
-    radius: number,
+    radius: CornerRadii,
     fill: number,
     stroke: number,
     alpha = 1,
+    lineWidth = 3,
 ): void {
     graphics.fillStyle(fill, alpha);
     graphics.fillRoundedRect(x, y, width, height, radius);
-    graphics.lineStyle(3, stroke, 1);
+    graphics.lineStyle(lineWidth, stroke, 1);
     graphics.strokeRoundedRect(x, y, width, height, radius);
 }
 

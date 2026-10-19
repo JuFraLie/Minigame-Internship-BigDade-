@@ -89,6 +89,8 @@ export interface LeavingCarView {
 
 export interface RingCarView {
     readonly id: number;
+    /** Continuous nose position on the ring, in cells from index 0. */
+    readonly pos: number;
     readonly x: number;
     readonly y: number;
     readonly dx: number;
@@ -542,6 +544,7 @@ export class GameWorld {
                 const nose = ringPointAt(this.cols, this.rows, car.pos);
                 return {
                     id: car.id,
+                    pos: car.pos,
                     x: nose.x,
                     y: nose.y,
                     dx: nose.dx,

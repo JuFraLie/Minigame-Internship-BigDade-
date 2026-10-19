@@ -85,6 +85,37 @@ export function ringPointAt(
 }
 
 /**
+ * Same mapping as `ringPointAt`, but interpolated from each ring cell toward the NEXT
+ * ring cell rather than along the outgoing segment's direction.
+ *
+ * On a straight the two agree exactly: the next cell lies one step along the direction.
+ * At a corner they diverge: `ringPointAt` keeps going straight through the corner cell,
+ * toward a cell that does not exist, so its point walks off the road slab before
+ * jumping diagonally into the next segment. This variant instead traces the corner as a
+ * right angle through the corner cell's centre — every point stays inside the corner cell
+ * or the cell after it, both of which are road — which is what lets the renderer draw a
+ * car turning a corner without its nose leaving the tarmac.
+ *
+ * Pure lot-space geometry; no pixels.
+ */
+export function ringPointContinuous(
+    cols: number,
+    rows: number,
+    pos: number,
+): { x: number; y: number; dx: number; dy: number } {
+    const p = mod(pos, ringLength(cols, rows));
+    const index = Math.floor(p);
+    const fraction = p - index;
+
+    const from = ringCellAt(cols, rows, index);
+    const to = ringCellAt(cols, rows, index + 1);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+
+    return { x: from.x + dx * fraction, y: from.y + dy * fraction, dx, dy };
+}
+
+/**
  * Ring cell a car parked at lot cell `(col, row)` facing `dir` drives onto when it leaves.
  * The entry is always the ring cell just outside the car's nose.
  */

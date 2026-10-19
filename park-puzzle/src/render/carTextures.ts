@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BUS_COLOR, BUS_LENGTH, CAR_COLORS } from '../core/config.ts';
+import { THEME } from './theme.ts';
 
 /**
  * Vehicle art: the bundled racing pack, loaded once and baked to board scale.
@@ -64,6 +65,31 @@ const FILL_ALONG = 0.9;
 
 /** Widest a vehicle may be, as a fraction of a cell, before its tyres eat the bay lines. */
 const FILL_ACROSS_MAX = 0.88;
+
+/**
+ * Light rim baked around every vehicle so it reads on the black asphalt board.
+ *
+ * The road is near-black and two of the pack's bodies — the black car, and the bus that is
+ * painted from it — would sink into it without an edge. The halo is the body's own
+ * silhouette, stamped flat in a warm white at eight small offsets, so it hugs the real
+ * shape rather than the texture's rectangle. Only baked, never drawn per frame.
+ */
+const VEHICLE_OUTLINE_COLOR = THEME.vehicle.outline;
+
+/** Halo reach in texels at reference scale (≈3px at the phone's usual 1.5× magnification). */
+const OUTLINE_TEXELS = 3;
+
+/** The eight stamp directions that dilate the silhouette into a halo. */
+const OUTLINE_OFFSETS: readonly (readonly [number, number])[] = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+];
 
 /**
  * Length 1 is a motorcycle; every longer vehicle is drawn from the pack's full-size bodies.
@@ -236,6 +262,32 @@ function bakePackTexture(
     // own width across the lane and its own length along the cells, which is exactly what
     // the destination rect asks for: `across` by `along`, centred on the origin the
     // translate leaves us at.
+    //
+    // Before the body lands, a light halo is dilated beneath it: the board is black asphalt
+    // and two of the pack's bodies — the black car and the bus painted from it — would
+    // otherwise sink into the road. The halo is the silhouette itself, filled flat and
+    // stamped at eight small offsets, so it hugs every curve of the real body instead of
+    // the rectangular texture around it. It costs one scratch canvas per texture, baked
+    // once at launch.
+    const scratch = document.createElement('canvas');
+    scratch.width = width;
+    scratch.height = height;
+    const sctx = scratch.getContext('2d');
+    if (sctx) {
+        sctx.save();
+        sctx.translate(width / 2, height / 2);
+        sctx.rotate(Math.PI / 2);
+        sctx.drawImage(image, 0, 0, sourceWidth, sourceHeight, -across / 2, -along / 2, across, along);
+        sctx.restore();
+        sctx.globalCompositeOperation = 'source-in';
+        sctx.fillStyle = VEHICLE_OUTLINE_COLOR;
+        sctx.fillRect(0, 0, width, height);
+
+        for (const [ox, oy] of OUTLINE_OFFSETS) {
+            ctx.drawImage(scratch, ox * OUTLINE_TEXELS, oy * OUTLINE_TEXELS);
+        }
+    }
+
     ctx.save();
     ctx.translate(width / 2, height / 2);
     ctx.rotate(Math.PI / 2);
