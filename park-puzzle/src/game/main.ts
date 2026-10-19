@@ -30,6 +30,11 @@ export const StartGame = (parent: string): Phaser.Game => {
         height: height * density,
         parent,
         backgroundColor: '#1d2530',
+        // Nearest-neighbour sampling, so the flat art stays crisp instead of being
+        // bilinearly smeared. Textures decide this individually in the Canvas renderer
+        // (`!frame.source.scaleMode`), so this is only the fallback for anything that does
+        // not carry its own mode — see `useNearest`.
+        antialias: false,
         // Phaser only builds its Touch Manager when the *device* claims touch support
         // (`ontouchstart` or `navigator.maxTouchPoints`), a sniff that comes back false on a
         // desktop and under DevTools device emulation. With it false Phaser binds no
@@ -64,8 +69,11 @@ export const StartGame = (parent: string): Phaser.Game => {
     // new space, otherwise the HUD and the board are drawn outside the canvas.
     let appliedWidth = width * density;
     let appliedHeight = height * density;
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
-    window.addEventListener('resize', () => {
+    const applyResize = (): void => {
+        resizeTimer = null;
+
         // Measure the window first. The Scale Manager only re-reads its parent at the end
         // of a refresh, so fitting without this would size the canvas for the *previous*
         // window and overflow it.
@@ -86,6 +94,16 @@ export const StartGame = (parent: string): Phaser.Game => {
         // Same design size, new window: only the fit into the window has to be recomputed.
         game.scale.refresh();
         game.events.emit(VIEWPORT_CHANGED);
+    };
+
+    // Trailing debounce. A single drag or a WebView settling fires a burst of resizes, and
+    // each one repaints the board texture and re-lays out the HUD — doing that on every
+    // event makes the window visibly stutter while it is still being dragged. The first
+    // event is applied on the next tick rather than immediately, so the burst still
+    // resolves in one frame instead of deferring the very first repaint by the full window.
+    window.addEventListener('resize', () => {
+        if (resizeTimer !== null) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(applyResize, 80);
     });
 
     return game;

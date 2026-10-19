@@ -59,8 +59,10 @@ npm run build    # tsc --noEmit && vite build  → static output in dist/
 npm run preview  # serve the built output
 ```
 
-`npm run build` must pass before every push. The output is static HTML + JS, servable from
-any file host (including `file:///android_asset/` inside the app).
+`npm run build` must pass before every push. The output is static HTML + JS + the art in
+`public/`, servable from any file host (including `file:///android_asset/` inside the app).
+Every URL — including the vehicle images — is relative and comes from the bundle itself, so
+nothing is ever fetched from a network.
 
 ---
 
@@ -91,7 +93,9 @@ src/
     layout.ts         cell size, board centring, top padding (the only module that
                       knows both grid and pixel space)
     viewport.ts       FIT + camera-zoom helpers (design height, renderScale)
-    carTextures.ts    car sprites baked once into a texture, not per frame
+    carTextures.ts    vehicle art: queues the bundled pack in `MainMenu.preload()` once,
+                      bakes each sprite to board scale on first use — never per frame —
+                      and falls back to a flat procedural car when the pack has no art
     gameView.ts       the round's drawing layer: cached board texture, car sprites,
                       pulsing entry windows, HUD
     menuView.ts       everything the Play Screen draws
@@ -107,6 +111,7 @@ src/
     main.ts         Phaser game config (type: Phaser.CANVAS)
   jsbridge.ts    Preserved host bridge module (the only file touching window.MpPostMessage)
   main.ts        Entry point: waits for the bridge, then starts the game
+public/          Everything served as-is: the vehicle art pack, plus `Credit`
 tests/           Node's native test runner
 ```
 
@@ -143,6 +148,26 @@ all, which is what the tests exercise.
 `whack-a-monster/`). It keeps world coordinates stable and the canvas sharp on hi-dpi
 screens while still accommodating any vertical screen height, and matches the house style
 of the sibling game.
+
+### Vehicle art
+
+Vehicles are drawn from a bundled top-down racing pack — `public/assets/`, Kenney's Racing
+Pack (CC0, credited in `public/Credit`) — not generated at runtime. The images are queued
+once from `MainMenu.preload()`, which is the only screen that runs before a vehicle is ever
+drawn, and the texture manager belongs to the game rather than to a scene, so the round and
+the Result Panel inherit them for free.
+
+Every image ships pointing **north**, nose at the top, while the views rotate a sprite with
+0 radians meaning "facing right". `carTextures.ts` turns each one a quarter clockwise into a
+canvas texture at load and stretches it to the `length × 1` cells it occupies: a motorcycle
+keeps the narrow proportion it was drawn with, while a three-cell car and the five-cell bus
+are lengthened until they read as long vehicles. Afterwards the texture is used as-is — no
+tinting and no per-frame drawing — and a resize only ever changes a scale factor.
+
+Colour is a label, not a filter: the palette in `core/config.ts` has one entry per body the
+pack ships, and `carTextures.ts` pairs the two by position. A colour or length the pack
+cannot cover falls back to the flat procedural car still in the same file, so the game
+degrades to a slightly plainer art style rather than to a missing texture.
 
 ---
 

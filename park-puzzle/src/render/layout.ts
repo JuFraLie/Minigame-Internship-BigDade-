@@ -14,9 +14,6 @@
  * and the leftover space is centred. Pure arithmetic — no Phaser, no DOM, testable alone.
  */
 
-/** Design-space height every layout is expressed in, independent of the device. */
-export const DESIGN_HEIGHT = 800;
-
 /** Portrait phones sit around 0.46; wider values only letterbox a desktop window. */
 export const MIN_DESIGN_ASPECT = 0.42;
 export const MAX_DESIGN_ASPECT = 0.9;

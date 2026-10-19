@@ -117,24 +117,73 @@ export class MenuView {
         const y = cy - height / 2;
 
         const g = this.scene.add.graphics();
-        g.fillStyle(0x2f3a46, 1);
-        g.fillRect(x, y, width, height);
-        g.lineStyle(2, 0x3f4d5c, 1);
-        g.strokeRect(x + cell * 0.15, y + cell * 0.15, width - cell * 0.3, height - cell * 0.3);
-        g.fillStyle(0x59626d, 1);
-        g.fillRect(x + cell, y + cell, cols * cell, rows * cell);
-        g.lineStyle(2, 0x78828e, 1);
-        g.strokeRect(x + cell, y + cell, cols * cell, rows * cell);
+
+        // Same flat slab the round draws: soft-cornered road, warmer lane dashes, lighter
+        // bay-ruled lot. The Play Screen then teaches the real board, not an older one.
+        g.fillStyle(0x364049, 1);
+        g.fillRoundedRect(x, y, width, height, cell * 0.42);
+        g.lineStyle(2, 0x47525f, 1);
+        g.strokeRoundedRect(x, y, width, height, cell * 0.42);
+
+        const mark = Math.max(2, cell * 0.07);
+        const dash = cell * 0.3;
+        const gap = cell * 0.34;
+        const corner = cell * 0.9;
+        g.fillStyle(0xe8b45c, 0.5);
+        for (let d = corner; d < width - corner; d += dash + gap) {
+            g.fillRoundedRect(x + d, y + cell * 0.5 - mark / 2, dash, mark, mark / 2);
+            g.fillRoundedRect(x + d, y + height - cell * 0.5 - mark / 2, dash, mark, mark / 2);
+        }
+        for (let d = corner; d < height - corner; d += dash + gap) {
+            g.fillRoundedRect(x + cell * 0.5 - mark / 2, y + d, mark, dash, mark / 2);
+            g.fillRoundedRect(x + width - cell * 0.5 - mark / 2, y + d, mark, dash, mark / 2);
+        }
+
+        g.fillStyle(0x4a5665, 1);
+        g.fillRoundedRect(x + cell, y + cell, cols * cell, rows * cell, cell * 0.2);
+        g.lineStyle(2, 0x5b6878, 1);
+        g.strokeRoundedRect(x + cell, y + cell, cols * cell, rows * cell, cell * 0.2);
+
+        g.lineStyle(1, 0x66727f, 0.4);
+        for (let c = 1; c < cols; c++) {
+            g.lineBetween(
+                x + cell + c * cell,
+                y + cell + 5,
+                x + cell + c * cell,
+                y + cell + rows * cell - 5,
+            );
+        }
+        for (let r = 1; r < rows; r++) {
+            g.lineBetween(
+                x + cell + 5,
+                y + cell + r * cell,
+                x + cell + cols * cell - 5,
+                y + cell + r * cell,
+            );
+        }
         content.add(g);
 
-        const demo: { col: number; row: number; dir: Direction; length: number; color: number }[] = [
-            { col: 1, row: 0, dir: 'up', length: 2, color: CAR_COLORS[0] },
-            { col: 0, row: 2, dir: 'left', length: 2, color: CAR_COLORS[3] },
-            { col: 2, row: 1, dir: 'right', length: 1, color: CAR_COLORS[1] },
+        // The seed is what picks each body shape, so the demo shows the variety the player
+        // is about to meet rather than three of the same car in different paint. Every
+        // demo car is two cells, matching the lot the game generates for every level.
+        const demo: {
+            col: number;
+            row: number;
+            dir: Direction;
+            length: number;
+            color: number;
+            seed: number;
+        }[] = [
+            { col: 1, row: 0, dir: 'up', length: 2, color: CAR_COLORS[0], seed: 1 },
+            { col: 0, row: 2, dir: 'left', length: 2, color: CAR_COLORS[3], seed: 4 },
+            // Grown from one cell to two: at one cell this bay held a car a fraction the
+            // width of its neighbours, which read as a bug rather than as a small vehicle.
+            // `down` is what keeps its body clear of the red car at (1,1).
+            { col: 2, row: 1, dir: 'down', length: 2, color: CAR_COLORS[1], seed: 7 },
         ];
 
         for (const car of demo) {
-            const key = ensureCarTexture(this.scene, car.color, car.length);
+            const key = ensureCarTexture(this.scene, car.color, car.length, car.seed);
             const { dx, dy } = directionVector(car.dir);
             const centreX = x + (car.col - (dx * (car.length - 1)) / 2 + 1.5) * cell;
             const centreY = y + (car.row - (dy * (car.length - 1)) / 2 + 1.5) * cell;

@@ -44,6 +44,19 @@ body {
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+
+    /* If the browser ever has to scale the canvas, it must step pixels rather than blend
+       them. This is the only filtering that applies OUTSIDE the canvas, so it is what
+       decides the finish on a screen whose density is not a whole multiple of the backing
+       store — a dpr-3 phone, whose backing store the game deliberately caps at 2x for the
+       sake of the target GPU. Bilinear resampling there smears every sprite in the finished
+       frame, which no amount of nearest-neighbour inside the canvas can undo, because the
+       game has already finished drawing by then. `pixelated` is the value Chromium WebViews
+       and modern Safari/Chrome/Firefox honour; the older aliases above cover the rest. It is
+       listed last so it wins where it is understood. */
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
 }
 
 /* Zero-size, invisible probe: reports the device cutout inset to the game layout. */

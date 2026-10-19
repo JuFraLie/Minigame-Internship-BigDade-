@@ -20,8 +20,27 @@ import type { RandomPort } from './ports.ts';
  * Randomness is injected, so a seed reproduces a level exactly.
  */
 export function generateLevel(spec: LevelSpec, random: RandomPort): CarSpec[] {
-    const cars: CarSpec[] = [];
     const target = pickCount(spec, random);
+    let best = buildLevel(spec, random, target);
+
+    // Every band parks two-cell cars, and a two-cell body cannot slip into a one-cell
+    // gap, so a single pass can seal the last usable corridors and stall below `minCars`
+    // no matter how long it searches — more attempts do not help, because the packing
+    // itself is the dead end rather than the effort spent on it. Re-running the same
+    // construction on the next stretch of the seeded stream is safe: each pass places its
+    // cars against only the cars it placed itself, so the reverse-exit proof holds for
+    // whichever pass is kept, and the fullest result is the one that ships.
+    for (let retry = 0; retry < 8 && best.length < spec.minCars; retry++) {
+        const candidate = buildLevel(spec, random, target);
+        if (candidate.length > best.length) best = candidate;
+    }
+
+    return best;
+}
+
+/** One pass of the reverse-exit construction, stopping at `target` cars. */
+function buildLevel(spec: LevelSpec, random: RandomPort, target: number): CarSpec[] {
+    const cars: CarSpec[] = [];
 
     for (let attempt = 0; attempt < 600 && cars.length < target; attempt++) {
         const candidate = pickCandidate(spec, cars, random);

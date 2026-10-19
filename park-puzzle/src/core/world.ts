@@ -1,4 +1,12 @@
-import { BUS_LENGTH, BUS_SPEED_RATIO, ENTRY_WINDOW_MIN_CELLS, QUEUE_GAP_CELLS, TICK_SECONDS, levelSpec } from './config.ts';
+import {
+    BUS_COLOR,
+    BUS_LENGTH,
+    BUS_SPEED_RATIO,
+    ENTRY_WINDOW_MIN_CELLS,
+    QUEUE_GAP_CELLS,
+    TICK_SECONDS,
+    levelSpec,
+} from './config.ts';
 import type { LevelSpec } from './config.ts';
 import { DIRECTIONS, directionVector, entryCellIndex, mod, ringLength, ringPointAt } from './ring.ts';
 import type { Direction } from './ring.ts';
@@ -308,7 +316,7 @@ export class GameWorld {
             id,
             pos: 0,
             length: BUS_LENGTH,
-            color: 0x34495e,
+            color: BUS_COLOR,
             entry: 0,
             isBus: true,
         });
@@ -325,7 +333,13 @@ export class GameWorld {
 
             if (car.outward) {
                 car.progress = Math.min(car.distance, car.progress + step);
-                if (car.progress >= car.distance) this.resolveEntry(car, i);
+                if (car.progress >= car.distance) {
+                    this.resolveEntry(car, i);
+                    // Losing the last fender empties `leaving` outright, so every index
+                    // this loop still walks is stale. Carrying on would read `undefined`
+                    // and throw inside Phaser's RAF callback, freezing the game for good.
+                    if (this.phase !== 'playing') return;
+                }
             } else {
                 car.progress = Math.max(0, car.progress - step);
                 // Bounced all the way back: the car is parked again, in the spot it left.

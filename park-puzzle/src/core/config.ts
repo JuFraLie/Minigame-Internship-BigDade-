@@ -57,16 +57,23 @@ export const PULSE_PERIOD_SECONDS = 6;
 /** How long a blocked car keeps showing its lock icon and shaking. */
 export const SHAKE_SECONDS = 0.5;
 
-/** Paint palette, indexed by `color` on every car. */
+/** The bus, which is painted in its own slate rather than in one of the car colours. */
+export const BUS_COLOR = 0x34495e;
+
+/**
+ * Paint palette, indexed by `color` on every car.
+ *
+ * Five colours, one per body the bundled art pack ships in, so every car is drawn from
+ * real art rather than from the procedural fallback. `render/carTextures.ts` pairs these
+ * with the pack's colour names by position, so a colour added here has to be added there
+ * too or it quietly loses its art.
+ */
 export const CAR_COLORS: readonly number[] = [
     0xe74c3c, // red
     0x3498db, // blue
     0xf1c40f, // yellow
     0x2ecc71, // green
-    0xe67e22, // orange
-    0x9b59b6, // purple
-    0x1abc9c, // teal
-    0xfd79a8, // pink
+    0x2b2f36, // black
 ];
 
 export interface LevelSpec {
@@ -87,16 +94,30 @@ export interface LevelSpec {
 /**
  * Level table. Levels past the last band keep the last band's shape and just get a new
  * layout, so "level 40" is always playable without a hand-written level 40.
+ *
+ * Every band parks cars at exactly TWO cells. The bands used to hand out one, two and
+ * three, which put vehicles of visibly different sizes side by side on the same board: a
+ * one-cell car filled 0.40 of a lane's width where a two-cell car filled 0.88, so the
+ * short one read as broken rather than as a deliberate smaller vehicle.
+ *
+ * Two is also the longest length that every band can still fill. The tightest is ten cars
+ * on a 5x6 lot, and three-cell cars there would claim thirty of thirty cells before any
+ * of them had a clear corridor to drive out through, so the car-count band would collapse.
+ * Mean demand is unchanged — the old band averaged two cells a car anyway — so the later
+ * levels are no fuller than they were.
+ *
+ * The five-cell bus is unaffected: it joins the ring rather than the lot, so it is a ring
+ * event with its own speed and art, not one of the parked cars.
  */
 export function levelSpec(level: number): LevelSpec {
     if (level <= 3) {
         return { cols: 4, rows: 4, minCars: 4, maxCars: 6, minLength: 2, maxLength: 2, ringSpeed: 2.5, speedPulse: false, bus: false };
     }
     if (level <= 8) {
-        return { cols: 5, rows: 5, minCars: 8, maxCars: 10, minLength: 1, maxLength: 3, ringSpeed: 3, speedPulse: false, bus: false };
+        return { cols: 5, rows: 5, minCars: 8, maxCars: 10, minLength: 2, maxLength: 2, ringSpeed: 3, speedPulse: false, bus: false };
     }
     if (level <= 15) {
-        return { cols: 5, rows: 6, minCars: 10, maxCars: 14, minLength: 1, maxLength: 3, ringSpeed: 3.5, speedPulse: true, bus: false };
+        return { cols: 5, rows: 6, minCars: 10, maxCars: 14, minLength: 2, maxLength: 2, ringSpeed: 3.5, speedPulse: true, bus: false };
     }
-    return { cols: 6, rows: 7, minCars: 14, maxCars: 18, minLength: 1, maxLength: 3, ringSpeed: 4, speedPulse: true, bus: true };
+    return { cols: 6, rows: 7, minCars: 14, maxCars: 18, minLength: 2, maxLength: 2, ringSpeed: 4, speedPulse: true, bus: true };
 }

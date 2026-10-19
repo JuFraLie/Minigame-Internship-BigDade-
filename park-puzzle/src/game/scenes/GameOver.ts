@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { RoundResult } from '../../app/roundSession.ts';
 import { ResultPanel } from '../../render/resultPanelView.ts';
 import { applyRenderScale, VIEWPORT_CHANGED } from '../../render/viewport.ts';
+import { fadeIn, fadeOutAndStart } from '../../render/transition.ts';
 import { advanceLevel, bridgePort, sessionState } from '../wiring.ts';
 
 /**
@@ -41,6 +42,8 @@ export class GameOver extends Phaser.Scene {
             this.panel?.dispose();
             this.panel = null;
         });
+
+        fadeIn(this);
     }
 
     private relayout(): void {
@@ -53,7 +56,7 @@ export class GameOver extends Phaser.Scene {
         if (this.leaving) return;
         this.leaving = true;
         advanceLevel();
-        this.scene.start('Game');
+        fadeOutAndStart(this, 'Game');
     }
 
     /** Retry goes straight back to gameplay — the Play Screen never replays. */
@@ -62,7 +65,7 @@ export class GameOver extends Phaser.Scene {
         this.leaving = true;
         // The level is deliberately NOT advanced: a retry replays the level just lost.
         sessionState.level = this.result.level;
-        this.scene.start('Game');
+        fadeOutAndStart(this, 'Game');
     }
 
     /** Exit reports the session to the host and does nothing else. Guarded to once. */

@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { DESIGN_HEIGHT, MAX_DESIGN_ASPECT, MIN_DESIGN_ASPECT } from './layout.ts';
+import { MAX_DESIGN_ASPECT, MIN_DESIGN_ASPECT } from './layout.ts';
 import type { Viewport } from './layout.ts';
 
 /**
@@ -27,20 +27,41 @@ export function renderScale(): number {
 }
 
 /**
- * Design size for the current window: always `DESIGN_HEIGHT` tall, and wide enough to
- * match the device aspect ratio inside a portrait range. No fixed 9:16 or 3:4 is assumed —
- * any vertical screen height maps onto this space and the canvas fills it edge to edge.
+ * Design size for the current window, wide enough to match the device aspect ratio inside
+ * a portrait range. No fixed 9:16 or 3:4 is assumed — the window maps onto this space and
+ * the canvas fills it edge to edge.
+ *
+ * The height tracks the window rather than sitting at a fixed constant, and that is what
+ * keeps the art sharp. `Scale.FIT` scales the backing store down to fit the window, and
+ * anything that is not exactly 1:1 makes the browser resample the WHOLE canvas with
+ * bilinear filtering — a soft blur over every sprite that no amount of nearest-neighbour
+ * sampling inside the canvas can undo, because it happens to the finished frame on its way
+ * to the screen. A fixed 800-tall design in a 752-tall window is a 0.94× shrink, which is
+ * exactly that blur.
+ *
+ * Pinning the height to the window makes the fit height-bound, so its factor is exactly
+ * `1 / renderScale()`: the backing store is `design * renderScale` and it is displayed at
+ * `design` CSS pixels, which is one device pixel per backing pixel and no resampling at
+ * all. The width is then derived from the aspect and capped at the window, so a wide
+ * window letterboxes instead of stretching.
  *
  * Read fresh on every call. `StartGame` keeps the canvas in step with it and announces the
  * change with `VIEWPORT_CHANGED`, so every screen lays itself out against exactly the size
  * the canvas is drawing — never against a size the canvas has left behind.
  */
 export function designSize(): { width: number; height: number } {
+    const windowWidth = Math.max(1, window.innerWidth);
+    const windowHeight = Math.max(1, window.innerHeight);
+
     const aspect = Math.min(
-        Math.max(window.innerWidth / Math.max(1, window.innerHeight), MIN_DESIGN_ASPECT),
+        Math.max(windowWidth / windowHeight, MIN_DESIGN_ASPECT),
         MAX_DESIGN_ASPECT,
     );
-    return { width: Math.round(DESIGN_HEIGHT * aspect), height: DESIGN_HEIGHT };
+
+    const height = windowHeight;
+    const width = Math.min(windowWidth, Math.round(height * aspect));
+
+    return { width, height };
 }
 
 /**
@@ -51,9 +72,15 @@ export function designSize(): { width: number; height: number } {
  */
 export const VIEWPORT_CHANGED = 'viewportChanged';
 
-/** Screen units per CSS pixel: `DESIGN_HEIGHT` always spans the whole window height. */
+/**
+ * Screen units per CSS pixel.
+ *
+ * The design height is the window height, so this is 1 and a cutout inset measured in CSS
+ * pixels is already in screen units. It is still computed rather than hard-coded, so the
+ * conversion keeps its meaning if the design size ever stops tracking the window.
+ */
 function screenUnitsPerCssPixel(): number {
-    return DESIGN_HEIGHT / Math.max(1, window.innerHeight);
+    return designSize().height / Math.max(1, window.innerHeight);
 }
 
 /** Reads `env(safe-area-inset-top)` through the invisible probe declared in index.html. */

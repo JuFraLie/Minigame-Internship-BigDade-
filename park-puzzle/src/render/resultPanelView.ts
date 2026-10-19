@@ -26,8 +26,10 @@ export interface ResultActions {
  */
 export class ResultPanel {
     private readonly container: Phaser.GameObjects.Container;
+    private readonly scene: Phaser.Scene;
 
     constructor(scene: Phaser.Scene, result: RoundResult, actions: ResultActions) {
+        this.scene = scene;
         const layout = computeBoardLayout(measureViewport(), 4, 4);
         const { width, height } = layout.viewport;
         const cx = width / 2;
@@ -119,9 +121,33 @@ export class ResultPanel {
                 onTap: () => actions.onExit(),
             }),
         );
+
+        this.enter();
+    }
+
+    /**
+     * Drops the panel in over the colour it is fading onto.
+     *
+     * It waits out the tail of the scene's fade-in first, so the win/loss colour is
+     * already settled when the panel arrives rather than the two fighting for the same
+     * third of a second. The whole container moves as one — the dim layer, the readout and
+     * both buttons — so the hit areas ride along with what the player can see.
+     */
+    private enter(): void {
+        this.container.setAlpha(0);
+        this.container.y = 26;
+        this.scene.tweens.add({
+            targets: this.container,
+            alpha: 1,
+            y: 0,
+            duration: 240,
+            delay: 90,
+            ease: 'Back.easeOut',
+        });
     }
 
     dispose(): void {
+        this.scene.tweens.killTweensOf(this.container);
         this.container.destroy(true);
     }
 }

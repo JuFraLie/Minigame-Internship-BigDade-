@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { bridgePort } from '../wiring.ts';
 import { MenuView } from '../../render/menuView.ts';
 import { applyRenderScale, VIEWPORT_CHANGED } from '../../render/viewport.ts';
+import { fadeIn, fadeOutAndStart } from '../../render/transition.ts';
+import { loadVehicleArt } from '../../render/carTextures.ts';
 
 /**
  * The Play Screen (AGENTS.md §2).
@@ -16,6 +18,18 @@ export class MainMenu extends Phaser.Scene {
 
     constructor() {
         super('MainMenu');
+    }
+
+    /**
+     * Loads the vehicle art once, at launch.
+     *
+     * The texture manager belongs to the game, not to a scene, so this single load covers
+     * the round and the Result Panel too: `create()` below and every scene after it can
+     * assume the pack is already in. A load that failed for any reason degrades to the
+     * procedural texture rather than to a missing-image box.
+     */
+    preload(): void {
+        loadVehicleArt(this);
     }
 
     create(): void {
@@ -33,6 +47,8 @@ export class MainMenu extends Phaser.Scene {
             this.view?.dispose();
             this.view = null;
         });
+
+        fadeIn(this);
     }
 
     /** The Play Screen holds no state, so laying it out again just means drawing it again. */
@@ -50,6 +66,6 @@ export class MainMenu extends Phaser.Scene {
         this.starting = true;
 
         bridgePort.launch();
-        this.scene.start('Game');
+        fadeOutAndStart(this, 'Game');
     }
 }
