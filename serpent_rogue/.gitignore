@@ -1,3 +1,5 @@
 node_modules/
-dist/
+# dist/ is committed on purpose: GitHub Pages serves the built game from
+# serpent_rogue/dist/ (same pattern as dungeon-runner, last-bullet and
+# whack-a-monster). Always build it with `npm run build:web`.
 *.local
