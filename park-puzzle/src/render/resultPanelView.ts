@@ -218,30 +218,82 @@ export class ResultPanel {
         const gap = <T>(regular: T, tight: T): T => (m.compact ? tight : regular);
         let y = 0;
 
-        // Outcome badge: an extruded disc with a hand-drawn check or cross, so the verdict
-        // lands before a single word is read.
+        // Verdict seal: a twelve-point sticker rosette with an extruded ink edge and a
+        // chunky cream mark. A plain disc with a hairline tick — what this used to be —
+        // reads as a task-app checkbox; the scalloped silhouette reads as a stamp pressed
+        // onto the sky, which is the same language as every other chunk on this screen.
         const r = gap(27, 22);
         const badgeY = y + r;
         const badge = scene.add.graphics();
+
+        /** Silhouette of the rosette, centred on `(0, 0)`. Alternating radii make the points. */
+        const seal = (cx: number, cyOffset: number, radius: number): void => {
+            const points = 12;
+            const valley = radius * 0.84;
+            badge.beginPath();
+            for (let i = 0; i < points * 2; i += 1) {
+                const angle = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+                const distance = i % 2 === 0 ? radius : valley;
+                const px = cx + Math.cos(angle) * distance;
+                const py = cyOffset + Math.sin(angle) * distance;
+                if (i === 0) badge.moveTo(px, py);
+                else badge.lineTo(px, py);
+            }
+            badge.closePath();
+        };
+
+        const sealColour = result.win ? THEME.menu.goBottom : THEME.text.dangerNumber;
+        seal(0, 7, r);
         badge.fillStyle(THEME.menu.ink, 1);
-        badge.fillCircle(0, badgeY + 7, r);
-        paintRoundedBox(badge, -r, badgeY - r, r * 2, r * 2, r, result.win ? THEME.menu.goBottom : THEME.text.dangerNumber, THEME.menu.ink, 1, 4);
-        badge.fillStyle(0xffffff, 0.22);
-        badge.fillCircle(0, badgeY - r * 0.35, r * 0.72);
-        badge.lineStyle(5, THEME.text.onFillNumber, 1);
-        badge.beginPath();
-        if (result.win) {
-            badge.moveTo(-r * 0.42, badgeY + r * 0.04);
-            badge.lineTo(-r * 0.15, badgeY + r * 0.35);
-            badge.lineTo(r * 0.46, badgeY - r * 0.35);
-        } else {
-            badge.moveTo(-r * 0.35, badgeY - r * 0.35);
-            badge.lineTo(r * 0.35, badgeY + r * 0.35);
-            badge.moveTo(r * 0.35, badgeY - r * 0.35);
-            badge.lineTo(-r * 0.35, badgeY + r * 0.35);
-        }
+        badge.fillPath();
+        seal(0, 0, r);
+        badge.fillStyle(sealColour, 1);
+        badge.fillPath();
+        badge.lineStyle(4, THEME.menu.ink, 1);
         badge.strokePath();
-        content.add(badge);
+
+        // Gloss across the top, held to 0.8r so it never spills past the valley radius
+        // where the points bite in.
+        badge.fillStyle(0xffffff, 0.2);
+        badge.beginPath();
+        badge.arc(0, 0, r * 0.8, Math.PI * 1.15, Math.PI * 1.85, false);
+        badge.closePath();
+        badge.fillPath();
+
+        // The mark, in two passes: a wider ink pass then the cream face, which is how the
+        // buttons draw their labels — so the verdict is cut from the same stamp as the text.
+        const strokes = result.win
+            ? [[[-0.44, 0.03], [-0.15, 0.34], [0.47, -0.37]]]
+            : [
+                  [[-0.34, -0.34], [0.34, 0.34]],
+                  [[-0.34, 0.34], [0.34, -0.34]],
+              ];
+        const markWidth = r * 0.24;
+        const drawMark = (width: number, colour: number): void => {
+            badge.fillStyle(colour, 1);
+            badge.lineStyle(width, colour, 1);
+            for (const polyline of strokes) {
+                for (let i = 0; i < polyline.length - 1; i += 1) {
+                    badge.beginPath();
+                    badge.moveTo(polyline[i][0] * r, polyline[i][1] * r);
+                    badge.lineTo(polyline[i + 1][0] * r, polyline[i + 1][1] * r);
+                    badge.strokePath();
+                }
+                // Graphics strokes butt-end, so the joints and terminals are capped by
+                // hand — otherwise the tick's elbow shears and the arms look cut off.
+                for (const [px, py] of polyline) badge.fillCircle(px * r, py * r, width / 2);
+            }
+        };
+        drawMark(markWidth + Math.max(4, r * 0.16), THEME.menu.ink);
+        drawMark(markWidth, THEME.menu.logoInkNumber);
+
+        // Held in a container so the tilt pivots on the seal's own centre — rotating the
+        // graphics directly would swing it around its bounding-box corner and throw it off
+        // the sunburst behind it. It leans further than the plates below do (-1.6): those
+        // are set down straight, this is stamped on askew.
+        const badgeHolder = scene.add.container(0, badgeY).setAngle(-5);
+        badgeHolder.add(badge);
+        content.add(badgeHolder);
         y = badgeY + r + gap(14, 10);
 
         // Headline, stroked and drop-shadowed like the logo, stepping down until it fits

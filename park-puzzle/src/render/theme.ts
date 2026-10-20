@@ -105,6 +105,8 @@ export const THEME = {
         shadowCss: '#0d0922',
         /** Logo and button label ink. */
         logoInk: '#fff6e6',
+        /** The same ink as a number, for Graphics fills (the verdict seal's mark). */
+        logoInkNumber: 0xfff6e6,
         /** Amber plate under the second title line, and the how-to tab. */
         plate: 0xff8c1a,
         /** Sticker card behind the how-to. */
