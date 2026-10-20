@@ -135,7 +135,10 @@ export function createArcadeButton(
         stroke: strokeColour || undefined,
         strokeThickness: strokeColour ? 6 : 0,
         letterSpacing: 2,
-        shadow: { x: 0, y: 3, color: THEME.menu.shadowCss, stroke: false },
+        // The shadow only belongs under a cream label on a filled slab, where it is what
+        // extrudes the type off the body. A pale slab's label is already dark, so the same
+        // near-black shadow lands on it and just doubles every glyph into a smear.
+        shadow: strokeColour ? { x: 0, y: 3, color: THEME.menu.shadowCss, stroke: false } : undefined,
     }).setOrigin(0.5, 0.5);
 
     // A long label steps down rather than running past the slab's edges.
