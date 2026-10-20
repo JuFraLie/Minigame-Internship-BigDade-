@@ -7,6 +7,7 @@ import { computeBoardLayout } from './layout.ts';
 import type { BoardLayout } from './layout.ts';
 import { measureViewport } from './viewport.ts';
 import { addText } from './text.ts';
+import { mixColor } from './color.ts';
 import { THEME } from './theme.ts';
 import { paintRoundedBox } from './widgets.ts';
 
@@ -582,14 +583,4 @@ export class MenuView {
         this.content?.destroy(true);
         this.content = null;
     }
-}
-
-/** Linear blend between two `0xrrggbb` values — the Canvas fallback for a gradient fill. */
-function mixColor(from: number, to: number, t: number): number {
-    const channel = (shift: number): number => {
-        const a = (from >> shift) & 0xff;
-        const b = (to >> shift) & 0xff;
-        return Math.round(a + (b - a) * t);
-    };
-    return (channel(16) << 16) | (channel(8) << 8) | channel(0);
 }

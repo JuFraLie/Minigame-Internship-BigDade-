@@ -49,6 +49,10 @@ export class GameOver extends Phaser.Scene {
     private relayout(): void {
         if (this.leaving) return;
         applyRenderScale(this);
+        // The panel lays itself out from the viewport, so a WebView that settles late
+        // (rotation, split screen, DevTools) gets a redrawn panel rather than one
+        // stranded at the old size.
+        this.panel?.rebuild();
     }
 
     /** Next Level: the session moves on and the round starts again at the new level. */
