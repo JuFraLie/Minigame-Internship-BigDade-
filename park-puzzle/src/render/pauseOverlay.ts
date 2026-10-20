@@ -26,14 +26,50 @@ type DropIn = Phaser.GameObjects.Graphics | Phaser.GameObjects.Text | Phaser.Gam
  */
 export class PauseOverlay {
     private readonly scene: Phaser.Scene;
+    private readonly onResume: () => void;
     /** Full-screen tap catcher. Toggled on its own; everything else drops in. */
-    private readonly dim: Phaser.GameObjects.Graphics;
+    private dim: Phaser.GameObjects.Graphics;
     private readonly objects: Phaser.GameObjects.GameObject[] = [];
     /** The subset that drops in: `objects` minus the dim layer. */
     private readonly dropping: DropIn[] = [];
 
     constructor(scene: Phaser.Scene, onResume: () => void) {
         this.scene = scene;
+        this.onResume = onResume;
+        this.dim = this.build();
+        this.enter();
+    }
+
+    /**
+     * Re-lays the sheet out against the current viewport, replacing the pieces built for
+     * the old one.
+     *
+     * A rotation or a late-settling WebView while the round is paused changes the screen
+     * under the overlay, and every other screen here rebuilds itself on that event. The
+     * pause sheet did not, so it stayed pinned to the size it was opened at: on a rotate
+     * to landscape the short height left the RESUME button below the fold, and because
+     * taps are dropped while paused the round became unresumable. The pieces are swapped
+     * outright rather than re-animated — the overlay is already on screen, so a second
+     * drop-in would flash the sheet for no benefit.
+     */
+    rebuild(): void {
+        for (const object of this.objects) {
+            this.scene.tweens.killTweensOf(object);
+            object.destroy();
+        }
+        this.objects.length = 0;
+        this.dropping.length = 0;
+        this.dim = this.build();
+        this.dim.setAlpha(1);
+        for (const target of this.dropping) target.setAlpha(1);
+    }
+
+    /**
+     * Builds every piece of the sheet against the viewport as it is RIGHT NOW and returns
+     * the dim layer. Split out of the constructor so `rebuild()` can run it again.
+     */
+    private build(): Phaser.GameObjects.Graphics {
+        const scene = this.scene;
 
         // Design units, read the same way every other screen reads them. `scene.scale`
         // reports the BACKING STORE (design x density), so laying the panel out against it
@@ -48,7 +84,6 @@ export class PauseOverlay {
             new Phaser.Geom.Rectangle(0, 0, width, height),
             Phaser.Geom.Rectangle.Contains,
         );
-        this.dim = dim;
         this.objects.push(dim);
 
         // A bottom sheet rather than a centred card: it sits in thumb reach, and the
@@ -103,13 +138,13 @@ export class PauseOverlay {
             bodyColour: THEME.menu.goBottom,
             labelColour: THEME.menu.logoInk,
             fontSize: 26,
-            onTap: onResume,
+            onTap: this.onResume,
         }).setDepth(DEPTH + 3);
 
         this.objects.push(panel, handle, title, subtitle, button);
         this.dropping.push(panel, handle, title, subtitle, button);
 
-        this.enter();
+        return dim;
     }
 
     /**

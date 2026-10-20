@@ -1,4 +1,5 @@
 import type { BridgePort, RandomPort } from '../core/ports.ts';
+import { TICK_SECONDS } from '../core/config.ts';
 import { GameWorld } from '../core/world.ts';
 
 export interface RoundResult {
@@ -55,9 +56,9 @@ export class RoundSession {
         // car through the ring.
         this.accumulator += dtSeconds;
         let steps = 0;
-        while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
+        while (this.accumulator >= TICK_SECONDS && steps < MAX_STEPS_PER_FRAME) {
             this.world.tick();
-            this.accumulator -= STEP;
+            this.accumulator -= TICK_SECONDS;
             steps++;
         }
         // Drop whatever is left over rather than carrying a debt into the next frame.
@@ -95,8 +96,6 @@ export class RoundSession {
         return result;
     }
 }
-
-const STEP = 1 / 60;
 
 /** Ceiling on catch-up ticks, so a long hitch can never freeze the frame that follows it. */
 const MAX_STEPS_PER_FRAME = 6;

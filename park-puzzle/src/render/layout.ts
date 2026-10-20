@@ -84,12 +84,6 @@ export function cellToScreen(layout: BoardLayout, col: number, row: number): { x
     };
 }
 
-/** Screen centre of a lot-space cell. */
-export function cellCenter(layout: BoardLayout, col: number, row: number): { x: number; y: number } {
-    const corner = cellToScreen(layout, col, row);
-    return { x: corner.x + layout.cell / 2, y: corner.y + layout.cell / 2 };
-}
-
 /** Converts a screen point to the lot cell under it, or null when the tap missed. */
 export function screenToCell(layout: BoardLayout, x: number, y: number): { col: number; row: number } | null {
     const col = Math.floor((x - layout.x) / layout.cell) - 1;

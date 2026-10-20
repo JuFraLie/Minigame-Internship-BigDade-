@@ -104,6 +104,9 @@ export class Game extends Phaser.Scene {
         if (this.ending) return;
         applyRenderScale(this);
         this.view?.relayout();
+        // The pause sheet is pinned to the viewport it was opened at, so it has to be
+        // rebuilt too — a rotate while paused would otherwise leave RESUME off-screen.
+        this.pause?.rebuild();
     }
 
     /** Pause is only ever a resume (AGENTS.md §2). */

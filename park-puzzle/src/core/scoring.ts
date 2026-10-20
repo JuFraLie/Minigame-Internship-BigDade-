@@ -17,6 +17,17 @@ export class ScoreState {
 
     private lastReleaseAt = Number.NEGATIVE_INFINITY;
 
+    /** Back to a fresh round: no score, all fenders standing, no combo in flight. */
+    reset(): void {
+        this.score = 0;
+        this.lives = LIVES;
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.cleared = 0;
+        this.crashes = 0;
+        this.lastReleaseAt = Number.NEGATIVE_INFINITY;
+    }
+
     /** x1 until the second fast release, then climbing to the cap. */
     get multiplier(): number {
         return Math.min(MAX_MULTIPLIER, Math.max(1, this.combo));

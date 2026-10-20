@@ -35,11 +35,3 @@ export type RoundEvent =
     | { type: 'roundLost' };
 
 export type RoundEventsPort = (event: RoundEvent) => void;
-
-/**
- * The renderer's whole surface: it is handed a read-only snapshot of the round and draws
- * it. Declared as a port so the simulation never learns that a renderer exists.
- */
-export interface RenderPort {
-    draw(snapshot: import('./world.ts').WorldSnapshot): void;
-}

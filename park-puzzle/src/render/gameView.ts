@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { WorldSnapshot, RingCarView } from '../core/world.ts';
 import { directionVector, ringCellAt, ringPointContinuous } from '../core/ring.ts';
 import { ensureCarTexture, REFERENCE_CELL, useNearest } from './carTextures.ts';
-import { cellToScreen, computeBoardLayout } from './layout.ts';
+import { cellToScreen, computeBoardLayout, topPadding } from './layout.ts';
 import type { BoardLayout } from './layout.ts';
 import { measureViewport } from './viewport.ts';
 import { LIVES } from '../core/config.ts';
@@ -224,7 +224,7 @@ export class GameView {
         this.hud.setDepth(80);
 
         const viewport = this.layout.viewport;
-        const top = Math.max(viewport.safeTop, viewport.height * 0.08);
+        const top = topPadding(viewport);
         const inset = 14;
         const g = this.chips;
         g.clear();
@@ -559,7 +559,14 @@ export class GameView {
             if (!car.blocked) continue;
             seen.add(car.id);
 
-            const centre = this.lotPoint(car.col, car.row);
+            // Centre on the body midpoint, the same point the sprite is drawn from — the
+            // raw (col, row) is the NOSE cell, which leaves the lock hovering a half-cell
+            // off the car it is supposed to be marking on a length-2 body.
+            const { dx, dy } = directionVector(car.dir);
+            const centre = this.lotPoint(
+                car.col - (dx * (car.length - 1)) / 2,
+                car.row - (dy * (car.length - 1)) / 2,
+            );
             let lock = this.locks.get(car.id);
             if (!lock) {
                 lock = this.scene.add.image(centre.x, centre.y, 'lock').setOrigin(0.5, 0.5).setDepth(60);

@@ -182,7 +182,7 @@ export function ensureCarTexture(
     seed = 0,
 ): string {
     const shape = bodyShape(color, length, seed);
-    const key = `car-${color.toString(16)}-${length}-${shape}`;
+    const key = carTextureKey(color, length, seed);
     if (cache.has(key) && scene.textures.exists(key)) return key;
 
     const source = assetSource(color, length, shape);
@@ -191,14 +191,6 @@ export function ensureCarTexture(
     }
 
     return bakeProceduralTexture(scene, key, color, length);
-}
-
-/** Drops every cached texture. Only needed if a scene is torn down for good. */
-export function clearCarTextures(scene: Phaser.Scene): void {
-    for (const key of cache.keys()) {
-        if (scene.textures.exists(key)) scene.textures.remove(key);
-    }
-    cache.clear();
 }
 
 /**

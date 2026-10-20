@@ -80,7 +80,7 @@ src/
     generator.ts   seeded reverse-order level generation (solvability by construction)
     scoring.ts     score / combo / fenders / clear bonus
     world.ts       the simulation: lot, ring, entry windows, crashes, round phase
-    ports.ts       BridgePort, RandomPort, RoundEventsPort, RenderPort (contracts;
+    ports.ts       BridgePort, RandomPort, RoundEventsPort (contracts;
                    the core implements none of them, which is what keeps the input layer
                    from having to import the rendering layer)
   app/

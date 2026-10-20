@@ -3,16 +3,20 @@ import {
     BUS_LENGTH,
     BUS_SPEED_RATIO,
     ENTRY_WINDOW_MIN_CELLS,
+    PULSE_AMPLITUDE,
+    PULSE_PERIOD_SECONDS,
     QUEUE_GAP_CELLS,
+    SHAKE_SECONDS,
+    SPEED_BONUS_PAR_SECONDS_PER_CAR,
     TICK_SECONDS,
     levelSpec,
 } from './config.ts';
 import type { LevelSpec } from './config.ts';
-import { DIRECTIONS, directionVector, entryCellIndex, mod, ringLength, ringPointAt } from './ring.ts';
+import { directionVector, entryCellIndex, mod, ringLength } from './ring.ts';
 import type { Direction } from './ring.ts';
 import { ScoreState } from './scoring.ts';
 import { generateLevel } from './generator.ts';
-import type { RandomPort, RoundEvent } from './ports.ts';
+import type { RandomPort, RoundEvent, RoundEventsPort } from './ports.ts';
 
 /**
  * The simulation: a lot, a ring road, and the rules that tie them together.
@@ -84,27 +88,18 @@ export interface LeavingCarView {
     readonly dir: Direction;
     readonly length: number;
     readonly color: number;
-    readonly outward: boolean;
 }
 
 export interface RingCarView {
     readonly id: number;
     /** Continuous nose position on the ring, in cells from index 0. */
     readonly pos: number;
-    readonly x: number;
-    readonly y: number;
-    readonly dx: number;
-    readonly dy: number;
     readonly length: number;
     readonly color: number;
-    readonly isBus: boolean;
 }
 
 /** An entry point with its window, so the renderer can pulse the gap for the player. */
 export interface EntryWindowView {
-    readonly col: number;
-    readonly row: number;
-    readonly dir: Direction;
     /** Ring cells the joining car needs: the entry cell and the cells just upstream. */
     readonly cells: number[];
     /** How many of `cells` are currently occupied — 0 means "safe to release now". */
@@ -123,11 +118,9 @@ export interface WorldSnapshot {
     readonly score: number;
     readonly lives: number;
     readonly multiplier: number;
-    readonly cleared: number;
     readonly totalCars: number;
     readonly elapsed: number;
     readonly phase: RoundPhase;
-    readonly speed: number;
     /** True while the level's bus is still circling. */
     readonly busActive: boolean;
 }
@@ -155,7 +148,7 @@ export class GameWorld {
     phase: RoundPhase = 'playing';
     elapsed = 0;
 
-    private readonly listeners: ((event: RoundEvent) => void)[] = [];
+    private readonly listeners: RoundEventsPort[] = [];
     private nextId = 1;
     private totalCars = 0;
     private busId: number | null = null;
@@ -177,6 +170,9 @@ export class GameWorld {
         this.phase = 'playing';
         this.elapsed = 0;
         this.nextId = 1;
+        // A reused world must not carry the previous round's score, fenders or combo —
+        // a stale `lastReleaseAt` would chain a multiplier straight into the new round.
+        this.scoreState.reset();
 
         for (const spec of cars) {
             this.parked.push({ ...spec, id: this.nextId++, blockedUntil: 0 });
@@ -186,7 +182,7 @@ export class GameWorld {
         if (this.spec.bus) this.spawnBus();
     }
 
-    subscribe(listener: (event: RoundEvent) => void): () => void {
+    subscribe(listener: RoundEventsPort): () => void {
         this.listeners.push(listener);
         return () => {
             const at = this.listeners.indexOf(listener);
@@ -201,8 +197,8 @@ export class GameWorld {
     /** Ring speed for the current moment, in cells per second. */
     get speed(): number {
         if (!this.spec.speedPulse) return this.spec.ringSpeed;
-        const wave = Math.sin((this.elapsed * 2 * Math.PI) / 6);
-        return this.spec.ringSpeed * (1 + 0.25 * wave);
+        const wave = Math.sin((this.elapsed * 2 * Math.PI) / PULSE_PERIOD_SECONDS);
+        return this.spec.ringSpeed * (1 + PULSE_AMPLITUDE * wave);
     }
 
     /**
@@ -218,7 +214,7 @@ export class GameWorld {
         if (!car) return;
 
         if (!this.pathIsClear(car)) {
-            car.blockedUntil = this.elapsed + 0.5;
+            car.blockedUntil = this.elapsed + SHAKE_SECONDS;
             this.emit({ type: 'carBlocked', id: car.id });
             return;
         }
@@ -278,7 +274,10 @@ export class GameWorld {
             const ahead = this.nearestAhead(car);
             if (!ahead) continue;
 
-            const gap = mod(ahead.pos - ahead.length - car.pos, this.ringCells);
+            // The leader's TAIL is `pos - (length - 1)`, the same cell span the occupancy
+            // check and the renderer use; measuring from one cell further back would hold
+            // every queued car a full empty cell behind the one in front of it.
+            const gap = mod(ahead.pos - (ahead.length - 1) - car.pos, this.ringCells);
             if (gap >= QUEUE_GAP_CELLS) continue;
 
             car.pos -= QUEUE_GAP_CELLS - gap;
@@ -292,7 +291,7 @@ export class GameWorld {
 
         for (const other of this.ring) {
             if (other === car) continue;
-            const gap = mod(other.pos - other.length - car.pos, this.ringCells);
+            const gap = mod(other.pos - (other.length - 1) - car.pos, this.ringCells);
             if (gap > 0 && gap < bestGap) {
                 bestGap = gap;
                 best = other;
@@ -504,7 +503,7 @@ export class GameWorld {
         if (this.phase !== 'playing') return;
 
         if (this.parked.length === 0 && this.leaving.length === 0) {
-            const par = this.totalCars * 6;
+            const par = this.totalCars * SPEED_BONUS_PAR_SECONDS_PER_CAR;
             const points = this.scoreState.registerClear(this.elapsed, par);
             this.phase = 'won';
             this.emit({ type: 'roundWon', points });
@@ -537,32 +536,21 @@ export class GameWorld {
                     dir: car.dir,
                     length: car.length,
                     color: car.color,
-                    outward: car.outward,
                 };
             }),
-            ring: this.ring.map((car) => {
-                const nose = ringPointAt(this.cols, this.rows, car.pos);
-                return {
-                    id: car.id,
-                    pos: car.pos,
-                    x: nose.x,
-                    y: nose.y,
-                    dx: nose.dx,
-                    dy: nose.dy,
-                    length: car.length,
-                    color: car.color,
-                    isBus: car.isBus,
-                };
-            }),
+            ring: this.ring.map((car) => ({
+                id: car.id,
+                pos: car.pos,
+                length: car.length,
+                color: car.color,
+            })),
             entries: this.entryViews(),
             score: this.scoreState.score,
             lives: this.scoreState.lives,
             multiplier: this.scoreState.multiplier,
-            cleared: this.scoreState.cleared,
             totalCars: this.totalCars,
             elapsed: this.elapsed,
             phase: this.phase,
-            speed: this.speed,
             busActive: this.busId !== null && this.ring.some((car) => car.isBus),
         };
     }
@@ -586,7 +574,7 @@ export class GameWorld {
                 if (this.ring.some((other) => this.ringCarOccupies(other, cell))) occupied++;
             }
 
-            views.push({ col: car.col, row: car.row, dir: car.dir, cells, occupied });
+            views.push({ cells, occupied });
         }
 
         return views;
@@ -599,6 +587,3 @@ export class GameWorld {
         return false;
     }
 }
-
-/** Every direction, exported for the generator's shuffles and for tests. */
-export { DIRECTIONS };

@@ -18,7 +18,6 @@
  */
 export const THEME = {
     /** Page and camera background — the frame everything else sits on. */
-    bg: 0xeef1f6,
     bgCss: '#eef1f6',
 
     /**
@@ -32,16 +31,10 @@ export const THEME = {
         primary: '#23303f',
         /** Label on a filled (primary/danger) button, where the fill carries contrast. */
         onFill: '#ffffff',
-        /** The same label ink as a number, for Graphics strokes over a filled badge. */
-        onFillNumber: 0xffffff,
-        /** Loss / fenders-remaining red. */
-        danger: '#d64545',
         /** The same red as a number, for Graphics fills (the loss badge). */
         dangerNumber: 0xd64545,
         /** Accent: title flourish, combo, score, the padlock. */
         accent: '#d97706',
-        /** The same accent as a number, for Graphics fills (badges, rules, dividers). */
-        accentNumber: 0xd97706,
     },
 
     board: {
@@ -71,7 +64,7 @@ export const THEME = {
 
     button: {
         /** RETRY, and the fenders chip in the gameplay HUD. */
-        danger: { fill: 0xe2691a, stroke: 0xc55a12 },
+        danger: { fill: 0xe2691a },
     },
 
     panel: {
