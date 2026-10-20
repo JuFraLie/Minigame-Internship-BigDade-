@@ -4,7 +4,7 @@ import { mixColor } from './color.ts';
 import { measureViewport } from './viewport.ts';
 import { addText } from './text.ts';
 import { THEME } from './theme.ts';
-import { paintRoundedBox } from './widgets.ts';
+import { createArcadeButton, paintRoundedBox } from './widgets.ts';
 
 export interface ResultActions {
     /** Win only: the next level. */
@@ -35,9 +35,9 @@ interface Metrics {
  * and it is the only screen that offers Next Level, Retry or Exit. Retry goes straight
  * back to gameplay — the Play Screen never replays.
  *
- * It wears the same arcade sticker look as the Play Screen — dusk sky, sunburst, chunky
- * ink outlines, extruded shadow edges and a tilt — so the round ends back on the screen
- * style the player started from rather than in the light chrome of the HUD.
+ * It wears the same arcade sticker look as every other screen — dusk sky, sunburst, chunky
+ * ink outlines, extruded shadow edges and a tilt — so the round ends on the style the player
+ * has been looking at the whole time rather than on a panel that arrives in a different key.
  *
  * Nothing here is pinned to a percentage of the screen. Every piece is measured as it is
  * built and hung off a running cursor, and the finished stack is scaled down only if it
@@ -294,39 +294,45 @@ export class ResultPanel {
         // Score sticker card: caption tab, big accent number, a hairline, then the stats.
         y += this.buildScoreCard(content, result, m, y);
 
-        // Buttons: chunky extruded slabs, the same construction as the Play Screen's MULAI,
-        // so the panel closes on the screen it opened with.
+        // Buttons: chunky extruded slabs, the same construction as the HUD's pause and the
+        // Play Screen's MULAI, so the panel closes on the screen it opened with.
         const primaryHeight = gap(66, 56);
-        this.arcadeButton(
-            content,
-            0,
-            y + primaryHeight / 2,
-            Math.min(300, m.width - 48),
-            primaryHeight,
-            result.win ? 'NEXT LEVEL' : 'RETRY',
-            result.win ? THEME.menu.goTop : THEME.menu.plate,
-            // Reuses the light theme's loss orange so the two screens agree on "danger".
-            result.win ? THEME.menu.goBottom : THEME.button.danger.fill,
-            THEME.menu.logoInk,
-            gap('28px', '24px'),
-            () => (result.win ? actions.onNextLevel() : actions.onRetry()),
+        content.add(
+            createArcadeButton(scene, {
+                x: 0,
+                y: y + primaryHeight / 2,
+                width: Math.min(300, m.width - 48),
+                height: primaryHeight,
+                label: result.win ? 'NEXT LEVEL' : 'RETRY',
+                topColour: result.win ? THEME.menu.goTop : THEME.menu.plate,
+                // The danger orange, shared with the HUD's fenders chip so the two agree
+                // on what a loss looks like.
+                bodyColour: result.win ? THEME.menu.goBottom : THEME.button.danger.fill,
+                labelColour: THEME.menu.logoInk,
+                fontSize: gap(28, 24),
+                onTap: () => (result.win ? actions.onNextLevel() : actions.onRetry()),
+                loops: this.loops,
+            }),
         );
         y += primaryHeight + gap(14, 10);
 
         const exitHeight = gap(54, 46);
-        this.arcadeButton(
-            content,
-            0,
-            y + exitHeight / 2,
-            Math.min(300, m.width - 48),
-            exitHeight,
-            'EXIT',
-            0xffffff,
-            THEME.menu.card,
-            THEME.menu.cardInkCss,
-            gap('22px', '19px'),
-            () => actions.onExit(),
-            THEME.menu.cardInkCss,
+        content.add(
+            createArcadeButton(scene, {
+                x: 0,
+                y: y + exitHeight / 2,
+                width: Math.min(300, m.width - 48),
+                height: exitHeight,
+                label: 'EXIT',
+                topColour: 0xffffff,
+                bodyColour: THEME.menu.card,
+                labelColour: THEME.menu.cardInkCss,
+                // A dark label on a pale slab carries its own contrast, so no outline.
+                strokeColour: '',
+                fontSize: gap(22, 19),
+                onTap: () => actions.onExit(),
+                loops: this.loops,
+            }),
         );
         y += exitHeight;
 
@@ -444,98 +450,6 @@ export class ResultPanel {
         });
 
         return cardHeight;
-    }
-
-    /**
-     * One arcade slab button: ink extrusion, two-tone body, glossy top half and a stroked
-     * label. Built here rather than through `createButton` because this screen wears the
-     * Play Screen's outline, not the light chrome's pill.
-     */
-    private arcadeButton(
-        parent: Phaser.GameObjects.Container,
-        x: number,
-        y: number,
-        width: number,
-        height: number,
-        label: string,
-        topColour: number,
-        bodyColour: number,
-        labelColour: string,
-        fontSize: string,
-        onTap: () => void,
-        strokeColour: string = THEME.menu.inkCss,
-    ): Phaser.GameObjects.Container {
-        const scene = this.scene;
-        const radius = 20;
-
-        const container = scene.add.container(x, y);
-        const graphics = scene.add.graphics();
-        graphics.fillStyle(THEME.menu.ink, 1);
-        graphics.fillRoundedRect(-width / 2, -height / 2 + 8, width, height, radius);
-        paintRoundedBox(graphics, -width / 2, -height / 2, width, height, radius, bodyColour, THEME.menu.ink, 1, 4);
-        graphics.fillStyle(topColour, 1);
-        graphics.fillRoundedRect(-width / 2 + 6, -height / 2 + 5, width - 12, height * 0.4, { tl: 14, tr: 14, br: 5, bl: 5 });
-        container.add(graphics);
-
-        const text = addText(scene, 0, 0, label, {
-            fontSize,
-            fontStyle: 'bold',
-            color: labelColour,
-            align: 'center',
-            stroke: strokeColour,
-            strokeThickness: labelColour === THEME.menu.cardInkCss ? 0 : 6,
-            letterSpacing: 2,
-            shadow: { x: 0, y: 3, color: THEME.menu.shadowCss, stroke: false },
-        }).setOrigin(0.5, 0.5);
-        // A long label steps down rather than running past the slab's edges.
-        let size = Number.parseInt(fontSize, 10);
-        while (text.width > width - 28 && size > 15) {
-            size -= 2;
-            text.setFontSize(size);
-        }
-        container.add(text);
-
-        container.setSize(width, height);
-        // Phaser normalises a hit test by the game object's `displayOrigin`, which for a
-        // Container is always `width * 0.5` / `height * 0.5`. The point handed to the hit
-        // area is therefore top-left relative, not centre relative, so the area runs from
-        // (0, 0) to (width, height) — exactly the box that was drawn above. Offsetting it
-        // by half the size again would leave only the top-left quarter of the button
-        // tappable, which reads on a touchscreen as "the button does not respond".
-        container.setInteractive(
-            new Phaser.Geom.Rectangle(0, 0, width, height),
-            Phaser.Geom.Rectangle.Contains,
-        );
-        container.on('pointerdown', () => this.press(container, onTap));
-        parent.add(container);
-
-        // The bob runs on `y` and the press on `scale`, so the two never fight over the
-        // same property — and the button reads as pressable before it is ever pressed.
-        this.loops.push(
-            scene.tweens.add({
-                targets: container,
-                y: y - 5,
-                duration: 1150,
-                yoyo: true,
-                repeat: -1,
-                ease: 'Sine.easeInOut',
-            }),
-        );
-
-        return container;
-    }
-
-    /** Press feedback, then the action — one place so both buttons feel identical. */
-    private press(target: Phaser.GameObjects.Container, onTap: () => void): void {
-        this.scene.tweens.add({
-            targets: target,
-            scaleX: 0.95,
-            scaleY: 0.95,
-            duration: 60,
-            yoyo: true,
-            ease: 'Quad.easeOut',
-        });
-        onTap();
     }
 
     /**

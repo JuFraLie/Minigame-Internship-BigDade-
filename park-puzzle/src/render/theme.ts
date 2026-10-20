@@ -1,15 +1,16 @@
 /**
- * The game's light theme, in one place.
+ * The game's palette, in one place.
  *
- * The light theme holds two ideas:
+ * The game draws in one style — the arcade dusk sky — on every screen: the Play Screen,
+ * the gameplay HUD, the pause sheet and the Result Panel. What ties them together is that
+ * one shape wears one outline: `menu.ink`, a heavy near-black purple, on every card, plate
+ * and slab, each with an extruded shadow and a glossy top strip. Amber plates, cream sticker
+ * cards and green pressable slabs are the fills that sit inside it.
  *
- * - The app chrome — page, cards, buttons — is light: pale surfaces, dark slate text.
- * - The board itself is black asphalt, the real colour of a road, so the cars and the
- *   yellow lane markings pop exactly the way they do on a real ring road.
- *
- * Text and strokes are dark slate, never white, so they keep their contrast against
- * the pale chrome. White is only used as a *label on a filled button*, where the
- * button itself is what carries the contrast.
+ * The board itself is black asphalt, the real colour of a road, so the cars and the yellow
+ * lane markings pop exactly the way they do on a real ring road. It takes the same ink
+ * outline as everything else, so it reads as a sticker laid on the sky rather than as a hole
+ * cut in it.
  *
  * Numbers are `0xrrggbb` for Graphics fills/strokes and `#rrggbb` strings for text and
  * camera backgrounds — the two forms are kept as parallel pairs so a colour can never
@@ -20,14 +21,15 @@ export const THEME = {
     bg: 0xeef1f6,
     bgCss: '#eef1f6',
 
-    /** Scene fades dim to the page colour, not to black: a light theme never goes dark. */
+    /**
+     * Scene fades ramp to this rather than to black, so a change of screen reads as a
+     * bright blink instead of the frame momentarily dying.
+     */
     fade: { r: 255, g: 255, b: 255 },
 
     text: {
-        /** Primary copy: headings, the score, button labels on pale fills. */
+        /** Default copy ink wherever a screen does not name one. */
         primary: '#23303f',
-        /** Secondary copy: subtitles, stat lines. */
-        muted: '#5c6b7d',
         /** Label on a filled (primary/danger) button, where the fill carries contrast. */
         onFill: '#ffffff',
         /** The same label ink as a number, for Graphics strokes over a filled badge. */
@@ -43,9 +45,8 @@ export const THEME = {
     },
 
     board: {
-        /** The ring road slab: black asphalt, the one dark surface in a light UI. */
+        /** The ring road slab: black asphalt, the one dark surface behind the cars. */
         road: 0x1e2126,
-        roadEdge: 0x3a414a,
         /** Lane dashes down each road edge — classic warm road-marking yellow. */
         lane: 0xe8b45c,
         /** The parking apron inside the ring, a shade lighter than the road. */
@@ -69,32 +70,14 @@ export const THEME = {
     },
 
     button: {
-        /** PLAY / RESUME / NEXT LEVEL. */
-        primary: { fill: 0x2ea85f, stroke: 0x1f8c4d },
-        /** RETRY. */
+        /** RETRY, and the fenders chip in the gameplay HUD. */
         danger: { fill: 0xe2691a, stroke: 0xc55a12 },
-        /** EXIT, pause pill — quiet, pale, dark label. */
-        neutral: { fill: 0xdfe5ee, stroke: 0xb9c3d1 },
     },
 
     panel: {
-        /** Pause and result cards. */
-        fill: 0xffffff,
-        stroke: 0xd3dae4,
         /** Overlay dim: a soft slate veil, not a blackout. */
         dim: 0x273449,
         dimAlpha: 0.5,
-        /** Lighter veil for the Result Panel, whose tinted backdrop must stay readable. */
-        dimAlphaSoft: 0.28,
-    },
-
-    /** HUD chips — small white cards floating over the asphalt board. */
-    chip: {
-        fill: 0xffffff,
-        stroke: 0xd3dae4,
-        /** Combo/bus highlight chip: a wash of the accent colour. */
-        accentFill: 0xfdf0d5,
-        accentStroke: 0xe8c98a,
     },
 
     /** Result Panel backdrops — a tint of the outcome, not a full colour change. */
@@ -104,9 +87,9 @@ export const THEME = {
     },
 
     /**
-     * The Play Screen only — the one screen that leaves the light chrome behind for an
-     * arcade dusk sky, so its colours live apart from the light theme above. Everything
-     * on it is chunky: one dark outline (`ink`) on every shape, amber plates, cream ink.
+     * The arcade look, shared by every screen: the Play Screen, the gameplay HUD, the pause
+     * sheet and the Result Panel. Everything on it is chunky — one dark outline (`ink`) on
+     * every shape, amber plates, cream sticker cards, green pressable slabs.
      */
     menu: {
         /** Sky wash, top → bottom. Drawn as stepped bands: Canvas has no gradient fill. */

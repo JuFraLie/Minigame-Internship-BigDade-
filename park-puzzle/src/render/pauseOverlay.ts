@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { addText } from './text.ts';
 import { THEME } from './theme.ts';
-import { createButton, paintRoundedBox } from './widgets.ts';
+import { createArcadeButton, paintSticker } from './widgets.ts';
 import { measureViewport } from './viewport.ts';
 
 const DEPTH = 100;
@@ -59,46 +59,50 @@ export class PauseOverlay {
         const sheetY = height - sheetHeight - 16;
 
         const panel = scene.add.graphics().setDepth(DEPTH + 1);
-        paintRoundedBox(
+        paintSticker(
             panel,
             sheetX,
             sheetY,
             sheetWidth,
             sheetHeight,
             { tl: 26, tr: 26, bl: 18, br: 18 },
-            THEME.panel.fill,
-            THEME.panel.stroke,
+            THEME.menu.card,
+            { shadowX: 0, shadowY: -4, glossAlpha: 0.14 },
         );
 
         const handle = scene.add.graphics().setDepth(DEPTH + 2);
-        handle.fillStyle(THEME.panel.stroke, 1);
-        handle.fillRoundedRect(width / 2 - 26, sheetY + 12, 52, 6, 3);
+        handle.fillStyle(THEME.menu.ink, 0.35);
+        handle.fillRoundedRect(width / 2 - 26, sheetY + 14, 52, 6, 3);
 
-        const title = addText(scene, width / 2, sheetY + 52, 'PAUSED', {
+        const title = addText(scene, width / 2, sheetY + 54, 'PAUSED', {
             fontSize: '30px',
             fontStyle: 'bold',
-            color: THEME.text.primary,
+            color: THEME.menu.cardInkCss,
             align: 'center',
+            letterSpacing: 2,
         })
             .setOrigin(0.5, 0.5)
             .setDepth(DEPTH + 2);
 
-        const subtitle = addText(scene, width / 2, sheetY + 88, 'The ring is frozen — take your time.', {
+        const subtitle = addText(scene, width / 2, sheetY + 90, 'The ring is frozen — take your time.', {
             fontSize: '14px',
-            color: THEME.text.muted,
+            color: THEME.menu.cardInkCss,
             align: 'center',
         })
             .setOrigin(0.5, 0.5)
+            .setAlpha(0.7)
             .setDepth(DEPTH + 2);
 
-        const button = createButton(scene, {
+        const button = createArcadeButton(scene, {
             x: width / 2,
             y: sheetY + 178,
             width: sheetWidth - 48,
             height: 62,
             label: 'RESUME',
-            variant: 'primary',
-            fontSize: '24px',
+            topColour: THEME.menu.goTop,
+            bodyColour: THEME.menu.goBottom,
+            labelColour: THEME.menu.logoInk,
+            fontSize: 26,
             onTap: onResume,
         }).setDepth(DEPTH + 3);
 

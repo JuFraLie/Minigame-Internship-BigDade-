@@ -22,11 +22,11 @@ import { paintRoundedBox } from './widgets.ts';
  * because "tap the car you want to move" is not quite self-evident when half the cars are
  * blocked by the other half.
  *
- * This is the one screen that leaves the light chrome behind: a dusk sky with a slow
- * sunburst behind the logo, and every chunk of UI drawn with the same heavy dark outline,
- * an extruded shadow edge and a slight tilt — the arcade sticker look the rest of the game
- * does not have. Copy is wrapped and measured before the card is drawn, so a narrow screen
- * grows the card instead of clipping a line.
+ * It establishes the look the rest of the game now shares: a dusk sky with a slow sunburst
+ * behind the logo, and every chunk of UI drawn with the same heavy dark outline, an
+ * extruded shadow edge and a slight tilt — the arcade sticker look. Copy is wrapped and
+ * measured before the card is drawn, so a narrow screen grows the card instead of clipping
+ * a line.
  *
  * Everything it draws lives in one container, so a resize is a redraw rather than a pile
  * of half-orphaned game objects. The idle loops it starts are stopped before that redraw.
@@ -473,9 +473,12 @@ export class MenuView {
     }
 
     /**
-     * MAIN: a pressed slab with an extruded edge, a glossy top half and a stroked label —
-     * built here rather than through `createButton` because this screen's buttons are the
-     * only ones that wear the arcade outline.
+     * MAIN: a pressed slab with an extruded edge, a glossy top half and a stroked label.
+     *
+     * This is the one button that predates the shared `createArcadeButton` and keeps its own
+     * build: its label is tuned heavier than the helper's defaults — a 7px stroke against 6,
+     * a deeper drop shadow, a wider letter-spacing — so it holds up directly under the logo
+     * where nothing else on the screen competes with it.
      */
     private buildPlayButton(
         content: Phaser.GameObjects.Container,

@@ -8,11 +8,22 @@ import { measureViewport } from './viewport.ts';
 import { LIVES } from '../core/config.ts';
 import { addText } from './text.ts';
 import { THEME } from './theme.ts';
-import { createButton, paintRoundedBox } from './widgets.ts';
+import { mixColor } from './color.ts';
+import { createArcadeButton, paintSticker } from './widgets.ts';
 
 /** Blocked-car nudge: three quarter-cycles over a third of a second, then it settles. */
 const SHAKE_MS = 320;
 const SHAKE_PX = 3.5;
+
+/**
+ * Ink outline drawn around the board slab.
+ *
+ * The board is baked into a texture that is this much larger than the lot-plus-ring
+ * rectangle, and the image is placed this much up and to the left of the layout origin,
+ * so the outline hangs outside the play area while the road surface stays exactly where
+ * `cellToScreen` says it is — the cars are placed against the layout, never the texture.
+ */
+const BOARD_EDGE = 4;
 
 /**
  * Everything the gameplay screen draws: the cached board, the cars, the entry-window
@@ -29,6 +40,9 @@ export class GameView {
     private layout: BoardLayout;
     private board: Phaser.GameObjects.Image | null = null;
     private boardKey = '';
+    /** Dusk sky behind everything, baked once per screen size like the board. */
+    private sky: Phaser.GameObjects.Image | null = null;
+    private skyKey = '';
 
     private readonly cars = new Map<number, Phaser.GameObjects.Sprite>();
     private readonly ringCars = new Map<number, Phaser.GameObjects.Sprite>();
@@ -39,7 +53,7 @@ export class GameView {
 
     private readonly pulse: Phaser.GameObjects.Graphics;
     private readonly hud: Phaser.GameObjects.Container;
-    /** Chip cards behind the HUD texts — one graphics, cleared and repainted as they change. */
+    /** Sticker cards behind the HUD texts — one graphics, cleared and repainted as they change. */
     private readonly chips: Phaser.GameObjects.Graphics;
 
     private readonly scoreCaption: Phaser.GameObjects.Text;
@@ -47,6 +61,7 @@ export class GameView {
     private readonly comboText: Phaser.GameObjects.Text;
     private readonly fendersText: Phaser.GameObjects.Text;
     private readonly levelText: Phaser.GameObjects.Text;
+    private readonly pauseButton: Phaser.GameObjects.Container;
 
     /** Score last drawn, so a change can be told apart from the initial 0. */
     private lastScore = 0;
@@ -60,39 +75,49 @@ export class GameView {
         onPause: () => void,
     ) {
         this.layout = computeBoardLayout(measureViewport(), cols, rows);
+        this.buildSky();
         this.pulse = scene.add.graphics().setDepth(1);
         this.buildBoard(cols, rows);
 
         this.hud = scene.add.container(0, 0);
 
-        // Chip cards sit behind the texts in the container, so they always render under.
+        // Sticker cards sit behind the texts in the container, so they always render under.
         this.chips = scene.add.graphics();
         this.hud.add(this.chips);
 
         this.scoreCaption = addText(scene, 0, 0, 'SCORE', {
             fontSize: '10px',
             fontStyle: 'bold',
-            color: THEME.text.muted,
+            color: THEME.menu.cardInkCss,
+            letterSpacing: 1,
         });
         this.scoreText = addText(scene, 0, 0, '0', {
             fontSize: '26px',
             fontStyle: 'bold',
-            color: THEME.text.primary,
+            color: THEME.text.accent,
         });
         this.comboText = addText(scene, 0, 0, '', {
-            fontSize: '13px',
+            fontSize: '12px',
             fontStyle: 'bold',
-            color: THEME.text.accent,
+            color: THEME.menu.logoInk,
+            stroke: THEME.menu.inkCss,
+            strokeThickness: 3,
+            letterSpacing: 1,
         });
         this.fendersText = addText(scene, 0, 0, '', {
             fontSize: '15px',
             fontStyle: 'bold',
-            color: THEME.text.danger,
+            color: THEME.text.onFill,
+            stroke: THEME.menu.inkCss,
+            strokeThickness: 3,
         });
         this.levelText = addText(scene, 0, 0, '', {
             fontSize: '14px',
             fontStyle: 'bold',
-            color: THEME.text.primary,
+            color: THEME.menu.logoInk,
+            stroke: THEME.menu.inkCss,
+            strokeThickness: 3,
+            letterSpacing: 1,
         });
         this.hud.add([
             this.scoreCaption,
@@ -102,18 +127,20 @@ export class GameView {
             this.levelText,
         ]);
 
-        this.hud.add(
-            createButton(scene, {
-                x: 0,
-                y: 0,
-                width: 64,
-                height: 40,
-                label: 'II',
-                variant: 'neutral',
-                fontSize: '17px',
-                onTap: onPause,
-            }),
-        );
+        this.pauseButton = createArcadeButton(scene, {
+            x: 0,
+            y: 0,
+            width: 52,
+            height: 40,
+            label: 'II',
+            topColour: THEME.menu.card,
+            bodyColour: THEME.menu.card,
+            labelColour: THEME.menu.cardInkCss,
+            strokeColour: '',
+            fontSize: 17,
+            onTap: onPause,
+        });
+        this.hud.add(this.pauseButton);
 
         this.layoutHud();
     }
@@ -128,8 +155,56 @@ export class GameView {
 
         const { cols, rows } = this.layout;
         this.layout = computeBoardLayout(measureViewport(), cols, rows);
+        this.buildSky();
         this.buildBoard(cols, rows);
         this.layoutHud();
+    }
+
+    /**
+     * Bakes the dusk sky once per screen size and blits it behind everything.
+     *
+     * The Play Screen paints this gradient with animated bands; the round does not need
+     * the motion, so it is baked into a texture instead and costs nothing per frame. It is
+     * what puts the round on the same screen as the two panels either side of it — without
+     * it the road would float on the page colour instead of sitting in the same sky.
+     */
+    private buildSky(): void {
+        const { width, height } = this.layout.viewport;
+        const key = `sky-${Math.round(width)}x${Math.round(height)}`;
+        if (this.skyKey !== key || !this.sky) {
+            if (this.sky) {
+                this.sky.destroy();
+                this.sky = null;
+            }
+            if (this.scene.textures.exists(this.skyKey)) this.scene.textures.remove(this.skyKey);
+
+            this.paintSky(key, width, height);
+            this.skyKey = key;
+            this.sky = this.scene.add
+                .image(0, 0, key)
+                .setOrigin(0, 0)
+                .setDepth(-10);
+        }
+
+        this.sky.setPosition(0, 0);
+    }
+
+    /** Stepped bands down the screen: `fillGradientStyle` is WebGL only, this is Canvas. */
+    private paintSky(key: string, width: number, height: number): void {
+        const [top, middle, bottom] = THEME.menu.sky;
+        const g = this.scene.add.graphics();
+        const bands = 32;
+        const bandHeight = height / bands;
+        for (let i = 0; i < bands; i += 1) {
+            const t = i / (bands - 1);
+            const colour =
+                t < 0.5 ? mixColor(top, middle, t * 2) : mixColor(middle, bottom, (t - 0.5) * 2);
+            // One px past the band: adjoining rects otherwise leave hairline seams.
+            g.fillStyle(colour, 1);
+            g.fillRect(0, i * bandHeight, width, bandHeight + 1);
+        }
+        g.generateTexture(key, width, height);
+        g.destroy();
     }
 
     /**
@@ -148,39 +223,66 @@ export class GameView {
     private layoutHud(): void {
         this.hud.setDepth(80);
 
-        const top = Math.max(this.layout.viewport.safeTop, this.layout.viewport.height * 0.08);
-        const inset = 16;
+        const viewport = this.layout.viewport;
+        const top = Math.max(viewport.safeTop, viewport.height * 0.08);
+        const inset = 14;
         const g = this.chips;
         g.clear();
 
-        // Score chip, top-left: small caption over the big number.
-        const scorePadX = 13;
+        // Score sticker, top-left: small caption over the big number, on the same cream
+        // card the how-to and the result panel use.
+        const scorePadX = 14;
         const scoreW = Math.max(92, Math.max(this.scoreCaption.width, this.scoreText.width) + scorePadX * 2);
-        paintRoundedBox(g, inset, top, scoreW, 56, 16, THEME.chip.fill, THEME.chip.stroke, 1, 2);
+        const scoreH = 56;
+        paintSticker(g, inset, top, scoreW, scoreH, 16, THEME.menu.card, { shadowX: 5, shadowY: 7 });
         this.scoreCaption.setPosition(inset + scorePadX, top + 7);
         this.scoreText.setPosition(inset + scorePadX, top + 20);
 
-        // Fenders and level chip, top-right.
-        const levelW = this.levelText.width;
-        const fendersW = this.fendersText.width;
-        const livesChipW = Math.max(92, fendersW + 10 + levelW + 26);
-        const livesChipX = this.layout.viewport.width - inset - livesChipW;
-        paintRoundedBox(g, livesChipX, top, livesChipW, 40, 14, THEME.chip.fill, THEME.chip.stroke, 1, 2);
-        this.fendersText.setPosition(livesChipX + 13, top + 11);
-        this.levelText.setPosition(livesChipX + livesChipW - 13, top + 11).setOrigin(1, 0);
+        // Level plate, top-right: the same tilted-free amber slab as the title's second
+        // line and the Result Panel's level chip.
+        const levelPadX = 13;
+        const levelH = 34;
+        const levelW = this.levelText.width + levelPadX * 2;
+        const levelX = viewport.width - inset - levelW;
+        paintSticker(g, levelX, top, levelW, levelH, 12, THEME.menu.plate, {
+            shadowX: 5,
+            shadowY: 6,
+        });
+        this.levelText.setPosition(levelX + levelPadX, top + (levelH - this.levelText.height) / 2);
 
-        // Combo chip under the score — accent wash, only while it says something.
+        // Fenders chip, immediately left of the level plate, in the danger orange the
+        // Result Panel's RETRY wears — a lost fender is the same red everywhere.
+        const fenderPadX = 12;
+        const fenderW = Math.max(62, this.fendersText.width + fenderPadX * 2);
+        const fenderX = levelX - 8 - fenderW;
+        paintSticker(g, fenderX, top, fenderW, levelH, 12, THEME.button.danger.fill, {
+            shadowX: 5,
+            shadowY: 6,
+        });
+        this.fendersText.setPosition(fenderX + fenderPadX, top + (levelH - this.fendersText.height) / 2);
+
+        // Combo chip under the score — accent slab, only while it says something. Both it
+        // and the pause slab below are kept inside the HUD band the board reserves
+        // (`HUD_HEIGHT`, 92px), so on a wide window where the board sits flush under the
+        // HUD neither can land on the road.
+        const scoreBottom = top + scoreH + 6;
         if (this.comboText.text) {
             const comboW = this.comboText.width + 24;
-            paintRoundedBox(g, inset, top + 62, comboW, 26, 13, THEME.chip.accentFill, THEME.chip.accentStroke, 1, 2);
-            this.comboText.setPosition(inset + 12, top + 68).setVisible(true);
+            const comboH = 26;
+            paintSticker(g, inset, scoreBottom, comboW, comboH, 12, THEME.menu.plate, {
+                shadowX: 4,
+                shadowY: 5,
+                lineWidth: 3,
+            });
+            this.comboText
+                .setPosition(inset + 12, scoreBottom + (comboH - this.comboText.height) / 2)
+                .setVisible(true);
         } else {
             this.comboText.setVisible(false);
         }
 
-        // Pause pill under the fender chip — the last child in the container.
-        const pause = this.hud.list[this.hud.list.length - 1] as Phaser.GameObjects.Container;
-        pause.setPosition(this.layout.viewport.width - inset - 32, top + 52);
+        // Pause sticker under the fender chip, kept clear of the board below it.
+        this.pauseButton.setPosition(viewport.width - inset - 26, top + levelH + 28);
     }
 
     /**
@@ -209,7 +311,9 @@ export class GameView {
                 .setDepth(0);
         }
 
-        this.board.setPosition(this.layout.x, this.layout.y);
+        // Pulled back by half the outline: the road surface is drawn that far inside the
+        // texture, so this puts it back on the layout origin the cars are measured from.
+        this.board.setPosition(this.layout.x - BOARD_EDGE / 2, this.layout.y - BOARD_EDGE / 2);
     }
 
     /**
@@ -222,16 +326,22 @@ export class GameView {
         const cell = this.layout.cell;
         const width = Math.ceil((cols + 2) * cell);
         const height = Math.ceil((rows + 2) * cell);
+        // Everything is drawn this far in, so the ink outline hangs outside the slab and
+        // the road surface still starts exactly where the layout origin says it does.
+        const o = BOARD_EDGE / 2;
 
         const g = this.scene.add.graphics();
 
-        // The road: inset a hair so the page colour frames the slab instead of it
-        // bleeding to a sharp corner against the background.
-        const inset = 1;
+        // The slab wears the same heavy ink outline and extruded shadow as every other
+        // chunk on this screen, so it reads as a sticker laid on the dusk sky rather than
+        // as a hole cut in it. Without the outline the black road simply vanished into
+        // the dark end of the gradient.
+        g.fillStyle(THEME.menu.ink, 1);
+        g.fillRoundedRect(0, 0, width + BOARD_EDGE, height + BOARD_EDGE, cell * 0.42 + o);
         g.fillStyle(THEME.board.road, 1);
-        g.fillRoundedRect(inset, inset, width - inset * 2, height - inset * 2, cell * 0.42);
-        g.lineStyle(2, THEME.board.roadEdge, 1);
-        g.strokeRoundedRect(inset, inset, width - inset * 2, height - inset * 2, cell * 0.42);
+        g.fillRoundedRect(o, o, width, height, cell * 0.42);
+        g.lineStyle(BOARD_EDGE, THEME.menu.ink, 1);
+        g.strokeRoundedRect(o, o, width, height, cell * 0.42);
 
         // Lane markings: short rounded dashes down the middle of each road edge, with the
         // corners left clear so the ring reads as one continuous loop.
@@ -242,18 +352,18 @@ export class GameView {
 
         g.fillStyle(THEME.board.lane, 0.5);
         for (let d = corner; d < width - corner; d += dash + gap) {
-            g.fillRoundedRect(d, cell * 0.5 - mark / 2, dash, mark, mark / 2);
-            g.fillRoundedRect(d, height - cell * 0.5 - mark / 2, dash, mark, mark / 2);
+            g.fillRoundedRect(o + d, o + cell * 0.5 - mark / 2, dash, mark, mark / 2);
+            g.fillRoundedRect(o + d, o + height - cell * 0.5 - mark / 2, dash, mark, mark / 2);
         }
         for (let d = corner; d < height - corner; d += dash + gap) {
-            g.fillRoundedRect(cell * 0.5 - mark / 2, d, mark, dash, mark / 2);
-            g.fillRoundedRect(width - cell * 0.5 - mark / 2, d, mark, dash, mark / 2);
+            g.fillRoundedRect(o + cell * 0.5 - mark / 2, o + d, mark, dash, mark / 2);
+            g.fillRoundedRect(o + width - cell * 0.5 - mark / 2, o + d, mark, dash, mark / 2);
         }
 
         // The lot: a lighter apron inside the ring, ruled into bays by a light grid so the
         // parking spaces are countable without any label.
-        const lotX = cell;
-        const lotY = cell;
+        const lotX = o + cell;
+        const lotY = o + cell;
         const lotW = cols * cell;
         const lotH = rows * cell;
 
@@ -270,7 +380,8 @@ export class GameView {
             g.lineBetween(lotX + 5, lotY + r * cell, lotX + lotW - 5, lotY + r * cell);
         }
 
-        g.generateTexture(key, width, height);
+        // Sized to the outline as well as the slab, or the ink edge is clipped off.
+        g.generateTexture(key, width + BOARD_EDGE, height + BOARD_EDGE);
         g.destroy();
 
         // The board is baked in design units and then blown up by the camera's zoom, so it
@@ -621,6 +732,9 @@ export class GameView {
         this.hud.destroy(true);
         if (this.board) this.board.destroy();
         if (this.scene.textures.exists(this.boardKey)) this.scene.textures.remove(this.boardKey);
+        if (this.sky) this.sky.destroy();
+        this.sky = null;
+        if (this.scene.textures.exists(this.skyKey)) this.scene.textures.remove(this.skyKey);
     }
 }
 
