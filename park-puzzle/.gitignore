@@ -1,2 +1,6 @@
 node_modules/
-dist/
+# dist/ is committed on purpose: GitHub Pages serves the built game from
+# park-puzzle/dist/ (same pattern as dungeon-runner, last-bullet, rps-brawl,
+# serpent_rogue and whack-a-monster). Always build it with `npm run build`.
+*.local
+.vite/

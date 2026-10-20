@@ -1,0 +1,72 @@
+/* Layout only — the game itself is rendered exclusively by the Phaser canvas. */
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #eef1f6;
+    color: rgba(35, 48, 63, 0.87);
+    /* The game is touch-only inside a mobile WebView: never scroll, never zoom,
+       never trigger pull-to-refresh or the long-press callout. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+}
+
+#app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#game-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* The canvas is the touch target: repeat the rule here so no gesture — tap, drag or
+   swipe — is ever handed to the browser to scroll, zoom or cancel mid-motion. */
+#game-container canvas {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+
+    /* If the browser ever has to scale the canvas, it must step pixels rather than blend
+       them. This is the only filtering that applies OUTSIDE the canvas, so it is what
+       decides the finish on a screen whose density is not a whole multiple of the backing
+       store — a dpr-3 phone, whose backing store the game deliberately caps at 2x for the
+       sake of the target GPU. Bilinear resampling there smears every sprite in the finished
+       frame, which no amount of nearest-neighbour inside the canvas can undo, because the
+       game has already finished drawing by then. `pixelated` is the value Chromium WebViews
+       and modern Safari/Chrome/Firefox honour; the older aliases above cover the rest. It is
+       listed last so it wins where it is understood. */
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+}
+
+/* Zero-size, invisible probe: reports the device cutout inset to the game layout. */
+#safe-area-probe {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    visibility: hidden;
+    pointer-events: none;
+}
