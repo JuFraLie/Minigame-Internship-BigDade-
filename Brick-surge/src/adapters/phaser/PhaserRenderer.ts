@@ -10,13 +10,12 @@
 import type Phaser from 'phaser';
 import type { RendererPort } from '../../domain/ports.ts';
 import type { PowerUpKind, WorldSnapshot } from '../../domain/types.ts';
+import { hudTop, renderScale, type Viewport } from './viewport.ts';
 
 const MAX_BRICK_SPRITES = 80;
 const MAX_BALL_SPRITES = 6;
 const MAX_DROP_SPRITES = 10;
 const MAX_PARTICLES = 24;
-/** Top of the screen reserved for the HUD (status bar / cutout safe area). */
-const HUD_HEIGHT_FRAC = 0.08;
 
 const DROP_COLORS: Record<PowerUpKind, number> = {
     multi: 0xffd23f,   // yellow — multi-ball
@@ -44,6 +43,7 @@ interface Particle {
 export class PhaserRenderer implements RendererPort {
     private scaleX = 1;
     private scaleY = 1;
+    private hudFontSize = 12;
 
     private readonly brickPool: Phaser.GameObjects.Rectangle[] = [];
     private readonly ballPool: Phaser.GameObjects.Rectangle[] = [];
@@ -68,8 +68,14 @@ export class PhaserRenderer implements RendererPort {
         this.scene = scene;
     }
 
-    create(screenWidth: number, screenHeight: number): void {
+    /** Backing-store density the camera zooms by — input conversion needs it. */
+    get densityScale(): number {
+        return renderScale();
+    }
+
+    create(viewport: Viewport): void {
         const s = this.scene;
+        const screenWidth = viewport.width;
 
         this.paddle = s.add.rectangle(0, 0, 10, 10, 0xf2f2f7).setOrigin(0.5);
         this.shieldLine = s.add.rectangle(0, 0, 10, 3, 0xaf52de).setOrigin(0.5).setVisible(false);
@@ -97,36 +103,50 @@ export class PhaserRenderer implements RendererPort {
             color: '#ffffff',
             fontSize: `${fontSize}px`,
         };
-        const hudY = screenHeight * HUD_HEIGHT_FRAC * 0.5;
-        this.scoreText = s.add.text(screenWidth * 0.04, hudY, '0', style).setOrigin(0, 0.5);
-        this.waveText = s.add.text(screenWidth * 0.5, hudY, 'Wave 1', style).setOrigin(0.5);
-        this.livesText = s.add.text(screenWidth * 0.96, hudY, '♥ 3', style).setOrigin(1, 0.5);
+        this.hudFontSize = fontSize;
+        this.scoreText = s.add.text(screenWidth * 0.04, 0, '0', style).setOrigin(0, 0.5);
+        this.waveText = s.add.text(screenWidth * 0.5, 0, 'Wave 1', style).setOrigin(0.5);
+        this.livesText = s.add.text(screenWidth * 0.96, 0, '♥ 3', style).setOrigin(1, 0.5);
 
         const bigStyle: Phaser.Types.GameObjects.Text.TextStyle = {
             ...style,
             fontSize: `${Math.round(screenWidth * 0.09)}px`,
             fontStyle: 'bold',
         };
-        this.bannerText = s.add.text(screenWidth * 0.5, screenHeight * 0.4, '', bigStyle)
+        this.bannerText = s.add.text(screenWidth * 0.5, viewport.height * 0.4, '', bigStyle)
             .setOrigin(0.5).setVisible(false);
 
-        this.serveText = s.add.text(screenWidth * 0.5, screenHeight * 0.6, '', bigStyle)
+        this.serveText = s.add.text(screenWidth * 0.5, viewport.height * 0.6, '', bigStyle)
             .setOrigin(0.5).setVisible(false);
 
-        this.comboText = s.add.text(screenWidth * 0.5, screenHeight * 0.14, '', {
+        this.comboText = s.add.text(screenWidth * 0.5, viewport.height * 0.16, '', {
             ...style,
             fontSize: `${Math.round(screenWidth * 0.05)}px`,
             color: '#ffd23f',
         }).setOrigin(0.5).setVisible(false);
 
-        this.resize(screenWidth, screenHeight);
+        this.layout(viewport);
     }
 
-    /** Re-derive the world→screen scale (portrait, any height). */
-    resize(screenWidth: number, screenHeight: number): void {
-        // The world is always 100 units wide; its height follows the aspect ratio.
-        this.scaleX = screenWidth / 100;
-        this.scaleY = screenHeight / (100 * (screenHeight / screenWidth));
+    /**
+     * Re-derive the world→screen scale and reposition the HUD for the given
+     * viewport (portrait, any height). The HUD sits below the device's real
+     * cutout/status-bar inset — never less than the design doc's 8%.
+     */
+    layout(viewport: Viewport): void {
+        const { width, height } = viewport;
+        // The world is always 100 units wide; its height follows the aspect ratio,
+        // so both scales are simply width / 100.
+        this.scaleX = width / 100;
+        this.scaleY = width / 100;
+
+        const hudY = hudTop(viewport, this.hudFontSize) * 0.5;
+        this.scoreText?.setPosition(width * 0.04, hudY);
+        this.waveText?.setPosition(width * 0.5, hudY);
+        this.livesText?.setPosition(width * 0.96, hudY);
+        this.comboText?.setPosition(width * 0.5, hudTop(viewport, this.hudFontSize) + width * 0.06);
+        this.bannerText?.setPosition(width * 0.5, height * 0.4);
+        this.serveText?.setPosition(width * 0.5, height * 0.6);
     }
 
     /** Feed a brick-destroyed event for a small burst (called by the scene). */

@@ -4,6 +4,11 @@
  *
  * HUD: live score, lives, wave, and a Pause button. The pause overlay offers
  * Resume only — no restart, no exit (AGENTS.md §2).
+ *
+ * All layout is in design units (CSS pixels of the window) — the camera zoom
+ * handles the backing-store density, so the canvas is sharp on a phone and the
+ * maths stays readable. A window resize (URL bar collapsing, split screen) is
+ * adopted live: the world keeps its aspect and the HUD re-positions.
  */
 
 import Phaser from 'phaser';
@@ -11,6 +16,9 @@ import type { AppContext } from '../app/AppContext.ts';
 import { GameSession } from '../domain/GameSession.ts';
 import { PhaserRenderer } from '../adapters/phaser/PhaserRenderer.ts';
 import { PhaserInput } from '../adapters/phaser/PhaserInput.ts';
+import {
+    applyRenderScale, hudTop, measureViewport, VIEWPORT_CHANGED, type Viewport,
+} from '../adapters/phaser/viewport.ts';
 import type { DomainEvent } from '../domain/types.ts';
 
 export class Game extends Phaser.Scene {
@@ -31,29 +39,41 @@ export class Game extends Phaser.Scene {
     private unsubscribe: (() => void) | null = null;
     /** Guards against double-firing endRound / scene switch. */
     private ended = false;
+    private viewport!: Viewport;
+    /** World height in world units, recomputed from the viewport aspect. */
+    private worldHeight = 200;
+    /** Scene-owned UI (background, pause button) — rebuilt on viewport change.
+     *  The renderer's sprites live in the same display list and must survive. */
+    private ownUi: Phaser.GameObjects.GameObject[] = [];
 
     create(): void {
-        const w = this.scale.width;
-        const h = this.scale.height;
+        this.viewport = measureViewport();
+        applyRenderScale(this);
+        const { width: w, height: h } = this.viewport;
 
-        this.add.rectangle(w / 2, h / 2, w, h, 0x0b1020);
+        const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x0b1020);
+        this.ownUi = [bg];
 
         // A fresh session per round; the DDA is shared via the context so it
         // keeps what it learned across Retries in this session (nothing is stored).
         this.session = new GameSession(this.ctx.random, this.ctx.clock, this.ctx.bus, this.ctx.dda);
         this.worldRenderer = new PhaserRenderer(this);
-        this.worldRenderer.create(w, h);
+        this.worldRenderer.create(this.viewport);
         this.ended = false;
+        this.paused = false;
 
         // World height in world units: 100 wide, height follows the aspect ratio.
-        this.session.start(100 * (h / w));
+        this.worldHeight = 100 * (h / w);
+        this.session.start(this.worldHeight);
 
         // Domain events → renderer FX and the bridge.
         this.unsubscribe = this.ctx.bus.subscribe((e) => this.onDomainEvent(e));
 
-        // Touch input: relative horizontal drag, anywhere on screen.
+        // Touch input: relative horizontal drag, anywhere on screen. Pointer
+        // coordinates are in backing-store pixels, so the conversion divides
+        // by the design width times the density.
         let paddleTargetX = 50; // world centre
-        const unitsPerPixel = (): number => 100 / this.scale.width;
+        const unitsPerPixel = (): number => 100 / (this.viewport.width * this.worldRenderer.densityScale);
         this.paddleInput = new PhaserInput(this, unitsPerPixel, (dx) => {
             paddleTargetX = Math.max(0, Math.min(100, paddleTargetX + dx));
             this.session.setPaddleTargetX(paddleTargetX);
@@ -66,13 +86,13 @@ export class Game extends Phaser.Scene {
         // Every round start, including Retry, reports startRound (AGENTS.md §4.2).
         this.ctx.bridge.signalStartRound();
 
-        this.scale.on('resize', this.onResize, this);
+        this.game.events.on(VIEWPORT_CHANGED, this.onViewportChanged, this);
         this.events.once('shutdown', () => {
+            this.game.events.off(VIEWPORT_CHANGED, this.onViewportChanged, this);
             this.unsubscribe?.();
             this.unsubscribe = null;
             // The input plugin outlives a scene restart — detach our handlers.
             this.paddleInput.destroy();
-            this.scale.off('resize', this.onResize, this);
         });
     }
 
@@ -116,22 +136,23 @@ export class Game extends Phaser.Scene {
     // ---- pause (resume only) ----
 
     private buildPauseButton(): void {
-        const w = this.scale.width;
-        const h = this.scale.height;
+        const { width: w } = this.viewport;
+        // Just under the HUD band, clear of any cutout.
+        const y = hudTop(this.viewport, Math.round(w * 0.045)) + w * 0.055;
         const size = w * 0.09;
-        const btn = this.add.rectangle(w * 0.92, h * 0.135, size, size, 0x1c2540)
+        const btn = this.add.rectangle(w * 0.92, y, size, size, 0x1c2540)
             .setInteractive({ useHandCursor: true });
-        this.add.text(w * 0.92, h * 0.135, 'II', {
+        const label = this.add.text(w * 0.92, y, 'II', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.04)}px`,
             color: '#ffffff',
         }).setOrigin(0.5);
         btn.on('pointerdown', () => this.setPaused(true));
+        this.ownUi.push(btn, label);
     }
 
     private buildPauseOverlay(): void {
-        const w = this.scale.width;
-        const h = this.scale.height;
+        const { width: w, height: h } = this.viewport;
         this.overlay = this.add.container(0, 0).setVisible(false);
 
         const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.6);
@@ -165,10 +186,31 @@ export class Game extends Phaser.Scene {
         this.paddleInput.setEnabled(!paused);
     }
 
-    private onResize(): void {
-        // Portrait, any height: re-derive the world→screen scale. Layout of the
-        // fixed HUD elements is rebuilt on the next scene create; during a round
-        // only the scale changes, which the renderer picks up per frame.
-        this.worldRenderer.resize(this.scale.width, this.scale.height);
+    // ---- window changes ----
+
+    /**
+     * The canvas adopted a new size. Re-derive the world aspect, reposition the
+     * HUD and overlays, and keep the round running — a phone's URL bar
+     * collapsing must never restart or break play.
+     */
+    private onViewportChanged(): void {
+        this.viewport = measureViewport();
+        const { width: w, height: h } = this.viewport;
+        this.worldHeight = 100 * (h / w);
+        this.session.resize(this.worldHeight);
+        this.worldRenderer.layout(this.viewport);
+
+        // Destroy only what this scene owns; the renderer's pooled sprites stay.
+        for (const obj of this.ownUi) obj.destroy();
+        this.ownUi = [];
+        this.overlay.destroy();
+
+        const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x0b1020);
+        // Re-added after the renderer's sprites, so push it behind them again.
+        bg.setDepth(-10);
+        this.ownUi.push(bg);
+        this.buildPauseButton();
+        this.buildPauseOverlay();
+        this.overlay.setVisible(this.paused);
     }
 }

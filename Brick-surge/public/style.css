@@ -45,3 +45,15 @@ body {
     user-select: none;
     -webkit-touch-callout: none;
 }
+
+/* Zero-size, invisible probe: reports the device cutout inset to the game layout. */
+#safe-area-probe {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    visibility: hidden;
+    pointer-events: none;
+}

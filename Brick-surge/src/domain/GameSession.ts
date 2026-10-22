@@ -94,6 +94,11 @@ export class GameSession {
         this.world.paddleTargetX = Math.max(0, Math.min(WORLD_WIDTH, worldX));
     }
 
+    /** The window aspect changed mid-round: adopt the new world height (§9, any height). */
+    resize(height: number): void {
+        this.world.resizeWorld(height);
+    }
+
     /**
      * Advance the simulation by `dtSeconds`. Internally the logic runs at a
      * fixed 120 Hz; fast balls are additionally sub-stepped so they cannot

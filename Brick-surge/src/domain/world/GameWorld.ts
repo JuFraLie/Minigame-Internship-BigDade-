@@ -48,6 +48,23 @@ export class GameWorld {
         this.lives = START_LIVES;
     }
 
+    /**
+     * Adopt a new world height mid-round (the window aspect changed: URL bar
+     * collapsed, split screen, rotation). Only vertical anchors move — the
+     * paddle, shield line and anything in flight are clamped, never lost.
+     */
+    resizeWorld(height: number): void {
+        this.height = height;
+        this.shieldY = height * SHIELD_Y_FRAC;
+        this.paddle.y = height - PADDLE_BOTTOM_MARGIN;
+        const half = this.paddle.w / 2;
+        this.paddle.x = Math.max(half, Math.min(this.width - half, this.paddle.x));
+        this.paddleTargetX = Math.max(half, Math.min(this.width - half, this.paddleTargetX));
+        for (const b of this.balls) {
+            b.y = Math.max(b.r, Math.min(height - b.r, b.y));
+        }
+    }
+
     setBricks(bricks: Brick[]): void {
         this.bricks = bricks;
     }

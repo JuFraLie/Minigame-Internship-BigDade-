@@ -16,6 +16,7 @@ import type { AppContext } from './app/AppContext.ts';
 import { MainMenu } from './scenes/MainMenu.ts';
 import { Game } from './scenes/Game.ts';
 import { GameOver } from './scenes/GameOver.ts';
+import { measureViewport, renderScale, VIEWPORT_CHANGED } from './adapters/phaser/viewport.ts';
 
 async function boot(parent: string): Promise<void> {
     // The game must not load/start before the bridge is available (§4.2).
@@ -36,15 +37,30 @@ async function boot(parent: string): Promise<void> {
         lastScore: 0,
     };
 
-    new Phaser.Game({
+    const size = measureViewport();
+    const density = renderScale();
+
+    const game = new Phaser.Game({
         type: Phaser.CANVAS, // Canvas only — WebGL must never be enabled (§3.4)
         parent,
         backgroundColor: '#0b1020',
+        // The backing store is density times the design size so the canvas is
+        // sharp on a high-density phone; scenes zoom their camera to match
+        // (see adapters/phaser/viewport.ts).
+        width: size.width * density,
+        height: size.height * density,
         scale: {
-            mode: Phaser.Scale.RESIZE,
-            autoCenter: Phaser.Scale.CENTER_BOTH,
+            // FIT never stretches; centring is left to the CSS flex on
+            // #game-container (Phaser's autoCenter writes margins a flex
+            // parent centres a second time, producing a visible offset).
+            mode: Phaser.Scale.FIT,
+            autoCenter: Phaser.Scale.NO_CENTER,
+            expandParent: true,
         },
         input: {
+            // Phaser only binds touch listeners when the *device* claims touch
+            // support — a desktop or DevTools emulation reports none, so touch
+            // is switched on outright for this touch-first game.
             touch: true,
         },
         scene: [MainMenu, Game, GameOver],
@@ -54,6 +70,29 @@ async function boot(parent: string): Promise<void> {
                 game.registry.set('ctx', ctx);
             },
         },
+    });
+
+    // Keep the canvas in step with the window (WebView settling late, URL bar
+    // collapsing, split screen). Size the backing store first, then tell the
+    // screens to lay out against the new size.
+    let appliedWidth = size.width * density;
+    let appliedHeight = size.height * density;
+
+    window.addEventListener('resize', () => {
+        game.scale.getParentBounds();
+        const next = measureViewport();
+        const targetWidth = next.width * density;
+        const targetHeight = next.height * density;
+
+        if (targetWidth !== appliedWidth || targetHeight !== appliedHeight) {
+            appliedWidth = targetWidth;
+            appliedHeight = targetHeight;
+            game.scale.setGameSize(targetWidth, targetHeight);
+            game.events.emit(VIEWPORT_CHANGED);
+            return;
+        }
+        // Same size: only the fit into the window has to be recomputed.
+        game.scale.refresh();
     });
 }
 

@@ -12,6 +12,9 @@ export default defineConfig({
         },
     },
     server: {
-        port: 8080
+        port: 8080,
+        // Bind to the LAN so a real phone on the same Wi-Fi can open the game
+        // during development (host only sees localhost otherwise).
+        host: true
     }
 });

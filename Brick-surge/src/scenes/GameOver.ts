@@ -4,10 +4,14 @@
  * Shows the final score and a win/lose message. Restart and Exit live here and
  * nowhere else. Retry goes straight back to gameplay (no Play Screen replay);
  * Exit calls the bridge exit signal exactly once and does nothing else.
+ *
+ * Layout is in design units, fonts scale with width, and thumb-reachable
+ * buttons stay at least ~44pt tall.
  */
 
 import Phaser from 'phaser';
 import type { AppContext } from '../app/AppContext.ts';
+import { applyRenderScale, measureViewport, VIEWPORT_CHANGED } from '../adapters/phaser/viewport.ts';
 
 export class GameOver extends Phaser.Scene {
     constructor() {
@@ -25,31 +29,34 @@ export class GameOver extends Phaser.Scene {
     private score!: number;
 
     create(): void {
-        const w = this.scale.width;
-        const h = this.scale.height;
+        applyRenderScale(this);
+        const { width: w, height: h, safeTop } = measureViewport();
 
         this.add.rectangle(w / 2, h / 2, w, h, 0x0b1020);
 
-        this.add.text(w / 2, h * 0.3, this.win ? 'YOU WIN!' : 'GAME OVER', {
+        // Headline clears the cutout/status-bar inset.
+        const headlineY = Math.max(h * 0.3, safeTop + w * 0.16);
+        this.add.text(w / 2, headlineY, this.win ? 'YOU WIN!' : 'GAME OVER', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.1)}px`,
             fontStyle: 'bold',
             color: this.win ? '#4cd964' : '#ff2d55',
         }).setOrigin(0.5);
 
-        this.add.text(w / 2, h * 0.42, `Score: ${this.score}`, {
+        this.add.text(w / 2, headlineY + h * 0.09, `Score: ${this.score}`, {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.055)}px`,
             color: '#ffffff',
         }).setOrigin(0.5);
 
         const btnW = w * 0.5;
-        const btnH = h * 0.075;
+        const btnH = Math.max(h * 0.075, 44); // never below the ~44pt touch target
 
         // Retry — straight back to gameplay, the Play Screen must not replay.
-        const retry = this.add.rectangle(w / 2, h * 0.56, btnW, btnH, 0x36a2eb)
+        const retryY = headlineY + h * 0.22;
+        const retry = this.add.rectangle(w / 2, retryY, btnW, btnH, 0x36a2eb)
             .setInteractive({ useHandCursor: true });
-        this.add.text(w / 2, h * 0.56, 'RETRY', {
+        this.add.text(w / 2, retryY, 'RETRY', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.05)}px`,
             fontStyle: 'bold',
@@ -60,9 +67,10 @@ export class GameOver extends Phaser.Scene {
         });
 
         // Exit — the bridge signal fires exactly once and nothing else happens.
-        const exit = this.add.rectangle(w / 2, h * 0.67, btnW, btnH, 0x48486a)
+        const exitY = retryY + h * 0.11;
+        const exit = this.add.rectangle(w / 2, exitY, btnW, btnH, 0x48486a)
             .setInteractive({ useHandCursor: true });
-        this.add.text(w / 2, h * 0.67, 'EXIT', {
+        this.add.text(w / 2, exitY, 'EXIT', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.05)}px`,
             fontStyle: 'bold',
@@ -71,5 +79,15 @@ export class GameOver extends Phaser.Scene {
         exit.on('pointerdown', () => {
             this.ctx.bridge.signalExit(this.win, this.score);
         });
+
+        this.game.events.on(VIEWPORT_CHANGED, this.onViewportChanged, this);
+        this.events.once('shutdown', () => {
+            this.game.events.off(VIEWPORT_CHANGED, this.onViewportChanged, this);
+        });
+    }
+
+    /** A fresh create() re-measures and re-lays everything out. */
+    private onViewportChanged(): void {
+        this.scene.restart();
     }
 }

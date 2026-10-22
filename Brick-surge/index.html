@@ -11,6 +11,10 @@
 <body>
     <div id="app">
         <div id="game-container"></div>
+        <!-- Layout probe only: the game reads this element's computed padding-top to learn
+             the device cutout/status-bar inset (env(safe-area-inset-top)) and reserves that
+             much space at the top of its own layout. It draws nothing. -->
+        <div id="safe-area-probe" aria-hidden="true"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
 </body>
