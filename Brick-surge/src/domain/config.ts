@@ -9,14 +9,14 @@ export const WORLD_WIDTH = 100;
 export const HUD_TOP_FRAC = 0.08;      // reserve the top 8% for the HUD (cutout safe)
 export const BRICK_TOP_FRAC = 0.15;    // first brick row starts at 15% of height
 
-export const BALL_RADIUS = 1.6;
-export const BASE_BALL_SPEED = 125;    // world units / second (~1.4 s for a paddle→bricks→paddle rally)
-export const MAX_BALL_SPEED = 160;     // hard cap — DDA can never exceed this
+export const BALL_RADIUS = 1.8;       // slightly bigger ball: easier to read and catch
+export const BASE_BALL_SPEED = 95;    // world units / second — Ballz-like leisurely pace
+export const MAX_BALL_SPEED = 120;    // hard cap — DDA can never exceed this
 
-export const PADDLE_WIDTH = 16;
+export const PADDLE_WIDTH = 20;
 export const PADDLE_HEIGHT = 3;
-export const PADDLE_MIN_WIDTH = 9;     // hard floor — DDA can never go below this
-export const PADDLE_MAX_WIDTH = 26;
+export const PADDLE_MIN_WIDTH = 12;    // hard floor — DDA can never go below this
+export const PADDLE_MAX_WIDTH = 30;
 export const PADDLE_BOTTOM_MARGIN = 8; // paddle centre is this far above the bottom
 
 export const SHIELD_Y_FRAC = 0.985;    // shield line sits just above the world bottom
@@ -39,8 +39,8 @@ export const COMBO_MAX = 5;
 export const POWERUP_POINTS = 50;
 export const WAVE_BONUS_PER_LIFE = 100;
 
-/** Falling speed of power-up drops, world units / second. */
-export const DROP_FALL_SPEED = 18;
+/** Falling speed of power-up drops, world units / second (slow = easy to catch). */
+export const DROP_FALL_SPEED = 14;
 
 /** Fixed logic step (120 Hz) — rendering may run faster or slower. */
 export const FIXED_STEP = 1 / 120;
@@ -57,13 +57,17 @@ export const BRICK_HP: Record<'basic' | 'sturdy' | 'tough', number> = {
     tough: 3,
 };
 
-/** Base (neutral) power-up drop weights; the shrink weight is DDA-adjusted at roll time. */
+/**
+ * Base (neutral) power-up drop weights; the shrink weight is DDA-adjusted at
+ * roll time. Weighted towards rewards (multi-ball, shield, life) rather than
+ * punishment — the Ballz philosophy: power-ups are the fun, not the tax.
+ */
 export const DROP_WEIGHTS: Record<PowerUpKind, number> = {
-    multi: 25,
+    multi: 30,
     wide: 25,
     slow: 20,
     fire: 12,
-    shield: 12,
-    life: 4,
+    shield: 16,
+    life: 6,
     shrink: 2,
 };

@@ -36,16 +36,27 @@ const setup = (): { session: GameSession; clock: BenchClock; sink: Collector } =
     return { session, clock, sink };
 };
 
-/** Advance the session in 60 fps steps, chasing the first ball with the paddle.
- *  The aim is deliberately a little off-centre — a player who always catches
- *  dead-centre would drive the ball perfectly vertical and stall the game. */
+/** Advance the session in 60 fps steps. The bot plays like a real player:
+ *  chase the ball to stay under it, but hold a small deliberate offset
+ *  towards the lowest live brick so the bounce actually steers the ball at
+ *  it. Pure ball-chasing would return the ball near-vertically forever and
+ *  sail over the last bricks. */
 const run = (session: GameSession, clock: BenchClock, seconds: number): void => {
     const steps = Math.round(seconds * 60);
     for (let i = 0; i < steps; i++) {
         const snap = session.snapshot();
         if (snap.balls.length > 0) {
-            const bias = Math.sin(i / 40) * 5; // weave under the ball
-            session.setPaddleTargetX(snap.balls[0].x + bias);
+            const ball = snap.balls[0];
+            const lowest = snap.bricks.length > 0
+                ? snap.bricks.reduce((a, b) => (b.y > a.y ? b : a))
+                : null;
+            // Deliberate paddle offset towards the brick: <= 6 units keeps the
+            // ball inside the paddle's catch half-width (~11.8) while tilting
+            // the return by up to ~27 degrees in the brick's direction. The
+            // paddle leads opposite the aim (a ball hitting the paddle's right
+            // side flies right), hence the minus sign.
+            const steer = lowest ? Math.max(-6, Math.min(6, (lowest.x - ball.x) * 0.35)) : 0;
+            session.setPaddleTargetX(ball.x - steer + Math.sin(i / 40) * 1.5);
         }
         clock.ms += 1000 / 60;
         session.update(1 / 60);
@@ -73,7 +84,10 @@ describe('GameSession (headless)', () => {
 
     it('a bot that always catches eventually clears wave 1', () => {
         const { session, clock, sink } = setup();
-        run(session, clock, 120);
+        // Ballz pace is deliberately leisurely (speed 95, ~45 deg bounces), so a
+        // wave takes longer than the classic Breakout tempo — the assertion is
+        // that a perfect player clears, not that they clear fast.
+        run(session, clock, 300);
         assert.ok(sink.count('waveCleared') >= 1, 'a perfect player must clear at least one wave');
     });
 

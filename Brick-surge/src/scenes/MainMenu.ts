@@ -41,7 +41,7 @@ export class MainMenu extends Phaser.Scene {
 
         // The title starts below the real cutout/status-bar inset.
         const titleY = Math.max(h * 0.28, safeTop + titleSize * 1.5);
-        this.add.text(w / 2, titleY, 'BRICK SURGE', {
+        this.add.text(w / 2, titleY, 'BRICKSURGE', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${titleSize}px`,
             fontStyle: 'bold',

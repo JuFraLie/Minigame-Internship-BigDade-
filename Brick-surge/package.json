@@ -1,6 +1,6 @@
 {
-    "name": "brick-surge",
-    "description": "Brick Surge — a Breakout-inspired mini-game with in-round DDA for MPArcade.",
+    "name": "bricksurge",
+    "description": "Bricksurge — a Breakout-inspired mini-game with in-round DDA for MPArcade.",
     "version": "1.0.0",
     "private": true,
     "type": "module",

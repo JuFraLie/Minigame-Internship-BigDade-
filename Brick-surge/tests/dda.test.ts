@@ -40,7 +40,7 @@ describe('DdaController basics', () => {
         assert.ok(paramsForLevel(3).paddleWidthMul < 1);
         assert.ok(paramsForLevel(-3).dropChance > paramsForLevel(3).dropChance);
         assert.equal(paramsForLevel(-3).shrinkWeight, 0);
-        assert.equal(paramsForLevel(3).shrinkWeight, 4);
+        assert.equal(paramsForLevel(3).shrinkWeight, 3);
         assert.ok(paramsForLevel(-3).serveSeconds > paramsForLevel(3).serveSeconds);
         assert.ok(paramsForLevel(-3).brickToughShareMul < 1);
         assert.ok(paramsForLevel(3).brickToughShareMul > 1);

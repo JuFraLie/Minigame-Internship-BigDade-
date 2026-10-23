@@ -10,12 +10,14 @@ import { BRICK_COLS, BRICK_GAP, BRICK_H, BRICK_TOP_FRAC, BRICK_W, BRICK_POINTS, 
 import type { RandomPort } from '../ports.ts';
 import type { Brick, BrickKind } from '../types.ts';
 
-/** How many rows each wave has (clamped so a wave never exceeds MAX_BRICKS). */
-const WAVE_ROWS = [3, 3, 4];
+/** How many rows each wave has (clamped so a wave never exceeds MAX_BRICKS).
+ *  Ballz-pace: short waves keep a round near the 2-3 minute target and never
+ *  bury the player in bricks. */
+const WAVE_ROWS = [2, 3, 3];
 
 /** Base share of non-basic bricks per wave (before the DDA multiplier). */
-const BASE_TOUGH_SHARE = 0.12;
-const BASE_STURDY_SHARE = 0.23;
+const BASE_TOUGH_SHARE = 0.08;
+const BASE_STURDY_SHARE = 0.15;
 
 type TemplateName = 'rows' | 'pyramid' | 'checker' | 'gaps';
 

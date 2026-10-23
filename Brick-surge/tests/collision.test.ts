@@ -90,11 +90,12 @@ describe('paddleBounce', () => {
         assert.ok(b.vy < 0, 'ball must travel upwards');
     });
 
-    it('angles an edge hit sharply', () => {
+    it('angles an edge hit sideways but stays gentle (Ballz-style 45 deg cap)', () => {
         const b = ball(57.5, 188, 0, 60); // near the right edge
         paddleBounce(b, paddle);
         assert.ok(b.vx > 0, 'right-side hit goes right');
-        assert.ok(Math.abs(b.vx) > Math.abs(b.vy), 'edge hit is sharper than 45 degrees');
+        // The steepest bounce is 45 deg from vertical, so |vy| is never below |vx|.
+        assert.ok(Math.abs(b.vy) >= Math.abs(b.vx) - 1e-9, 'edge hit must stay at or under 45 degrees');
     });
 
     it('mirrors left and right edge hits', () => {

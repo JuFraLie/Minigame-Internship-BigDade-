@@ -34,8 +34,8 @@ export interface DifficultyParams {
 export const NEUTRAL_PARAMS: DifficultyParams = {
     ballSpeedMul: 1,
     paddleWidthMul: 1,
-    dropChance: 0.12,
-    shrinkWeight: 2,
+    dropChance: 0.16,
+    shrinkWeight: 1,
     brickToughShareMul: 1,
     serveSeconds: BASE_SERVE_SECONDS,
 };
@@ -49,16 +49,18 @@ const lerp = (level: number, easy: number, neutral: number, hard: number): numbe
         : neutral + ((hard - neutral) * d) / MAX_LEVEL;
 };
 
-/** Parameters for a given difficulty level (table from the design doc §7.2). */
+/** Parameters for a given difficulty level (design doc §7.2 table, softened
+ *  towards the Ballz feel: the easy end is genuinely easy, the hard end only
+ *  bites lightly — the paddle stays wide and the ball stays readable). */
 export function paramsForLevel(level: number): DifficultyParams {
     const d = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, level));
     return {
-        ballSpeedMul: lerp(d, 0.8, 1, 1.25),
-        paddleWidthMul: lerp(d, 1.25, 1, 0.85),
-        dropChance: lerp(d, 0.18, 0.12, 0.08),
-        shrinkWeight: Math.round(lerp(d, 0, 2, 4)),
-        brickToughShareMul: lerp(d, 0.7, 1, 1.3),
-        serveSeconds: lerp(d, 2, 1.5, 1),
+        ballSpeedMul: lerp(d, 0.75, 1, 1.15),
+        paddleWidthMul: lerp(d, 1.35, 1, 0.9),
+        dropChance: lerp(d, 0.22, 0.16, 0.11),
+        shrinkWeight: Math.round(lerp(d, 0, 1, 3)),
+        brickToughShareMul: lerp(d, 0.7, 1, 1.2),
+        serveSeconds: lerp(d, 2, 1.5, 1.2),
     };
 }
 

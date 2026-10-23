@@ -94,9 +94,11 @@ export function bounceWalls(ball: Ball, width: number, height: number): boolean 
  * centre = straight up, edges = sharper. A minimum vertical component prevents
  * near-horizontal balls that would stall the game.
  *
- * maxTiltRad is the steepest allowed angle from vertical (~60 deg).
+ * maxTiltRad is the steepest allowed angle from vertical. Ballz-style tuning:
+ * 45 deg keeps returns gentle and predictable instead of the classic
+ * near-horizontal Breakout shot that is almost impossible to chase on touch.
  */
-export function paddleBounce(ball: Ball, paddle: Rect, maxTiltRad = Math.PI / 3): void {
+export function paddleBounce(ball: Ball, paddle: Rect, maxTiltRad = Math.PI / 4): void {
     const halfW = Math.max(paddle.w / 2, 0.0001);
     let offset = (ball.x - paddle.x) / halfW;          // -1 .. 1
     offset = Math.max(-1, Math.min(1, offset));

@@ -1,4 +1,4 @@
-# Brick Surge
+# Bricksurge
 
 A Breakout-inspired portrait mini-game for the Manado Post app, with in-round
 Dynamic Difficulty Adjustment (DDA) and random power-up drops.
@@ -11,6 +11,12 @@ stays tense but fair.
 
 A round is 3 waves and lasts roughly 2–4 minutes. Built with Phaser 3
 (Canvas only) + TypeScript + Vite.
+
+Tuning follows a Ballz-like ease curve: a leisurely ball (95 u/s), a wide
+paddle (20 units, ~20% of the screen), bounce angles capped at 45° so returns
+stay gentle and predictable, short waves, and drops weighted towards rewards
+rather than punishment. The DDA still spans −3…+3 but its hard end bites
+lightly.
 
 ## Commands
 
