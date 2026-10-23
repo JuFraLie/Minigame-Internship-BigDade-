@@ -1,6 +1,6 @@
 /** Score and combo: points per brick, combo multiplier, bonuses. */
 
-import { COMBO_MAX, POWERUP_POINTS, WAVE_BONUS_PER_LIFE } from '../config.ts';
+import { COMBO_MAX, POWERUP_POINTS, WAVE_BONUS_PER_BALL } from '../config.ts';
 
 export class ScoreSystem {
     private total = 0;
@@ -37,9 +37,9 @@ export class ScoreSystem {
         this.total += POWERUP_POINTS;
     }
 
-    /** Wave clear bonus: 100 per remaining life. Returns the bonus added. */
-    addWaveBonus(lives: number): number {
-        const bonus = WAVE_BONUS_PER_LIFE * Math.max(0, lives);
+    /** Wave clear bonus: 100 per ball still in the player's possession. Returns the bonus added. */
+    addWaveBonus(balls: number): number {
+        const bonus = WAVE_BONUS_PER_BALL * Math.max(0, balls);
         this.total += bonus;
         return bonus;
     }

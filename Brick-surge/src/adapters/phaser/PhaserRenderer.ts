@@ -18,12 +18,11 @@ const MAX_DROP_SPRITES = 10;
 const MAX_PARTICLES = 24;
 
 const DROP_COLORS: Record<PowerUpKind, number> = {
-    multi: 0xffd23f,   // yellow — multi-ball
+    multi: 0xffd23f,   // yellow — +1 ball (the one you want)
     wide: 0x4cd964,    // green — wide paddle
     slow: 0x5ac8fa,    // blue — slow ball
     fire: 0xff6b3d,    // orange — fireball
     shield: 0xaf52de,  // purple — shield
-    life: 0xff2d55,    // red/pink — extra life
     shrink: 0x8e8e93,  // grey — the bad one
 };
 
@@ -53,13 +52,13 @@ export class PhaserRenderer implements RendererPort {
     private paddle!: Phaser.GameObjects.Rectangle;
     private shieldLine!: Phaser.GameObjects.Rectangle;
     private scoreText!: Phaser.GameObjects.Text;
-    private livesText!: Phaser.GameObjects.Text;
+    private ballText!: Phaser.GameObjects.Text;
     private waveText!: Phaser.GameObjects.Text;
     private bannerText!: Phaser.GameObjects.Text;
     private serveText!: Phaser.GameObjects.Text;
     private comboText!: Phaser.GameObjects.Text;
 
-    /** Screen shake timer for life-lost feedback (seconds remaining). */
+    /** Screen shake timer for ball-lost feedback (seconds remaining). */
     private shake = 0;
 
     private readonly scene: Phaser.Scene;
@@ -106,7 +105,7 @@ export class PhaserRenderer implements RendererPort {
         this.hudFontSize = fontSize;
         this.scoreText = s.add.text(screenWidth * 0.04, 0, '0', style).setOrigin(0, 0.5);
         this.waveText = s.add.text(screenWidth * 0.5, 0, 'Wave 1', style).setOrigin(0.5);
-        this.livesText = s.add.text(screenWidth * 0.96, 0, '♥ 3', style).setOrigin(1, 0.5);
+        this.ballText = s.add.text(screenWidth * 0.96, 0, '● 1', style).setOrigin(1, 0.5);
 
         const bigStyle: Phaser.Types.GameObjects.Text.TextStyle = {
             ...style,
@@ -143,7 +142,7 @@ export class PhaserRenderer implements RendererPort {
         const hudY = hudTop(viewport, this.hudFontSize) * 0.5;
         this.scoreText?.setPosition(width * 0.04, hudY);
         this.waveText?.setPosition(width * 0.5, hudY);
-        this.livesText?.setPosition(width * 0.96, hudY);
+        this.ballText?.setPosition(width * 0.96, hudY);
         this.comboText?.setPosition(width * 0.5, hudTop(viewport, this.hudFontSize) + width * 0.06);
         this.bannerText?.setPosition(width * 0.5, height * 0.4);
         this.serveText?.setPosition(width * 0.5, height * 0.6);
@@ -231,7 +230,7 @@ export class PhaserRenderer implements RendererPort {
 
         // --- HUD ---
         this.scoreText.setText(String(snap.score));
-        this.livesText.setText('♥ ' + Math.max(0, snap.lives));
+        this.ballText.setText('● ' + Math.max(0, snap.ballCount));
         this.waveText.setText(`Wave ${snap.wave}`);
 
         this.comboText.setVisible(snap.combo > 1);

@@ -8,7 +8,8 @@
  */
 
 import {
-    BRICK_POINTS, FIXED_STEP, MAX_LIVES, PADDLE_WIDTH, WAVE_COUNT, WORLD_WIDTH,
+    BASE_BALL_SPEED, BRICK_POINTS, FIXED_STEP, MAX_BALL_SPEED,
+    PADDLE_WIDTH, START_BALLS, WAVE_COUNT, WORLD_WIDTH,
 } from './config.ts';
 import { DdaController } from './dda/DdaController.ts';
 import { bounceWalls, circleVsRect, paddleBounce, reflect, separate } from './physics/Collision.ts';
@@ -38,8 +39,10 @@ export class GameSession {
     private accumulator = 0;
     private waveStartMs = 0;
     private lastBrickHitMs = 0;
-    private cleanStreak = false;      // no life lost since the wave began
+    private cleanStreak = false;      // no ball lost since the wave began
     private servedThisPhase = false;  // ball already spawned for the current 'playing' entry
+    /** Balls about to launch at round start (serving phase shows this in the HUD). */
+    private pendingServeCount = 0;
     private currentBallSpeedMul = 1;  // smoothed towards the DDA target, in-wave
     private currentPaddleWidth = PADDLE_WIDTH; // likewise for the paddle
 
@@ -81,9 +84,9 @@ export class GameSession {
         this.currentBallSpeedMul = this.dda.params.ballSpeedMul;
         this.currentPaddleWidth = PADDLE_WIDTH;
         this.world.setBricks(this.waves.generate(1, height, this.dda.params.brickToughShareMul));
-        this.powerUps.startWave();
         this.cleanStreak = true;
         this.servedThisPhase = false;
+        this.pendingServeCount = START_BALLS;
         this.waveStartMs = this.clock.now();
         this.lastBrickHitMs = this.waveStartMs;
         this.dispatch(this.round.start(this.dda.params.serveSeconds));
@@ -140,7 +143,9 @@ export class GameSession {
                 .map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h, hp: b.hp, maxHp: b.maxHp, kind: b.kind })),
             drops: this.powerUps.liveDrops.map((d) => ({ x: d.x, y: d.y, kind: d.kind })),
             shieldActive: this.powerUps.hasShield(),
-            lives: this.world.lives,
+            ballCount: this.round.phase === 'serving'
+                ? this.pendingServeCount
+                : this.world.aliveBalls,
             score: this.score.score,
             wave: this.round.wave,
             combo: this.score.comboMultiplier,
@@ -159,7 +164,8 @@ export class GameSession {
 
         if (this.round.phase === 'playing' && !this.servedThisPhase) {
             this.servedThisPhase = true;
-            this.world.serveBall(this.currentBallSpeedMul);
+            this.pendingServeCount = 0; // now genuinely in flight
+            this.world.serveVolley(this.currentBallSpeedMul);
         }
 
         if (this.round.phase !== 'playing') return; // banner: balls frozen
@@ -253,33 +259,28 @@ export class GameSession {
             return;
         }
 
+        // The ball is gone for good — there are no extra lives (Ballz rule).
         ball.alive = false;
 
         // Near miss: the ball fell close to the paddle edge — a struggle tell.
         const edgeDist = Math.abs(ball.x - this.world.paddle.x) - this.world.paddle.w / 2;
         if (edgeDist < NEAR_MISS_UNITS) this.dda.onNearMiss();
 
-        if (this.world.aliveBalls > 0) return;
-
-        // Last ball gone: lose a life (anti-exploit — the DDA needs several events).
-        this.world.lives--;
         this.cleanStreak = false;
-        this.dda.onLifeLost();
-        this.sink.emit({ type: 'lifeLost', livesLeft: this.world.lives });
+        this.dda.onBallLost();
+        this.sink.emit({ type: 'ballLost', ballsLeft: this.world.aliveBalls });
         this.score.breakCombo();
 
-        if (this.world.lives <= 0) {
+        // Out of balls: the round is over. Other balls, if any, keep playing.
+        if (this.world.aliveBalls === 0) {
             this.dispatch(this.round.lost());
-        } else {
-            this.servedThisPhase = false;
-            this.dispatch(this.round.beginServe(this.dda.params.serveSeconds));
         }
     }
 
     private onWaveCleared(): void {
         const elapsed = (this.clock.now() - this.waveStartMs) / 1000;
         this.dda.onWaveCleared(WAVE_TARGET_SECONDS, elapsed);
-        const bonus = this.score.addWaveBonus(this.world.lives);
+        const bonus = this.score.addWaveBonus(this.world.aliveBalls);
         this.sink.emit({ type: 'waveCleared', wave: this.round.wave, bonus });
 
         const signals = this.round.waveCleared();
@@ -296,7 +297,6 @@ export class GameSession {
             this.world.height,
             this.dda.params.brickToughShareMul,
         ));
-        this.powerUps.startWave();
         this.cleanStreak = true;
         this.waveStartMs = this.clock.now();
         this.lastBrickHitMs = this.waveStartMs;
@@ -306,19 +306,21 @@ export class GameSession {
         this.dda.onDropResult(true);
         this.score.addPowerUp();
 
-        switch (kind) {
-            case 'life':
-                this.world.lives = Math.min(MAX_LIVES, this.world.lives + 1);
-                break;
-            case 'multi': {
-                for (const spawn of this.powerUps.splitSpawns(this.world.balls)) {
-                    this.world.addBall(spawn);
-                }
-                break;
+        if (kind === 'multi') {
+            // The heart of the game: a caught pickup permanently adds a ball
+            // to the volley. It launches from the paddle straight away, fanned
+            // so it does not perfectly shadow an existing ball.
+            const speed = Math.min(
+                BASE_BALL_SPEED * this.currentBallSpeedMul,
+                MAX_BALL_SPEED,
+            );
+            const spawn = this.powerUps.multiSpawn(this.world.paddle, speed, this.world.balls.length);
+            if (!this.world.addBall(spawn)) {
+                // Volley already at the MAX_BALLS cap — don't waste the pickup.
+                this.score.addPowerUp();
             }
-            default:
-                this.powerUps.apply(kind);
-                break;
+        } else {
+            this.powerUps.apply(kind);
         }
         this.sink.emit({ type: 'powerUpCollected', kind });
     }

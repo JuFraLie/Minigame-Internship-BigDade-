@@ -3,20 +3,22 @@
 A Breakout-inspired portrait mini-game for the Manado Post app, with in-round
 Dynamic Difficulty Adjustment (DDA) and random power-up drops.
 
-Drag the paddle to bounce the ball into bricks. Destroyed bricks sometimes drop
-power-ups (multi-ball, wide paddle, slow ball, fireball, shield, extra life —
-and a "bad" Shrink). A hidden DDA watches how the player is doing and quietly
-tunes ball speed, paddle size, drop rates and brick toughness so every round
-stays tense but fair.
+Drag the paddle to bounce the volley into bricks. There are no extra lives:
+every ball that falls past the paddle is gone for good, and running out of
+balls ends the round. Destroyed bricks drop power-ups (the main one being +1
+ball, plus wide paddle, slow ball, fireball, shield — and a "bad" Shrink), so
+the loop is Ballz-style: break bricks, grow the volley, keep it alive. A hidden
+DDA watches how the player is doing and quietly tunes ball speed, paddle size,
+drop rates and brick toughness so every round stays tense but fair.
 
-A round is 3 waves and lasts roughly 2–4 minutes. Built with Phaser 3
-(Canvas only) + TypeScript + Vite.
+A round is 3 dense waves (4/5/6 rows) and lasts roughly 2–5 minutes. Built with
+Phaser 3 (Canvas only) + TypeScript + Vite.
 
 Tuning follows a Ballz-like ease curve: a leisurely ball (95 u/s), a wide
 paddle (20 units, ~20% of the screen), bounce angles capped at 45° so returns
-stay gentle and predictable, short waves, and drops weighted towards rewards
-rather than punishment. The DDA still spans −3…+3 but its hard end bites
-lightly.
+stay gentle and predictable, generous drop rates weighted towards rewards
+rather than punishment, and a hard cap of 6 balls in flight. The DDA still
+spans −3…+3 but its hard end bites lightly.
 
 ## Commands
 
@@ -55,7 +57,7 @@ reports time per tick to catch regressions.
 
 ### DDA
 
-Session-only (no storage): every launch starts neutral. Signals (life lost,
+Session-only (no storage): every launch starts neutral. Signals (ball lost,
 near miss, rally length, drop catch rate, clean streaks, wave clear time) feed
 a Skill Score, which maps to a Difficulty Level −3…+3 with an 8 s cooldown and
 hysteresis, so the level never flickers. Points per brick are never changed, so

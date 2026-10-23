@@ -84,7 +84,7 @@ export function applyRenderScale(scene: Phaser.Scene): void {
 
 /**
  * The HUD band: the design-doc's 8% of height, widened when the device
- * actually reports a bigger cutout/status-bar inset, so the score and lives
+ * actually reports a bigger cutout/status-bar inset, so the score and ball count
  * are never hidden behind a notch.
  */
 export function hudTop(viewport: Viewport, fontSize: number): number {

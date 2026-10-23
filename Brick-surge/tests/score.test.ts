@@ -3,7 +3,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { ScoreSystem } from '../src/domain/score/ScoreSystem.ts';
-import { COMBO_MAX, POWERUP_POINTS, WAVE_BONUS_PER_LIFE } from '../src/domain/config.ts';
+import { COMBO_MAX, POWERUP_POINTS, WAVE_BONUS_PER_BALL } from '../src/domain/config.ts';
 
 describe('ScoreSystem', () => {
     it('starts at zero with a x1 multiplier', () => {
@@ -52,9 +52,9 @@ describe('ScoreSystem', () => {
         assert.equal(s.score, POWERUP_POINTS);
     });
 
-    it('wave bonus is 100 per remaining life', () => {
+    it('wave bonus is 100 per remaining ball', () => {
         const s = new ScoreSystem();
-        assert.equal(s.addWaveBonus(3), 3 * WAVE_BONUS_PER_LIFE);
+        assert.equal(s.addWaveBonus(3), 3 * WAVE_BONUS_PER_BALL);
         assert.equal(s.score, 300);
     });
 

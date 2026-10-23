@@ -69,7 +69,7 @@ describe('RoundStateMachine', () => {
         assert.equal(round.win, true);
     });
 
-    it('losing the last life ends the round as a loss', () => {
+    it('losing the last ball ends the round as a loss', () => {
         const { round, clock } = makeRound();
         round.start(1.5);
         tickUntilIdle(round, clock);
@@ -90,22 +90,12 @@ describe('RoundStateMachine', () => {
         assert.equal(round.waveCleared().length, 0);
     });
 
-    it('beginServe restarts the countdown after a life is lost', () => {
-        const { round, clock } = makeRound();
-        round.start(1.5);
-        tickUntilIdle(round, clock);
-        round.beginServe(2);
-        assert.equal(round.phase, 'serving');
-        tickUntilIdle(round, clock);
-        assert.equal(round.phase, 'playing');
-    });
-
     it('ignores signals once the round has ended', () => {
         const { round, clock } = makeRound();
         round.start(1.5);
         tickUntilIdle(round, clock);
         round.lost();
-        assert.equal(round.beginServe(2).length, 0);
+        assert.equal(round.waveCleared().length, 0);
         assert.equal(round.phase, 'ended');
         tickUntilIdle(round, clock);
         assert.equal(round.phase, 'ended', 'countdown must not revive an ended round');

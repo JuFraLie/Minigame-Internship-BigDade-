@@ -18,7 +18,7 @@ export interface ClockPort {
     now(): number;
 }
 
-/** Where the domain publishes typed events (life lost, brick destroyed, round ended...). */
+/** Where the domain publishes typed events (ball lost, brick destroyed, round ended...). */
 export interface EventSinkPort {
     emit(event: DomainEvent): void;
 }

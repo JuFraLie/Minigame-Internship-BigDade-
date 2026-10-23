@@ -34,7 +34,9 @@ export interface DifficultyParams {
 export const NEUTRAL_PARAMS: DifficultyParams = {
     ballSpeedMul: 1,
     paddleWidthMul: 1,
-    dropChance: 0.16,
+    // Drops are the game (balls are the resource): every second brick or so
+    // should pop something out, even at neutral difficulty.
+    dropChance: 0.3,
     shrinkWeight: 1,
     brickToughShareMul: 1,
     serveSeconds: BASE_SERVE_SECONDS,
@@ -57,7 +59,7 @@ export function paramsForLevel(level: number): DifficultyParams {
     return {
         ballSpeedMul: lerp(d, 0.75, 1, 1.15),
         paddleWidthMul: lerp(d, 1.35, 1, 0.9),
-        dropChance: lerp(d, 0.22, 0.16, 0.11),
+        dropChance: lerp(d, 0.4, 0.3, 0.2),
         shrinkWeight: Math.round(lerp(d, 0, 1, 3)),
         brickToughShareMul: lerp(d, 0.7, 1, 1.2),
         serveSeconds: lerp(d, 2, 1.5, 1.2),
@@ -70,10 +72,10 @@ export function paramsForLevel(level: number): DifficultyParams {
  * applied as EMA steps so a single mistake never swings the game.
  */
 const ALPHA = {
-    // One life lost alone must NOT move D (anti-exploit, §7.3): the EMA step is
-    // half the weight, so a single death leaves S above the -1 boundary. Two or
-    // three struggle events are needed before the game eases.
-    lifeLost: -0.16,
+    // One ball lost alone must NOT move D (anti-exploit, §7.3): the EMA step is
+    // half the weight, so a single lost ball leaves S above the -1 boundary.
+    // Two or three struggle events are needed before the game eases.
+    ballLost: -0.16,
     nearMiss: -0.06,
     rallyLong: -0.08,
     rallyShort: 0.05,
@@ -118,8 +120,8 @@ export class DdaController {
 
     // ---- Signals (all pull S up or down; none of them moves D directly) ----
 
-    /** A life was lost — the strongest struggle signal. */
-    onLifeLost(): void { this.pull(ALPHA.lifeLost); }
+    /** A ball was lost for good — the strongest struggle signal. */
+    onBallLost(): void { this.pull(ALPHA.ballLost); }
 
     /** The ball fell just off the paddle edge — a near miss. */
     onNearMiss(): void { this.pull(ALPHA.nearMiss); }

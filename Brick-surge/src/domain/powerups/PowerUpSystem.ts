@@ -6,7 +6,7 @@
  * round state machine.
  */
 
-import { DROP_FALL_SPEED, DROP_WEIGHTS, MAX_BALLS } from '../config.ts';
+import { BALL_RADIUS, DROP_FALL_SPEED, DROP_WEIGHTS } from '../config.ts';
 import type { RandomPort } from '../ports.ts';
 import type { Drop, PowerUpKind, Rect } from '../types.ts';
 
@@ -35,22 +35,21 @@ interface ActiveTimers {
 }
 
 const TIMER_SECONDS: Record<'slow' | 'fire' | 'wide' | 'shrink', number> = {
-    slow: 10,
-    fire: 6,
-    wide: 12,
+    slow: 12,
+    fire: 8,
+    wide: 15,
     shrink: 8,
 };
 
-const WIDE_MUL = 1.4;
+const WIDE_MUL = 1.5;
 const SHRINK_MUL = 0.75;
-const SLOW_MUL = 0.75;
+const SLOW_MUL = 0.65;
 
 export class PowerUpSystem {
     private readonly drops: Drop[] = [];
     private readonly timers: ActiveTimers = { slow: 0, fire: 0, paddleEffect: 'none', paddleTimer: 0 };
     private readonly random: RandomPort;
     private shieldCharge = false;
-    private lifeDroppedThisWave = false;
     private nextId = 1;
     private onEvent: (e: PowerUpEvent) => void = () => {};
 
@@ -70,12 +69,6 @@ export class PowerUpSystem {
         this.timers.paddleEffect = 'none';
         this.timers.paddleTimer = 0;
         this.shieldCharge = false;
-        this.lifeDroppedThisWave = false;
-    }
-
-    /** Called at every wave boundary — clears the one-extra-life-per-wave flag. */
-    startWave(): void {
-        this.lifeDroppedThisWave = false;
     }
 
     /**
@@ -86,7 +79,6 @@ export class PowerUpSystem {
         if (this.random.next() >= dropChance) return;
 
         const weights: Record<PowerUpKind, number> = { ...DROP_WEIGHTS, shrink: shrinkWeight };
-        if (this.lifeDroppedThisWave) weights.life = 0;
         const total = (Object.keys(weights) as PowerUpKind[]).reduce((sum, k) => sum + weights[k], 0);
         if (total <= 0) return;
 
@@ -97,7 +89,6 @@ export class PowerUpSystem {
             if (roll < 0) { kind = k; break; }
         }
 
-        if (kind === 'life') this.lifeDroppedThisWave = true;
         this.drops.push({ id: this.nextId++, kind, x: brickX, y: brickY, vy: DROP_FALL_SPEED, alive: true });
     }
 
@@ -121,37 +112,26 @@ export class PowerUpSystem {
     }
 
     /**
-     * Compute the two extra ball spawns for a multi-ball pickup: every live ball
-     * splits into 3 (original + 2 new), but never beyond MAX_BALLS total.
-     * Pure calculation — the caller (GameWorld) assigns ids and owns the list.
+     * Compute the spawn for a caught "+1 ball" pickup: one extra ball joins
+     * the volley, launched from the paddle with a slight fan so it does not
+     * perfectly shadow an existing ball. Pure calculation — the caller
+     * (GameWorld) assigns ids and owns the list.
      */
-    splitSpawns(balls: readonly { x: number; y: number; vx: number; vy: number; r: number; alive: boolean }[]): BallSpawn[] {
-        const spawns: BallSpawn[] = [];
-        let live = balls.reduce((n, b) => n + (b.alive ? 1 : 0), 0);
-        for (const b of balls) {
-            if (!b.alive) continue;
-            const speed = Math.hypot(b.vx, b.vy) || 1;
-            const baseAngle = Math.atan2(b.vy, b.vx);
-            for (const delta of [0.5, -0.5]) {
-                if (live >= MAX_BALLS) return spawns;
-                const angle = baseAngle + delta;
-                spawns.push({
-                    x: b.x,
-                    y: b.y,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    r: b.r,
-                });
-                live++;
-            }
-        }
-        return spawns;
+    multiSpawn(paddle: { x: number; y: number; w: number; h: number }, speed: number, index: number): BallSpawn {
+        const fan = ((index % 3) - 1) * 0.35; // -0.35, 0, +0.35 radians
+        return {
+            x: paddle.x,
+            y: paddle.y - paddle.h / 2 - BALL_RADIUS - 0.1,
+            vx: Math.sin(fan) * speed,
+            vy: -Math.cos(fan) * speed,
+            r: BALL_RADIUS,
+        };
     }
 
     apply(kind: PowerUpKind): void {
         switch (kind) {
             case 'multi':
-                break; // handled by the session (needs the ball list)
+                break; // handled by the session (owns the ball stock)
             case 'wide':
                 this.timers.paddleEffect = 'wide';
                 this.timers.paddleTimer = TIMER_SECONDS.wide;
@@ -169,8 +149,6 @@ export class PowerUpSystem {
             case 'shield':
                 this.shieldCharge = true;
                 break;
-            case 'life':
-                break; // handled by the session (owns the life counter)
         }
     }
 

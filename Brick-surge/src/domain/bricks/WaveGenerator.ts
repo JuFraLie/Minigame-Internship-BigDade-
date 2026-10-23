@@ -11,9 +11,9 @@ import type { RandomPort } from '../ports.ts';
 import type { Brick, BrickKind } from '../types.ts';
 
 /** How many rows each wave has (clamped so a wave never exceeds MAX_BRICKS).
- *  Ballz-pace: short waves keep a round near the 2-3 minute target and never
- *  bury the player in bricks. */
-const WAVE_ROWS = [2, 3, 3];
+ *  Ballz-dense: a full grid per wave (thinned by the template), balanced by
+ *  the growing volley — more balls shred the bigger waves fast. */
+const WAVE_ROWS = [4, 5, 6];
 
 /** Base share of non-basic bricks per wave (before the DDA multiplier). */
 const BASE_TOUGH_SHARE = 0.08;

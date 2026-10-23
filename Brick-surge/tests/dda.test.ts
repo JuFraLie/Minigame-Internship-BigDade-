@@ -48,17 +48,17 @@ describe('DdaController basics', () => {
 });
 
 describe('DdaController struggle eases the game', () => {
-    it('repeated life losses lower the skill score', () => {
+    it('repeated ball losses lower the skill score', () => {
         const { dda } = makeDda();
         const before = dda.skillScore;
-        for (let i = 0; i < 5; i++) dda.onLifeLost();
+        for (let i = 0; i < 5; i++) dda.onBallLost();
         assert.ok(dda.skillScore < before);
     });
 
     it('sustained struggle reaches the easiest level and stops at the cap', () => {
         const { dda, clock } = makeDda();
         for (let i = 0; i < 40; i++) {
-            dda.onLifeLost();
+            dda.onBallLost();
             dda.onNearMiss();
             settle(dda, clock, 1);
         }
@@ -66,9 +66,9 @@ describe('DdaController struggle eases the game', () => {
         assert.equal(dda.difficultyLevel, Math.max(MIN_LEVEL, dda.difficultyLevel), 'cap holds');
     });
 
-    it('a SINGLE life loss must NOT change the level (anti-exploit)', () => {
+    it('a SINGLE ball loss must NOT change the level (anti-exploit)', () => {
         const { dda, clock } = makeDda();
-        dda.onLifeLost();
+        dda.onBallLost();
         settle(dda, clock, 5);
         assert.equal(dda.difficultyLevel, 0, 'one death alone must not ease the game');
     });
@@ -98,7 +98,7 @@ describe('DdaController dominance raises difficulty', () => {
 describe('DdaController guards', () => {
     it('never steps more than once per cooldown window', () => {
         const { dda, clock } = makeDda();
-        for (let i = 0; i < 20; i++) dda.onLifeLost();
+        for (let i = 0; i < 20; i++) dda.onBallLost();
         // Two updates back-to-back with no time passing: only one step allowed.
         dda.update();
         const afterFirst = dda.difficultyLevel;
@@ -116,7 +116,7 @@ describe('DdaController guards', () => {
 
     it('never steps more than one level at a time', () => {
         const { dda, clock } = makeDda();
-        for (let i = 0; i < 50; i++) dda.onLifeLost();
+        for (let i = 0; i < 50; i++) dda.onBallLost();
         const before = dda.difficultyLevel;
         clock.advance(9);
         dda.update();
@@ -125,16 +125,16 @@ describe('DdaController guards', () => {
 
     it('hysteresis: S crossing a level boundary by a hair does NOT move D', () => {
         const { dda, clock } = makeDda();
-        // One life lost + one missed drop lands S just past the -1 boundary
+        // One ball lost + one missed drop lands S just past the -1 boundary
         // (centre ≈ -0.6) but inside the hysteresis band — D must hold at 0.
-        dda.onLifeLost();
+        dda.onBallLost();
         dda.onDropResult(false);
         settle(dda, clock, 3);
         assert.equal(dda.skillScore < 0.5, true, 'S should have dropped');
         assert.equal(dda.difficultyLevel, 0, 'hysteresis must hold D at 0');
 
         // A little further down, past the band, the step is finally taken.
-        dda.onLifeLost();
+        dda.onBallLost();
         dda.onDropResult(false);
         settle(dda, clock, 3);
         assert.equal(dda.difficultyLevel, -1, 'past the band D must step down');

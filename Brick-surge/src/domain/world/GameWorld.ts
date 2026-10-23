@@ -1,11 +1,11 @@
 /**
- * The game world in world units: paddle, balls, bricks, drops, lives.
+ * The game world in world units: paddle, balls, bricks, drops, ball stock.
  * Knows nothing about rendering, the DDA, or the bridge.
  */
 
 import {
     BASE_BALL_SPEED, BALL_RADIUS, MAX_BALLS, MAX_BALL_SPEED, PADDLE_BOTTOM_MARGIN,
-    PADDLE_HEIGHT, PADDLE_WIDTH, SHIELD_Y_FRAC, START_LIVES, WORLD_WIDTH,
+    PADDLE_HEIGHT, PADDLE_WIDTH, SHIELD_Y_FRAC, START_BALLS, WORLD_WIDTH,
 } from '../config.ts';
 import type { RandomPort } from '../ports.ts';
 import type { Ball, Brick, Rect } from '../types.ts';
@@ -27,7 +27,6 @@ export class GameWorld {
     readonly balls: Ball[] = [];
     bricks: Brick[] = [];
 
-    lives = START_LIVES;
     /** The shield line Y (world units); a charged shield saves one ball here. */
     shieldY = 0; // set from SHIELD_Y_FRAC in reset
 
@@ -45,7 +44,6 @@ export class GameWorld {
         this.paddle.w = PADDLE_WIDTH;
         this.balls.length = 0;
         this.bricks = [];
-        this.lives = START_LIVES;
     }
 
     /**
@@ -96,24 +94,34 @@ export class GameWorld {
         if (Math.abs(this.paddle.x - target) < 0.05) this.paddle.x = target;
     }
 
-    /** Spawn a ball resting just above the paddle (serving state). */
-    serveBall(speedMul: number): void {
+    /**
+     * Launch the round's opening volley (Ballz-style: START_BALLS at once).
+     * The balls are stacked vertically above the paddle with a shared slight
+     * lean, so they travel as a column and fan out the moment they start
+     * hitting bricks. Later balls only ever join via "+1 ball" pickups.
+     * Returns how many balls were launched.
+     */
+    serveVolley(speedMul: number): number {
         const speed = Math.min(BASE_BALL_SPEED * speedMul, MAX_BALL_SPEED);
-        const b: Ball = {
-            id: this.nextBallId++,
-            x: this.paddle.x,
-            y: this.paddle.y - this.paddle.h / 2 - BALL_RADIUS - 0.1,
-            vx: 0,
-            vy: -speed,
-            r: BALL_RADIUS,
-            alive: true,
-        };
-        // Slight random lean so serves are not perfectly vertical.
-        b.vx = (this.random.next() - 0.5) * speed * 0.2;
-        this.balls.push(b);
+        const count = START_BALLS;
+        // Slight random lean so volleys are not perfectly vertical.
+        const lean = (this.random.next() - 0.5) * speed * 0.2;
+        const spacing = BALL_RADIUS * 2.2;
+        for (let i = 0; i < count; i++) {
+            this.balls.push({
+                id: this.nextBallId++,
+                x: this.paddle.x,
+                y: this.paddle.y - this.paddle.h / 2 - BALL_RADIUS - 0.1 - i * spacing,
+                vx: lean,
+                vy: -speed,
+                r: BALL_RADIUS,
+                alive: true,
+            });
+        }
+        return count;
     }
 
-    /** Launch any number of extra balls (multi-ball); returns false when the cap is reached. */
+    /** Launch any number of extra balls (a "+1 ball" pickup); false when at the cap. */
     addBall(spawn: { x: number; y: number; vx: number; vy: number; r: number }): boolean {
         if (this.aliveBalls >= MAX_BALLS) return false;
         this.balls.push({ ...spawn, id: this.nextBallId++, alive: true });
@@ -133,7 +141,7 @@ export class GameWorld {
         }
     }
 
-    /** Kill all live balls (used when a life is lost and we re-serve). */
+    /** Kill all live balls (used at round end / teardown). */
     killBalls(): void {
         for (const b of this.balls) b.alive = false;
     }

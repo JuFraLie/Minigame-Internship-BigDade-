@@ -2,7 +2,7 @@
  * Round state machine: waves, serving, win/lose, and the single endRound event.
  *
  * The machine owns the round skeleton only — it does not touch balls, bricks
- * or scoring. The session feeds it facts ("bricks cleared", "life lost") and
+ * or scoring. The session feeds it facts ("bricks cleared", "ball lost") and
  * reads the resulting phase and timers.
  */
 
@@ -59,17 +59,6 @@ export class RoundStateMachine {
     }
 
     /**
-     * The last ball fell but lives remain: restart the serve countdown using
-     * the DDA-tuned duration. Ignored once the round has ended.
-     */
-    beginServe(seconds: number): RoundSignal[] {
-        if (this.phaseInternal === 'ended') return [];
-        this.phaseInternal = 'serving';
-        this.beginCountdown(seconds);
-        return [];
-    }
-
-    /**
      * All bricks of the current wave are gone. Advances to the next wave
      * (with the inter-wave banner) or ends the round as a win.
      */
@@ -81,7 +70,7 @@ export class RoundStateMachine {
         return [{ type: 'waveBanner', wave: this.waveInternal + 1 }];
     }
 
-    /** The last life was lost — end the round as a loss. */
+    /** The last ball was lost — end the round as a loss. */
     lost(): RoundSignal[] {
         return this.end(false);
     }

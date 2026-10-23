@@ -2,7 +2,7 @@
  * Game — the round scene. Drives the domain loop and forwards snapshots to the
  * renderer; contains no game logic of its own (AGENTS.md §4.3).
  *
- * HUD: live score, lives, wave, and a Pause button. The pause overlay offers
+ * HUD: live score, ball count, wave, and a Pause button. The pause overlay offers
  * Resume only — no restart, no exit (AGENTS.md §2).
  *
  * All layout is in design units (CSS pixels of the window) — the camera zoom
@@ -111,8 +111,11 @@ export class Game extends Phaser.Scene {
                     this.worldRenderer.burst(e.x, e.y, 0xffffff);
                 }
                 break;
-            case 'lifeLost':
-                this.worldRenderer.triggerShake();
+            case 'ballLost':
+                // With a full volley the shakes would chain into constant noise;
+                // save the feedback for the moment it actually matters — the
+                // last ball (one more miss = game over).
+                if (e.ballsLeft <= 1) this.worldRenderer.triggerShake();
                 break;
             case 'roundEnded':
                 this.finishRound(e.win, e.score);

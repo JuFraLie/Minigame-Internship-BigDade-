@@ -8,11 +8,10 @@ export type PowerUpKind =
     | 'slow'
     | 'fire'
     | 'shield'
-    | 'life'
     | 'shrink';
 
 export const POWER_UP_KINDS: readonly PowerUpKind[] = [
-    'multi', 'wide', 'slow', 'fire', 'shield', 'life', 'shrink',
+    'multi', 'wide', 'slow', 'fire', 'shield', 'shrink',
 ];
 
 /** A live brick in world units (x/y = top-left corner). */
@@ -64,7 +63,7 @@ export type DomainEvent =
     | { type: 'waveBanner'; wave: number }
     | { type: 'waveStarted'; wave: number }
     | { type: 'waveCleared'; wave: number; bonus: number }
-    | { type: 'lifeLost'; livesLeft: number }
+    | { type: 'ballLost'; ballsLeft: number }
     | { type: 'ballSaved'; }
     | { type: 'brickHit'; x: number; y: number; destroyed: boolean; points: number }
     | { type: 'dropSpawned'; x: number; y: number; kind: PowerUpKind }
@@ -82,7 +81,8 @@ export interface WorldSnapshot {
     bricks: readonly { x: number; y: number; w: number; h: number; hp: number; maxHp: number; kind: BrickKind }[];
     drops: readonly { x: number; y: number; kind: PowerUpKind }[];
     shieldActive: boolean;
-    lives: number;
+    /** Balls still in the player's possession (the score that matters now). */
+    ballCount: number;
     score: number;
     wave: number;
     combo: number;

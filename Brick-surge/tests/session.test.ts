@@ -64,22 +64,38 @@ const run = (session: GameSession, clock: BenchClock, seconds: number): void => 
 };
 
 describe('GameSession (headless)', () => {
-    it('starts a round: serving, wave 1, live bricks', () => {
+    it('starts a round: serving, wave 1, live bricks, 1 ball', () => {
         const { session, sink } = setup();
         const snap = session.snapshot();
         assert.equal(snap.phase, 'serving');
         assert.equal(snap.wave, 1);
         assert.ok(snap.bricks.length > 0, 'wave 1 must have bricks');
-        assert.equal(snap.lives, 3);
+        assert.equal(snap.ballCount, 1, 'Ballz start: one ball, no lives');
         assert.equal(sink.count('roundStarted'), 1);
     });
 
-    it('serves the ball after the countdown and starts hitting bricks', () => {
+    it('serves the volley after the countdown and starts hitting bricks', () => {
         const { session, clock } = setup();
         run(session, clock, 3); // serve countdown is ~1.5 s
         const snap = session.snapshot();
         assert.equal(snap.phase, 'playing');
         assert.ok(snap.balls.length > 0, 'ball must be in play');
+        assert.equal(snap.ballCount, snap.balls.length, 'in flight = owned');
+    });
+
+    it('ball count stays between 1 and the MAX_BALLS cap while playing', () => {
+        const { session, clock } = setup();
+        for (let i = 0; i < 60 * 120; i++) {
+            const snap = session.snapshot();
+            assert.ok(snap.ballCount >= 0 && snap.ballCount <= 6,
+                `ballCount ${snap.ballCount} outside 0..MAX_BALLS`);
+            if (snap.phase === 'playing' && snap.ballCount === 0) {
+                assert.fail('playing with zero balls must have ended the round');
+            }
+            session.setPaddleTargetX(50 + Math.sin(i / 30) * 30);
+            clock.ms += 1000 / 60;
+            session.update(1 / 60);
+        }
     });
 
     it('a bot that always catches eventually clears wave 1', () => {

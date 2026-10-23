@@ -28,8 +28,9 @@ export const BRICK_GAP = 0.8;
 export const MAX_BRICKS = 80;
 
 export const WAVE_COUNT = 3;
-export const START_LIVES = 3;
-export const MAX_LIVES = 5;
+/** Balls the player starts a round with; every catchable "+1 ball" pickup grows this. */
+export const START_BALLS = 1;
+/** Hard cap on simultaneous balls — also the frame-rate rule (AGENTS.md §4.4). */
 export const MAX_BALLS = 6;
 
 export const BANNER_SECONDS = 1;       // "Wave 2" banner between waves
@@ -37,7 +38,8 @@ export const BASE_SERVE_SECONDS = 1.5; // countdown before the next ball is serv
 
 export const COMBO_MAX = 5;
 export const POWERUP_POINTS = 50;
-export const WAVE_BONUS_PER_LIFE = 100;
+/** Wave-clear bonus per ball still in the player's possession. */
+export const WAVE_BONUS_PER_BALL = 100;
 
 /** Falling speed of power-up drops, world units / second (slow = easy to catch). */
 export const DROP_FALL_SPEED = 14;
@@ -59,15 +61,14 @@ export const BRICK_HP: Record<'basic' | 'sturdy' | 'tough', number> = {
 
 /**
  * Base (neutral) power-up drop weights; the shrink weight is DDA-adjusted at
- * roll time. Weighted towards rewards (multi-ball, shield, life) rather than
- * punishment — the Ballz philosophy: power-ups are the fun, not the tax.
+ * roll time. Multi-ball dominates: the whole game is about growing the volley
+ * (Ballz-style) — every other drop is a supporting act.
  */
 export const DROP_WEIGHTS: Record<PowerUpKind, number> = {
-    multi: 30,
-    wide: 25,
-    slow: 20,
-    fire: 12,
-    shield: 16,
-    life: 6,
+    multi: 55,
+    wide: 20,
+    slow: 15,
+    fire: 10,
+    shield: 12,
     shrink: 2,
 };

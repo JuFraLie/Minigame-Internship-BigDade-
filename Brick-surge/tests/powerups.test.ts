@@ -4,7 +4,6 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { SeededRandom } from '../src/adapters/random/SeededRandom.ts';
 import { PowerUpSystem } from '../src/domain/powerups/PowerUpSystem.ts';
-import { MAX_BALLS } from '../src/domain/config.ts';
 import type { PowerUpKind } from '../src/domain/types.ts';
 
 const paddle = { x: 50, y: 190, w: 16, h: 3 };
@@ -39,28 +38,20 @@ describe('PowerUpSystem drops', () => {
         assert.deepEqual(a, b);
     });
 
-    it('respects weights: common kinds beat rare ones over many rolls', () => {
+    it('respects weights: multi dominates over rare kinds', () => {
         const sys = new PowerUpSystem(new SeededRandom(7));
         const kinds = collectKinds(sys, 400);
         const count = (k: PowerUpKind): number => kinds.filter((x) => x === k).length;
-        // multi+wide (weight 25 each) must out-count life (weight 4).
-        assert.ok(count('multi') + count('wide') > count('life') * 3);
+        // multi (weight 55) must be the single most common drop — it is the
+        // resource the whole game is built on.
+        assert.ok(count('multi') > count('shrink') * 3);
+        assert.ok(count('multi') >= count('wide'), 'multi at least ties any other kind');
     });
 
     it('never drops Shrink when its weight is 0 (the DDA struggling case)', () => {
         const sys = new PowerUpSystem(new SeededRandom(3));
         const kinds = collectKinds(sys, 200, 1, 0);
         assert.equal(kinds.includes('shrink'), false);
-    });
-
-    it('drops at most one Extra Life per wave', () => {
-        const sys = new PowerUpSystem(new SeededRandom(11));
-        const kinds = collectKinds(sys, 300, 1, 2);
-        assert.equal(kinds.filter((k) => k === 'life').length, 1);
-        // A new wave resets the flag.
-        sys.startWave();
-        const more = collectKinds(sys, 300, 1, 2);
-        assert.equal(more.filter((k) => k === 'life').length, 1);
     });
 
     it('reports missed drops', () => {
@@ -80,8 +71,8 @@ describe('PowerUpSystem effects', () => {
         assert.equal(sys.paddleWidthMul(), 1);
         sys.apply('wide');
         assert.ok(sys.paddleWidthMul() > 1);
-        for (let t = 0; t < 13 * 60; t++) sys.update(1 / 60, paddle, 200);
-        assert.equal(sys.paddleWidthMul(), 1, 'wide must expire after 12 s');
+        for (let t = 0; t < 16 * 60; t++) sys.update(1 / 60, paddle, 200);
+        assert.equal(sys.paddleWidthMul(), 1, 'wide must expire after 15 s');
     });
 
     it('collecting the same timed power-up refreshes, not stacks', () => {
@@ -98,19 +89,19 @@ describe('PowerUpSystem effects', () => {
         assert.ok(sys.paddleWidthMul() < 1);
     });
 
-    it('slow ball halves-ish speed and expires after 10 s', () => {
+    it('slow ball halves-ish speed and expires after 12 s', () => {
         const sys = new PowerUpSystem(new SeededRandom(1));
         sys.apply('slow');
         assert.ok(sys.ballSpeedMul() < 1);
-        for (let t = 0; t < 11 * 60; t++) sys.update(1 / 60, paddle, 200);
+        for (let t = 0; t < 13 * 60; t++) sys.update(1 / 60, paddle, 200);
         assert.equal(sys.ballSpeedMul(), 1);
     });
 
-    it('fireball is active for 6 s', () => {
+    it('fireball is active for 8 s', () => {
         const sys = new PowerUpSystem(new SeededRandom(1));
         sys.apply('fire');
         assert.equal(sys.isFireball(), true);
-        for (let t = 0; t < 7 * 60; t++) sys.update(1 / 60, paddle, 200);
+        for (let t = 0; t < 9 * 60; t++) sys.update(1 / 60, paddle, 200);
         assert.equal(sys.isFireball(), false);
     });
 
@@ -123,31 +114,15 @@ describe('PowerUpSystem effects', () => {
     });
 });
 
-describe('PowerUpSystem multi-ball cap', () => {
-    const liveBalls = (balls: { alive: boolean }[]): number => balls.filter((b) => b.alive).length;
-
-    it('splits one ball into three', () => {
+describe('PowerUpSystem multi-ball', () => {
+    it('spawns exactly one extra ball, fanned from the paddle', () => {
         const sys = new PowerUpSystem(new SeededRandom(1));
-        const balls = [{ x: 50, y: 100, vx: 0, vy: -60, r: 1.6, alive: true }];
-        const spawns = sys.splitSpawns(balls);
-        assert.equal(spawns.length, 2);
-        assert.equal(liveBalls(balls) + spawns.length, 3);
-    });
-
-    it('never exceeds MAX_BALLS', () => {
-        const sys = new PowerUpSystem(new SeededRandom(1));
-        const balls = Array.from({ length: 5 }, () => ({ x: 50, y: 100, vx: 0, vy: -60, r: 1.6, alive: true }));
-        const spawns = sys.splitSpawns(balls);
-        assert.ok(liveBalls(balls) + spawns.length <= MAX_BALLS);
-    });
-
-    it('ignores dead balls', () => {
-        const sys = new PowerUpSystem(new SeededRandom(1));
-        const balls = [
-            { x: 50, y: 100, vx: 0, vy: -60, r: 1.6, alive: false },
-            { x: 50, y: 100, vx: 0, vy: -60, r: 1.6, alive: true },
-        ];
-        const spawns = sys.splitSpawns(balls);
-        assert.equal(spawns.length, 2);
+        const spawn = sys.multiSpawn(paddle, 95, 0);
+        assert.equal(spawn.r > 0, true);
+        assert.equal(spawn.vy < 0, true, 'the new ball launches upward');
+        // Fan index moves the spawn off dead-centre so it does not shadow an
+        // existing ball on the very first bounce.
+        const other = sys.multiSpawn(paddle, 95, 2);
+        assert.notEqual(spawn.vx, other.vx);
     });
 });
