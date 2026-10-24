@@ -1,4 +1,4 @@
-/** RoundStateMachine: win, lose, wave transitions, endRound emitted exactly once. */
+/** RoundStateMachine: endless waves, lose, and endRound emitted exactly once. */
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
@@ -11,9 +11,9 @@ class FakeClock implements ClockPort {
     advance(seconds: number): void { this.ms += seconds * 1000; }
 }
 
-const makeRound = (waves = 3, banner = 1): { round: RoundStateMachine; clock: FakeClock } => {
+const makeRound = (banner = 1): { round: RoundStateMachine; clock: FakeClock } => {
     const clock = new FakeClock();
-    return { round: new RoundStateMachine(clock, waves, banner), clock };
+    return { round: new RoundStateMachine(clock, banner), clock };
 };
 
 /** Tick until the serving/banner countdown expires. */
@@ -55,28 +55,29 @@ describe('RoundStateMachine', () => {
         assert.equal(round.wave, 2);
     });
 
-    it('clearing the LAST wave ends the round as a win', () => {
-        const { round, clock } = makeRound(3);
+    it('is endless: waves advance forever, no wave ever ends the run', () => {
+        const { round, clock } = makeRound();
         round.start(1.5);
-        for (let wave = 1; wave <= 3; wave++) {
+        // Clear ten waves in a row — the machine must happily keep counting up.
+        for (let wave = 1; wave <= 10; wave++) {
             tickUntilIdle(round, clock);
             const signals = round.waveCleared();
-            if (wave < 3) {
-                assert.equal(signals.some((s) => s.type === 'waveBanner'), true);
-            }
+            assert.equal(signals.some((s) => s.type === 'waveBanner'), true,
+                `wave ${wave} must show a banner for the next one`);
+            assert.equal(signals.some((s) => s.type === 'roundEnded'), false);
+            tickUntilIdle(round, clock);
+            assert.equal(round.phase, 'playing');
+            assert.equal(round.wave, wave + 1);
         }
-        assert.equal(round.phase, 'ended');
-        assert.equal(round.win, true);
     });
 
-    it('losing the last ball ends the round as a loss', () => {
+    it('losing the last ball ends the run at the current wave', () => {
         const { round, clock } = makeRound();
         round.start(1.5);
         tickUntilIdle(round, clock);
         const signals = round.lost();
-        assert.deepEqual(signals, [{ type: 'roundEnded', win: false }]);
+        assert.deepEqual(signals, [{ type: 'roundEnded', wave: 1 }]);
         assert.equal(round.phase, 'ended');
-        assert.equal(round.win, false);
     });
 
     it('endRound is emitted exactly once even if called repeatedly', () => {

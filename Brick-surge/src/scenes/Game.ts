@@ -118,22 +118,23 @@ export class Game extends Phaser.Scene {
                 if (e.ballsLeft <= 1) this.worldRenderer.triggerShake();
                 break;
             case 'roundEnded':
-                this.finishRound(e.win, e.score);
+                this.finishRound(e.wave, e.score);
                 break;
             default:
                 break;
         }
     }
 
-    private finishRound(win: boolean, score: number): void {
+    private finishRound(wave: number, score: number): void {
         if (this.ended) return;
         this.ended = true;
         this.paddleInput.setEnabled(false);
-        // The Result Panel appears → endRound, then hand over to GameOver.
-        this.ctx.bridge.signalEndRound(win, score);
-        this.ctx.lastWin = win;
+        // The run is endless, so the host contract wants `win: true` on the
+        // endRound signal (jsbridge.ts §endRound). Then hand over to GameOver.
+        this.ctx.bridge.signalEndRound(true, score);
+        this.ctx.lastWave = wave;
         this.ctx.lastScore = score;
-        this.scene.start('GameOver', { ctx: this.ctx, win, score });
+        this.scene.start('GameOver', { ctx: this.ctx, wave, score });
     }
 
     // ---- pause (resume only) ----

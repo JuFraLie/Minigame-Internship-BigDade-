@@ -12,7 +12,7 @@ import type { RendererPort } from '../../domain/ports.ts';
 import type { PowerUpKind, WorldSnapshot } from '../../domain/types.ts';
 import { hudTop, renderScale, type Viewport } from './viewport.ts';
 
-const MAX_BRICK_SPRITES = 80;
+const MAX_BRICK_SPRITES = 96; // = MAX_BRICKS: the endless field's biggest wave
 const MAX_BALL_SPRITES = 6;
 const MAX_DROP_SPRITES = 10;
 const MAX_PARTICLES = 24;

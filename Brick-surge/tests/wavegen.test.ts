@@ -4,7 +4,8 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { SeededRandom } from '../src/adapters/random/SeededRandom.ts';
 import { WaveGenerator } from '../src/domain/bricks/WaveGenerator.ts';
-import { MAX_BRICKS, WORLD_WIDTH } from '../src/domain/config.ts';
+import { MAX_BRICKS, MAX_WAVE_ROWS, WORLD_WIDTH } from '../src/domain/config.ts';
+import { rowsForWave } from '../src/domain/bricks/WaveGenerator.ts';
 
 const HEIGHT = 210;
 
@@ -21,7 +22,7 @@ describe('WaveGenerator', () => {
     it('produces bricks inside the world and under the cap', () => {
         for (const seed of [1, 2, 3, 4, 5]) {
             const gen = new WaveGenerator(new SeededRandom(seed));
-            for (const wave of [1, 2, 3]) {
+            for (const wave of [1, 2, 3, 8, 25]) {
                 const bricks = gen.generate(wave, HEIGHT, 1);
                 assert.ok(bricks.length > 0, `wave ${wave} must not be empty`);
                 assert.ok(bricks.length <= MAX_BRICKS);
@@ -31,6 +32,25 @@ describe('WaveGenerator', () => {
                     assert.ok(b.hp >= 1 && b.hp <= 3);
                 }
             }
+        }
+    });
+
+    it('endless waves get denser, then cap at MAX_WAVE_ROWS', () => {
+        assert.equal(rowsForWave(1), 6, 'wave 1 is dense from the start');
+        assert.ok(rowsForWave(2) > rowsForWave(1));
+        assert.ok(rowsForWave(3) > rowsForWave(2));
+        // Endless: one extra row per wave past the opening trio...
+        assert.equal(rowsForWave(4), rowsForWave(3) + 1);
+        assert.equal(rowsForWave(5), rowsForWave(4) + 1);
+        // ...until the cap, which holds for any wave number the run can reach.
+        for (const wave of [7, 20, 100, 9999]) {
+            assert.equal(rowsForWave(wave), MAX_WAVE_ROWS, `wave ${wave} must cap`);
+        }
+        // Monotonic: the field never gets smaller as the run goes on.
+        let prev = 0;
+        for (let w = 1; w <= 30; w++) {
+            assert.ok(rowsForWave(w) >= prev, `wave ${w} must not shrink the field`);
+            prev = rowsForWave(w);
         }
     });
 

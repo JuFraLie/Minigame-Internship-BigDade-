@@ -1,9 +1,9 @@
 /**
  * GameOver — the Result Panel (AGENTS.md §2).
  *
- * Shows the final score and a win/lose message. Restart and Exit live here and
- * nowhere else. Retry goes straight back to gameplay (no Play Screen replay);
- * Exit calls the bridge exit signal exactly once and does nothing else.
+ * Shows the final score and how far the endless run got. Restart and Exit live
+ * here and nowhere else. Retry goes straight back to gameplay (no Play Screen
+ * replay); Exit calls the bridge exit signal exactly once and does nothing else.
  *
  * Layout is in design units, fonts scale with width, and thumb-reachable
  * buttons stay at least ~44pt tall.
@@ -18,14 +18,14 @@ export class GameOver extends Phaser.Scene {
         super('GameOver');
     }
 
-    init(data: { ctx: AppContext; win: boolean; score: number }): void {
+    init(data: { ctx: AppContext; wave: number; score: number }): void {
         this.ctx = data.ctx;
-        this.win = data.win;
+        this.wave = data.wave;
         this.score = data.score;
     }
 
     private ctx!: AppContext;
-    private win!: boolean;
+    private wave!: number;
     private score!: number;
 
     create(): void {
@@ -36,14 +36,20 @@ export class GameOver extends Phaser.Scene {
 
         // Headline clears the cutout/status-bar inset.
         const headlineY = Math.max(h * 0.3, safeTop + w * 0.16);
-        this.add.text(w / 2, headlineY, this.win ? 'YOU WIN!' : 'GAME OVER', {
+        this.add.text(w / 2, headlineY, 'GAME OVER', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.1)}px`,
             fontStyle: 'bold',
-            color: this.win ? '#4cd964' : '#ff2d55',
+            color: '#ff2d55',
         }).setOrigin(0.5);
 
-        this.add.text(w / 2, headlineY + h * 0.09, `Score: ${this.score}`, {
+        this.add.text(w / 2, headlineY + h * 0.075, `Reached wave ${this.wave}`, {
+            fontFamily: 'system-ui, sans-serif',
+            fontSize: `${Math.round(w * 0.05)}px`,
+            color: '#ffd23f',
+        }).setOrigin(0.5);
+
+        this.add.text(w / 2, headlineY + h * 0.145, `Score: ${this.score}`, {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.055)}px`,
             color: '#ffffff',
@@ -77,7 +83,8 @@ export class GameOver extends Phaser.Scene {
             color: '#ffffff',
         }).setOrigin(0.5);
         exit.on('pointerdown', () => {
-            this.ctx.bridge.signalExit(this.win, this.score);
+            // Endless game: the host contract wants `win: true` (jsbridge.ts §exit).
+            this.ctx.bridge.signalExit(true, this.score);
         });
 
         this.game.events.on(VIEWPORT_CHANGED, this.onViewportChanged, this);

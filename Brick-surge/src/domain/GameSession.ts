@@ -9,7 +9,7 @@
 
 import {
     BASE_BALL_SPEED, BRICK_POINTS, FIXED_STEP, MAX_BALL_SPEED,
-    PADDLE_WIDTH, START_BALLS, WAVE_COUNT, WORLD_WIDTH,
+    PADDLE_WIDTH, START_BALLS, WORLD_WIDTH,
 } from './config.ts';
 import { DdaController } from './dda/DdaController.ts';
 import { bounceWalls, circleVsRect, paddleBounce, reflect, separate } from './physics/Collision.ts';
@@ -287,13 +287,11 @@ export class GameSession {
         if (signals.length === 0) return;
         this.dispatch(signals);
 
-        // The last wave ends the round (win) — nothing to generate.
-        if (this.round.phase === 'ended') return;
-
-        // Next wave: bricks are laid out during the banner, using the DDA's
-        // updated Tough/Sturdy share; balls stay frozen until the banner ends.
+        // The run is endless: the next wave's field is laid out during the
+        // banner, using the DDA's updated Tough/Sturdy share; balls stay
+        // frozen until the banner ends.
         this.world.setBricks(this.waves.generate(
-            Math.min(this.round.wave + 1, WAVE_COUNT),
+            this.round.wave + 1,
             this.world.height,
             this.dda.params.brickToughShareMul,
         ));
@@ -343,7 +341,7 @@ export class GameSession {
                     break;
                 case 'roundEnded': {
                     // Wave-clear bonus already counted; final score is read here.
-                    const ev: DomainEvent = { type: 'roundEnded', win: s.win, score: this.score.score };
+                    const ev: DomainEvent = { type: 'roundEnded', wave: s.wave, score: this.score.score };
                     this.sink.emit(ev);
                     break;
                 }

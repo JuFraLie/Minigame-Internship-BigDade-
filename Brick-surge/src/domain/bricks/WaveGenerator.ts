@@ -6,14 +6,21 @@
  * with a seeded RNG.
  */
 
-import { BRICK_COLS, BRICK_GAP, BRICK_H, BRICK_TOP_FRAC, BRICK_W, BRICK_POINTS, BRICK_HP, MAX_BRICKS, WORLD_WIDTH } from '../config.ts';
+import { BRICK_COLS, BRICK_GAP, BRICK_H, BRICK_TOP_FRAC, BRICK_W, BRICK_POINTS, BRICK_HP, MAX_BRICKS, MAX_WAVE_ROWS, WORLD_WIDTH } from '../config.ts';
 import type { RandomPort } from '../ports.ts';
 import type { Brick, BrickKind } from '../types.ts';
 
 /** How many rows each wave has (clamped so a wave never exceeds MAX_BRICKS).
- *  Ballz-dense: a full grid per wave (thinned by the template), balanced by
- *  the growing volley — more balls shred the bigger waves fast. */
-const WAVE_ROWS = [4, 5, 6];
+ *  Dense Ballz fields: a full 8-column grid per wave, thinned by the template.
+ *  The endless run keeps adding a row per wave until MAX_WAVE_ROWS. */
+const WAVE_ROWS = [6, 7, 8];
+
+/** Rows for a wave (1-based): the opening trio, then endless +1 per wave. */
+export function rowsForWave(wave: number): number {
+    if (wave <= WAVE_ROWS.length) return WAVE_ROWS[wave - 1];
+    const grown = WAVE_ROWS[WAVE_ROWS.length - 1] + (wave - WAVE_ROWS.length);
+    return Math.min(MAX_WAVE_ROWS, grown);
+}
 
 /** Base share of non-basic bricks per wave (before the DDA multiplier). */
 const BASE_TOUGH_SHARE = 0.08;
@@ -68,13 +75,14 @@ export class WaveGenerator {
     }
 
     /**
-     * Generate the brick layout for a wave (1-based).
+     * Generate the brick layout for a wave (1-based, unbounded — the run is
+     * endless and the field keeps growing, see `rowsForWave`).
      * `toughShareMul` scales the Tough+Sturdy share (0.7 .. 1.3 from the DDA);
      * the split between Tough and Sturdy keeps its base ratio. Tough bricks
      * only appear from wave 2 (§5).
      */
     generate(wave: number, worldHeight: number, toughShareMul: number): Brick[] {
-        const rows = WAVE_ROWS[Math.min(wave, WAVE_ROWS.length) - 1];
+        const rows = rowsForWave(wave);
         const template = this.pickTemplate();
         const grid = buildGrid(template, rows, BRICK_COLS, this.random);
 

@@ -5,14 +5,15 @@ Dynamic Difficulty Adjustment (DDA) and random power-up drops.
 
 Drag the paddle to bounce the volley into bricks. There are no extra lives:
 every ball that falls past the paddle is gone for good, and running out of
-balls ends the round. Destroyed bricks drop power-ups (the main one being +1
+balls ends the run. Destroyed bricks drop power-ups (the main one being +1
 ball, plus wide paddle, slow ball, fireball, shield — and a "bad" Shrink), so
 the loop is Ballz-style: break bricks, grow the volley, keep it alive. A hidden
 DDA watches how the player is doing and quietly tunes ball speed, paddle size,
-drop rates and brick toughness so every round stays tense but fair.
+drop rates and brick toughness so every run stays tense but fair.
 
-A round is 3 dense waves (4/5/6 rows) and lasts roughly 2–5 minutes. Built with
-Phaser 3 (Canvas only) + TypeScript + Vite.
+The run is **endless**: there is no final wave. Fields start dense (6/7/8
+rows of 8 columns) and keep growing by one row per wave up to 12 — the run only
+ends when the balls do. Built with Phaser 3 (Canvas only) + TypeScript + Vite.
 
 The game is portrait-locked: the playfield is always a portrait column (max
 aspect 3:5). A phone held upright gets the entire screen exactly as before; a

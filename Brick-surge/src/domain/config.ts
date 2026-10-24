@@ -25,13 +25,21 @@ export const BRICK_COLS = 8;
 export const BRICK_W = 11.4;
 export const BRICK_H = 4.5;
 export const BRICK_GAP = 0.8;
-export const MAX_BRICKS = 80;
+/** Hard cap per wave: 12 rows x 8 columns of the endless field. */
+export const MAX_BRICKS = 96;
 
-export const WAVE_COUNT = 3;
 /** Balls the player starts a round with; every catchable "+1 ball" pickup grows this. */
 export const START_BALLS = 1;
 /** Hard cap on simultaneous balls — also the frame-rate rule (AGENTS.md §4.4). */
 export const MAX_BALLS = 6;
+
+/**
+ * Rows per wave: dense from the start, then one extra row per wave in the
+ * endless run (waves 4+) until this cap. The growing volley is meant to meet
+ * a field that keeps getting fuller — that is where the late-run pressure
+ * comes from, on top of whatever the DDA decides.
+ */
+export const MAX_WAVE_ROWS = 12;
 
 export const BANNER_SECONDS = 1;       // "Wave 2" banner between waves
 export const BASE_SERVE_SECONDS = 1.5; // countdown before the next ball is served

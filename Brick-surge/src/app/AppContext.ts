@@ -16,7 +16,7 @@ export interface AppContext {
     bus: EventBus;
     random: RandomPort;
     clock: ClockPort;
-    /** Final result of the last finished round — used by the exit payload. */
-    lastWin: boolean;
+    /** Final result of the last finished run — used by the exit payload. */
+    lastWave: number;
     lastScore: number;
 }

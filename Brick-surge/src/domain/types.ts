@@ -69,7 +69,7 @@ export type DomainEvent =
     | { type: 'dropSpawned'; x: number; y: number; kind: PowerUpKind }
     | { type: 'powerUpCollected'; kind: PowerUpKind }
     | { type: 'paddleHit'; }
-    | { type: 'roundEnded'; win: boolean; score: number };
+    | { type: 'roundEnded'; wave: number; score: number };
 
 /** Read-only view of the world handed to the renderer each frame (world units). */
 export interface WorldSnapshot {

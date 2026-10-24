@@ -33,7 +33,7 @@ async function boot(parent: string): Promise<void> {
         bus: new EventBus(),
         random: new MathRandom(),
         clock,
-        lastWin: false,
+        lastWave: 0,
         lastScore: 0,
     };
 

@@ -121,8 +121,19 @@ describe('GameSession (headless)', () => {
         assert.equal(sink.count('roundEnded'), 1, 'exactly one roundEnded');
         const end = sink.last('roundEnded');
         assert.ok(end && end.type === 'roundEnded');
-        assert.equal(end.win, false, 'a passive player must eventually lose');
+        assert.ok(end.wave >= 1, 'the run reports the wave it ended on');
         assert.ok(end.score >= 0);
+    });
+
+    it('is endless: a good player sails past wave 3 without the run ending', () => {
+        const { session, clock, sink } = setup();
+        run(session, clock, 400);
+        const lastWave = Math.max(0, ...sink.events
+            .filter((e) => e.type === 'waveCleared')
+            .map((e) => (e.type === 'waveCleared' ? e.wave : 0)));
+        assert.ok(lastWave >= 3, `expected to clear past the old 3-wave limit, got ${lastWave}`);
+        assert.equal(sink.count('roundEnded'), 0,
+            'a run that keeps clearing must never end on its own (no win condition)');
     });
 
     it('endRound is emitted exactly once, even across further updates', () => {

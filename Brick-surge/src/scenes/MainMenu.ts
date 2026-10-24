@@ -48,7 +48,7 @@ export class MainMenu extends Phaser.Scene {
             color: '#ffd23f',
         }).setOrigin(0.5);
 
-        this.add.text(w / 2, titleY + h * 0.1, 'Drag to move the paddle — catch the yellow drops\nto add balls. Run out of balls and the run is over!', {
+        this.add.text(w / 2, titleY + h * 0.1, 'Drag to move the paddle — catch the yellow drops\nto add balls. Endless waves: when the balls are gone, it\u2019s over!', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${bodySize}px`,
             color: '#ffffff',
