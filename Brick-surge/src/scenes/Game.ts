@@ -5,7 +5,7 @@
  * HUD: live score, ball count, wave, and a Pause button. The pause overlay offers
  * Resume only — no restart, no exit (AGENTS.md §2).
  *
- * All layout is in design units (CSS pixels of the window) — the camera zoom
+ * All layout is in design units (CSS pixels of the portrait playfield) — the camera zoom
  * handles the backing-store density, so the canvas is sharp on a phone and the
  * maths stays readable. A window resize (URL bar collapsing, split screen) is
  * adopted live: the world keeps its aspect and the HUD re-positions.

@@ -1,11 +1,17 @@
 /**
- * Device measurement for mobile: viewport size in design units, the render
- * (backing-store) density, and the real cutout/status-bar inset read through
- * the invisible probe declared in index.html.
+ * Device measurement for mobile: the portrait playfield in design units, the
+ * render (backing-store) density, and the real cutout/status-bar inset read
+ * through the invisible probe declared in index.html.
  *
- * Design units are plain CSS pixels of the window, so the canvas backing store
- * is `renderScale()` times larger — that is what keeps the game sharp on a
- * high-density phone instead of a soft blur. Kept out of the domain: none of
+ * The playfield is portrait-locked (see `portraitPlayfield`): the game always
+ * plays in a portrait-shaped column, whatever the device is doing. In landscape
+ * the column is centred in the window and the page background fills the sides,
+ * so the layout never squashes into a short wide strip — and the game is never
+ * blocked, it just stays portrait.
+ *
+ * Design units are plain CSS pixels of the playfield, so the canvas backing
+ * store is `renderScale()` times larger — that is what keeps the game sharp on
+ * a high-density phone instead of a soft blur. Kept out of the domain: none of
  * this is game logic.
  */
 
@@ -13,6 +19,35 @@ import type Phaser from 'phaser';
 
 /** Top of the screen the HUD must stay clear of (AGENTS.md §3.1). */
 export const HUD_TOP_FRAC = 0.08;
+
+/**
+ * The widest playfield the game lays out, as width / height. Anything squarer
+ * than this — a landscape phone, a tablet held sideways, a desktop window —
+ * gets clamped to a portrait column of the same height.
+ *
+ * 3:5 (0.6) is chosen just above the widest real portrait phone (a 320×568
+ * iPhone SE is 0.563; most are ~0.46), so an upright phone is never touched:
+ * it gets the full window exactly as before. The clamp only ever engages on
+ * non-portrait windows, and even then the result is unmistakably portrait.
+ */
+export const PORTRAIT_MAX_ASPECT = 3 / 5;
+
+/**
+ * Clamp a window size to the portrait playfield (pure — unit tested).
+ *
+ * Portrait sizes come back untouched; wider-than-portrait ones come back as a
+ * centred portrait column at the same height, floored to whole CSS pixels so
+ * the aspect never exceeds the cap and the canvas backing store stays
+ * integral. Width/height are floored at 1.
+ */
+export function portraitPlayfield(width: number, height: number): { width: number; height: number } {
+    const w = Math.max(1, Math.round(width));
+    const h = Math.max(1, Math.round(height));
+    const capped = Math.max(1, Math.floor(h * PORTRAIT_MAX_ASPECT));
+    return w <= capped
+        ? { width: w, height: h }
+        : { width: capped, height: h };
+}
 
 /**
  * Backing-store density, capped at 2: past that a G95-class GPU only loses
@@ -30,9 +65,9 @@ export function renderScale(): number {
 }
 
 export interface Viewport {
-    /** Window width in design units (CSS pixels). */
+    /** Playfield width in design units (CSS pixels), portrait-locked. */
     width: number;
-    /** Window height in design units — any vertical height is supported. */
+    /** Playfield height in design units — any vertical height is supported. */
     height: number;
     /** Device cutout / status-bar inset at the top, in design units. */
     safeTop: number;
@@ -48,14 +83,19 @@ function readCutoutInset(): number {
 }
 
 /**
- * The current window in design units. Read fresh on every call so a WebView
- * that settles late (or a browser URL bar collapsing) never leaves the layout
+ * The current playfield in design units: the window clamped to portrait
+ * (see `portraitPlayfield`). Read fresh on every call so a WebView that
+ * settles late (or a browser URL bar collapsing) never leaves the layout
  * describing a size the canvas has left behind.
+ *
+ * Everything — canvas size, scene layout, world aspect — is derived from this,
+ * so a device rotated mid-game simply re-lays out on the next VIEWPORT_CHANGED.
  */
 export function measureViewport(): Viewport {
+    const playfield = portraitPlayfield(window.innerWidth, window.innerHeight);
     return {
-        width: Math.max(1, window.innerWidth),
-        height: Math.max(1, window.innerHeight),
+        width: playfield.width,
+        height: playfield.height,
         safeTop: readCutoutInset(),
     };
 }

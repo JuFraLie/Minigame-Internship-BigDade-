@@ -37,7 +37,7 @@ async function boot(parent: string): Promise<void> {
         lastScore: 0,
     };
 
-    const size = measureViewport();
+    const size = measureViewport(); // portrait playfield, not necessarily the whole window
     const density = renderScale();
 
     const game = new Phaser.Game({
@@ -46,7 +46,9 @@ async function boot(parent: string): Promise<void> {
         backgroundColor: '#0b1020',
         // The backing store is density times the design size so the canvas is
         // sharp on a high-density phone; scenes zoom their camera to match
-        // (see adapters/phaser/viewport.ts).
+        // (see adapters/phaser/viewport.ts). In landscape the design size is a
+        // portrait column — flexbox centres it and the page background (the
+        // same colour) fills the sides, so the game always plays portrait-shaped.
         width: size.width * density,
         height: size.height * density,
         scale: {
@@ -72,13 +74,14 @@ async function boot(parent: string): Promise<void> {
         },
     });
 
-    // Keep the canvas in step with the window (WebView settling late, URL bar
-    // collapsing, split screen). Size the backing store first, then tell the
-    // screens to lay out against the new size.
+    // Keep the canvas in step with the window (device rotation, WebView
+    // settling late, URL bar collapsing, split screen). Size the backing store
+    // first, then tell the screens to lay out against the new size.
     let appliedWidth = size.width * density;
     let appliedHeight = size.height * density;
+    let appliedSafeTop = size.safeTop;
 
-    window.addEventListener('resize', () => {
+    const syncSize = (): void => {
         game.scale.getParentBounds();
         const next = measureViewport();
         const targetWidth = next.width * density;
@@ -91,9 +94,20 @@ async function boot(parent: string): Promise<void> {
             game.events.emit(VIEWPORT_CHANGED);
             return;
         }
-        // Same size: only the fit into the window has to be recomputed.
+        // Same playfield size: the cutout inset may still have moved (rotating
+        // a notch phone), which the HUD has to re-clear even though the canvas
+        // did not change. Otherwise only the fit into the window needs a nudge.
+        if (next.safeTop !== appliedSafeTop) {
+            appliedSafeTop = next.safeTop;
+            game.events.emit(VIEWPORT_CHANGED);
+            return;
+        }
         game.scale.refresh();
-    });
+    };
+
+    window.addEventListener('resize', syncSize);
+    // Older WebViews report a rotation here before (or without) a resize.
+    window.addEventListener('orientationchange', syncSize);
 }
 
 void boot('game-container');

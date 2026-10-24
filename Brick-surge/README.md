@@ -14,6 +14,12 @@ drop rates and brick toughness so every round stays tense but fair.
 A round is 3 dense waves (4/5/6 rows) and lasts roughly 2–5 minutes. Built with
 Phaser 3 (Canvas only) + TypeScript + Vite.
 
+The game is portrait-locked: the playfield is always a portrait column (max
+aspect 3:5). A phone held upright gets the entire screen exactly as before; a
+device in landscape — or a tablet/desktop window — gets a centred portrait
+column with the page background filling the sides, so the layout never squashes
+into a short wide strip and the game is never blocked.
+
 Tuning follows a Ballz-like ease curve: a leisurely ball (95 u/s), a wide
 paddle (20 units, ~20% of the screen), bounce angles capped at 45° so returns
 stay gentle and predictable, generous drop rates weighted towards rewards

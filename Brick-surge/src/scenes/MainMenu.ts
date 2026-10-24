@@ -5,7 +5,7 @@
  * also starts. Fires `launch` (once per session, guarded inside the bridge
  * adapter) and then hands over to the Game scene.
  *
- * Layout is in design units (CSS pixels of the window); the camera zoom makes
+ * Layout is in design units (CSS pixels of the portrait playfield); the camera zoom makes
  * the canvas sharp on a high-density phone. Fonts scale with the width, so any
  * portrait phone from a small 720p to a tall 21:9 gets a sensible layout.
  */
