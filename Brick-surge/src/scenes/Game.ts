@@ -19,6 +19,7 @@ import { PhaserInput } from '../adapters/phaser/PhaserInput.ts';
 import {
     applyRenderScale, hudTop, measureViewport, VIEWPORT_CHANGED, type Viewport,
 } from '../adapters/phaser/viewport.ts';
+import { backdrop, makeButton, THEME } from '../adapters/phaser/theme.ts';
 import type { DomainEvent } from '../domain/types.ts';
 
 export class Game extends Phaser.Scene {
@@ -51,7 +52,8 @@ export class Game extends Phaser.Scene {
         applyRenderScale(this);
         const { width: w, height: h } = this.viewport;
 
-        const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x0b1020);
+        const bg = backdrop(this, w, h);
+        bg.setDepth(-10);
         this.ownUi = [bg];
 
         // A fresh session per round; the DDA is shared via the context so it
@@ -108,7 +110,7 @@ export class Game extends Phaser.Scene {
         switch (e.type) {
             case 'brickHit':
                 if (e.destroyed) {
-                    this.worldRenderer.burst(e.x, e.y, 0xffffff);
+                    this.worldRenderer.burstBrick(e.x, e.y, e.kind);
                 }
                 break;
             case 'ballLost':
@@ -144,11 +146,12 @@ export class Game extends Phaser.Scene {
         // Just under the HUD band, clear of any cutout.
         const y = hudTop(this.viewport, Math.round(w * 0.045)) + w * 0.055;
         const size = w * 0.09;
-        const btn = this.add.rectangle(w * 0.92, y, size, size, 0x1c2540)
+        const btn = this.add.circle(w * 0.92, y, size / 2, THEME.accent)
             .setInteractive({ useHandCursor: true });
         const label = this.add.text(w * 0.92, y, 'II', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.04)}px`,
+            fontStyle: 'bold',
             color: '#ffffff',
         }).setOrigin(0.5);
         btn.on('pointerdown', () => this.setPaused(true));
@@ -159,28 +162,29 @@ export class Game extends Phaser.Scene {
         const { width: w, height: h } = this.viewport;
         this.overlay = this.add.container(0, 0).setVisible(false);
 
-        const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.6);
+        const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x1b1140, 0.7);
         const label = this.add.text(w / 2, h * 0.4, 'PAUSED', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${Math.round(w * 0.09)}px`,
             fontStyle: 'bold',
-            color: '#ffffff',
+            color: '#ffd23f',
+            stroke: '#af52de',
+            strokeThickness: Math.max(3, Math.round(w * 0.014)),
         }).setOrigin(0.5);
 
         // Resume only — no restart, no exit.
-        const btnW = w * 0.5;
-        const btnH = h * 0.07;
-        const resume = this.add.rectangle(w / 2, h * 0.55, btnW, btnH, 0x36a2eb)
-            .setInteractive({ useHandCursor: true });
-        const resumeLabel = this.add.text(w / 2, h * 0.55, 'RESUME', {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${Math.round(w * 0.05)}px`,
-            fontStyle: 'bold',
-            color: '#ffffff',
-        }).setOrigin(0.5);
-
-        resume.on('pointerdown', () => this.setPaused(false));
-        this.overlay.add([dim, label, resume, resumeLabel]);
+        const resume = makeButton(this, {
+            x: w / 2,
+            y: h * 0.55,
+            width: w * 0.5,
+            height: Math.max(h * 0.07, 44), // never below the ~44pt touch target
+            top: 0x0a84ff,
+            bottom: 0x64d2ff,
+            label: 'RESUME',
+            fontSize: Math.round(w * 0.05),
+        });
+        resume.image.on('pointerdown', () => this.setPaused(false));
+        this.overlay.add([dim, label, resume.image, resume.label]);
     }
 
     private setPaused(paused: boolean): void {
@@ -209,7 +213,7 @@ export class Game extends Phaser.Scene {
         this.ownUi = [];
         this.overlay.destroy();
 
-        const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x0b1020);
+        const bg = backdrop(this, w, h);
         // Re-added after the renderer's sprites, so push it behind them again.
         bg.setDepth(-10);
         this.ownUi.push(bg);

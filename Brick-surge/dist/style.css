@@ -8,6 +8,10 @@ body {
     padding: 0;
     overflow: hidden;
     background-color: #0b1020;
+    /* Mirrors the playfield backdrop (adapters/phaser/theme.ts). The canvas is
+       always a full-height column, so page and game share the same top→bottom
+       gradient and blend together — including the pillarbox in landscape. */
+    background-image: linear-gradient(180deg, #2b1b5e 0%, #16204a 45%, #0b1020 100%);
     color: rgba(255, 255, 255, 0.87);
     /* The game is touch-only inside a mobile WebView: never scroll, never zoom,
        never trigger pull-to-refresh or the long-press callout. */

@@ -65,7 +65,7 @@ export type DomainEvent =
     | { type: 'waveCleared'; wave: number; bonus: number }
     | { type: 'ballLost'; ballsLeft: number }
     | { type: 'ballSaved'; }
-    | { type: 'brickHit'; x: number; y: number; destroyed: boolean; points: number }
+    | { type: 'brickHit'; x: number; y: number; kind: BrickKind; destroyed: boolean; points: number }
     | { type: 'dropSpawned'; x: number; y: number; kind: PowerUpKind }
     | { type: 'powerUpCollected'; kind: PowerUpKind }
     | { type: 'paddleHit'; }

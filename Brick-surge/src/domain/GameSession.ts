@@ -238,9 +238,9 @@ export class GameSession {
                     this.dda.params.dropChance,
                     this.dda.params.shrinkWeight,
                 );
-                this.sink.emit({ type: 'brickHit', x: hit.px, y: hit.py, destroyed: true, points: awarded });
+                this.sink.emit({ type: 'brickHit', x: hit.px, y: hit.py, kind: brick.kind, destroyed: true, points: awarded });
             } else {
-                this.sink.emit({ type: 'brickHit', x: hit.px, y: hit.py, destroyed: false, points: 0 });
+                this.sink.emit({ type: 'brickHit', x: hit.px, y: hit.py, kind: brick.kind, destroyed: false, points: 0 });
             }
 
             if (this.world.remainingBricks === 0) this.onWaveCleared();

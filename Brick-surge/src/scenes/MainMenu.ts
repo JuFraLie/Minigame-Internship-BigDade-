@@ -13,6 +13,7 @@
 import Phaser from 'phaser';
 import type { AppContext } from '../app/AppContext.ts';
 import { applyRenderScale, measureViewport, VIEWPORT_CHANGED } from '../adapters/phaser/viewport.ts';
+import { backdrop, makeButton } from '../adapters/phaser/theme.ts';
 
 export class MainMenu extends Phaser.Scene {
     constructor() {
@@ -34,7 +35,7 @@ export class MainMenu extends Phaser.Scene {
         applyRenderScale(this);
         const { width: w, height: h, safeTop } = measureViewport();
 
-        this.add.rectangle(w / 2, h / 2, w, h, 0x0b1020);
+        backdrop(this, w, h);
 
         const titleSize = Math.round(w * 0.11);
         const bodySize = Math.round(w * 0.045);
@@ -46,12 +47,14 @@ export class MainMenu extends Phaser.Scene {
             fontSize: `${titleSize}px`,
             fontStyle: 'bold',
             color: '#ffd23f',
+            stroke: '#af52de',
+            strokeThickness: Math.max(2, Math.round(titleSize * 0.08)),
         }).setOrigin(0.5);
 
         this.add.text(w / 2, titleY + h * 0.1, 'Drag to move the paddle — catch the yellow drops\nto add balls. Endless waves: when the balls are gone, it\u2019s over!', {
             fontFamily: 'system-ui, sans-serif',
             fontSize: `${bodySize}px`,
-            color: '#ffffff',
+            color: '#e6e9ff',
             align: 'center',
             lineSpacing: 8,
         }).setOrigin(0.5);
@@ -59,15 +62,17 @@ export class MainMenu extends Phaser.Scene {
         // Play button — a clear start action, as required by the flow. Big
         // enough for a thumb: ~50% of width, ~8% of height.
         const btnY = titleY + h * 0.28;
-        const btnW = w * 0.5;
-        const btnH = Math.max(h * 0.07, 44); // never below the ~44pt touch target
-        const btn = this.add.rectangle(w / 2, btnY, btnW, btnH, 0x36a2eb).setInteractive({ useHandCursor: true });
-        this.add.text(w / 2, btnY, 'PLAY', {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${Math.round(w * 0.06)}px`,
-            fontStyle: 'bold',
-            color: '#ffffff',
-        }).setOrigin(0.5);
+        const play = makeButton(this, {
+            x: w / 2,
+            y: btnY,
+            width: w * 0.5,
+            height: Math.max(h * 0.07, 44), // never below the ~44pt touch target
+            top: 0xffd23f,
+            bottom: 0xff9500,
+            label: 'PLAY',
+            fontSize: Math.round(w * 0.06),
+            labelColor: '#101426',
+        });
 
         const start = (): void => {
             if (this.started) return;
@@ -77,7 +82,7 @@ export class MainMenu extends Phaser.Scene {
             this.scene.start('Game', { ctx: this.ctx });
         };
 
-        btn.on('pointerdown', start);
+        play.image.on('pointerdown', start);
         // Tapping anywhere on the Play Screen also starts the game.
         this.input.on('pointerdown', start);
 
