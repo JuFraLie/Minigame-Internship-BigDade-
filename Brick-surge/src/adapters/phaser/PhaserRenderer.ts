@@ -1,47 +1,27 @@
 /**
- * Phaser Canvas renderer. Implements RendererPort.
+ * Phaser Canvas world renderer. Implements RendererPort.
  *
- * Draws a WorldSnapshot (world units, 100 wide) onto the screen using pooled
- * shapes plus the gradient textures from ./theme.ts — no bundled image assets,
- * no allocation inside the frame loop. Particle bursts are small and capped to
- * protect the frame rate on the reference device class.
+ * Draws the world half of a WorldSnapshot (world units, 100 wide): paddle,
+ * shield, bricks, balls, drops and particles — pooled shapes plus the gradient
+ * textures from ./theme.ts, no bundled image assets, no allocation inside the
+ * frame loop. Particle bursts are small and capped to protect the frame rate
+ * on the reference device class.
+ *
+ * The screen half (HUD text, banner, serve countdown) belongs to ./Hud.ts —
+ * this class never touches it.
  */
 
 import type Phaser from 'phaser';
 import type { RendererPort } from '../../domain/ports.ts';
-import type { PowerUpKind, WorldSnapshot } from '../../domain/types.ts';
+import type { BrickKind, WorldSnapshot } from '../../domain/types.ts';
 import { BRICK_GAP, BRICK_H, BRICK_TOP_FRAC } from '../../domain/config.ts';
-import { hudBand, THEME } from './theme.ts';
-import { hudTop, renderScale, type Viewport } from './viewport.ts';
+import { THEME } from './theme.ts';
+import { renderScale, type Viewport } from './viewport.ts';
 
 const MAX_BRICK_SPRITES = 96; // = MAX_BRICKS: the endless field's biggest wave
 const MAX_BALL_SPRITES = 6;
 const MAX_DROP_SPRITES = 10;
 const MAX_PARTICLES = 24;
-
-const DROP_COLORS: Record<PowerUpKind, number> = {
-    multi: 0xffd23f,   // yellow — +1 ball (the one you want)
-    wide: 0x4cd964,    // green — wide paddle
-    slow: 0x5ac8fa,    // blue — slow ball
-    fire: 0xff6b3d,    // orange — fireball
-    shield: 0xaf52de,  // purple — shield
-    shrink: 0x8e8e93,  // grey — the bad one
-};
-
-/**
- * Brick colours. The two armoured kinds keep fixed, unmistakable colours;
- * basic bricks sweep a cool spectrum row by row (sky → blue → violet → rose),
- * so a dense wave still reads as colour while green and orange stay free for
- * "takes two hits" and "takes three".
- */
-const BASIC_ROW_COLORS = [
-    0x5ac8fa, 0x36a2eb, 0x4c6fff, 0x5e5ce6, 0x8b5cf6, 0xaf52de, 0xff375f, 0xff6482,
-];
-
-const BRICK_COLORS: Record<string, number> = {
-    sturdy: 0x4cd964,
-    tough: 0xff9500,
-};
 
 interface Particle {
     sprite: Phaser.GameObjects.Rectangle;
@@ -53,7 +33,6 @@ interface Particle {
 export class PhaserRenderer implements RendererPort {
     private scaleX = 1;
     private scaleY = 1;
-    private hudFontSize = 12;
 
     private readonly brickPool: Phaser.GameObjects.Rectangle[] = [];
     private readonly ballPool: Phaser.GameObjects.Arc[] = [];
@@ -63,17 +42,9 @@ export class PhaserRenderer implements RendererPort {
 
     private paddle!: Phaser.GameObjects.Rectangle;
     private shieldLine!: Phaser.GameObjects.Rectangle;
-    private scoreText!: Phaser.GameObjects.Text;
-    private ballText!: Phaser.GameObjects.Text;
-    private waveText!: Phaser.GameObjects.Text;
-    private bannerText!: Phaser.GameObjects.Text;
-    private serveText!: Phaser.GameObjects.Text;
-    private comboText!: Phaser.GameObjects.Text;
 
     /** World height in world units — where the brick rows actually start. */
     private worldHeight = 100;
-    /** Tinted strip behind the HUD, rebuilt whenever the viewport changes. */
-    private hudBandImage: Phaser.GameObjects.Image | null = null;
 
     /** Screen shake timer for ball-lost feedback (seconds remaining). */
     private shake = 0;
@@ -91,13 +62,12 @@ export class PhaserRenderer implements RendererPort {
 
     create(viewport: Viewport): void {
         const s = this.scene;
-        const screenWidth = viewport.width;
 
         this.paddle = s.add.rectangle(0, 0, 10, 10, THEME.paddle).setOrigin(0.5);
-        this.shieldLine = s.add.rectangle(0, 0, 10, 3, 0xaf52de).setOrigin(0.5).setVisible(false);
+        this.shieldLine = s.add.rectangle(0, 0, 10, 3, THEME.shield).setOrigin(0.5).setVisible(false);
 
         for (let i = 0; i < MAX_BRICK_SPRITES; i++) {
-            this.brickPool.push(s.add.rectangle(0, 0, 10, 10, 0xffffff).setOrigin(0.5).setVisible(false));
+            this.brickPool.push(s.add.rectangle(0, 0, 10, 10, THEME.bricks.basic).setOrigin(0.5).setVisible(false));
         }
         // Soft halo first, so every glow sits behind its ball in the list.
         for (let i = 0; i < MAX_BALL_SPRITES; i++) {
@@ -120,64 +90,13 @@ export class PhaserRenderer implements RendererPort {
             });
         }
 
-        const fontSize = Math.round(screenWidth * 0.045);
-        const style: Phaser.Types.GameObjects.Text.TextStyle = {
-            fontFamily: 'system-ui, sans-serif',
-            color: '#ffffff',
-            fontSize: `${fontSize}px`,
-        };
-        this.hudFontSize = fontSize;
-        // Three colours across the HUD row: gold score, sky wave, green balls.
-        this.scoreText = s.add.text(screenWidth * 0.04, 0, '0', {
-            ...style,
-            color: '#ffd23f',
-            fontStyle: 'bold',
-        }).setOrigin(0, 0.5);
-        this.waveText = s.add.text(screenWidth * 0.5, 0, 'Wave 1', {
-            ...style,
-            color: '#64d2ff',
-        }).setOrigin(0.5);
-        this.ballText = s.add.text(screenWidth * 0.96, 0, '● 1', {
-            ...style,
-            color: '#32d74b',
-            fontStyle: 'bold',
-        }).setOrigin(1, 0.5);
-
-        const bigStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-            ...style,
-            fontSize: `${Math.round(screenWidth * 0.09)}px`,
-            fontStyle: 'bold',
-        };
-        this.bannerText = s.add.text(screenWidth * 0.5, viewport.height * 0.4, '', {
-            ...bigStyle,
-            color: '#ffd23f',
-            stroke: '#af52de',
-            strokeThickness: Math.max(3, Math.round(screenWidth * 0.014)),
-        }).setOrigin(0.5).setVisible(false);
-
-        this.serveText = s.add.text(screenWidth * 0.5, viewport.height * 0.6, '', {
-            ...bigStyle,
-            color: '#64d2ff',
-            stroke: '#141a34',
-            strokeThickness: Math.max(3, Math.round(screenWidth * 0.01)),
-        }).setOrigin(0.5).setVisible(false);
-
-        this.comboText = s.add.text(screenWidth * 0.5, viewport.height * 0.16, '', {
-            ...style,
-            fontSize: `${Math.round(screenWidth * 0.05)}px`,
-            fontStyle: 'bold',
-            color: '#ff375f',
-            stroke: '#ffffff',
-            strokeThickness: Math.max(2, Math.round(screenWidth * 0.007)),
-        }).setOrigin(0.5).setVisible(false);
-
         this.layout(viewport);
     }
 
     /**
-     * Re-derive the world→screen scale and reposition the HUD for the given
-     * viewport (portrait, any height). The HUD sits below the device's real
-     * cutout/status-bar inset — never less than the design doc's 8%.
+     * Re-derive the world→screen scale for the given viewport (portrait, any
+     * height) and refresh the brick-row colour sweep's idea of where the rows
+     * are. HUD positioning lives in ./Hud.ts.
      */
     layout(viewport: Viewport): void {
         const { width, height } = viewport;
@@ -188,25 +107,13 @@ export class PhaserRenderer implements RendererPort {
         // Same formula the scene derives the session's world height from — the
         // brick row sweep below must agree with where the rows really are.
         this.worldHeight = 100 * (height / width);
-
-        const bandHeight = hudTop(viewport, this.hudFontSize);
-        this.hudBandImage?.destroy();
-        this.hudBandImage = hudBand(this.scene, width, bandHeight);
-
-        const hudY = bandHeight * 0.5;
-        this.scoreText?.setPosition(width * 0.04, hudY);
-        this.waveText?.setPosition(width * 0.5, hudY);
-        this.ballText?.setPosition(width * 0.96, hudY);
-        this.comboText?.setPosition(width * 0.5, bandHeight + width * 0.06);
-        this.bannerText?.setPosition(width * 0.5, height * 0.4);
-        this.serveText?.setPosition(width * 0.5, height * 0.6);
     }
 
     /**
      * Brick destroyed: a small burst in the brick's own colour — the row sweep
      * comes from where the brick sits, exactly as it is drawn on screen.
      */
-    burstBrick(worldX: number, worldY: number, kind: string): void {
+    burstBrick(worldX: number, worldY: number, kind: BrickKind): void {
         const color = this.brickBase(kind, worldY);
         let spawned = 0;
         for (const p of this.particles) {
@@ -280,7 +187,7 @@ export class PhaserRenderer implements RendererPort {
             sprite.setVisible(true)
                 .setPosition(d.x * this.scaleX, d.y * this.scaleY)
                 .setDisplaySize(5 * this.scaleX, 5 * this.scaleY)
-                .setFillStyle(DROP_COLORS[d.kind]);
+                .setFillStyle(THEME.drops[d.kind]);
         }
 
         // --- particles ---
@@ -292,26 +199,6 @@ export class PhaserRenderer implements RendererPort {
             p.sprite.y += p.vy * dt;
             p.sprite.setAlpha(Math.max(0, p.life / 0.35));
             if (p.life <= 0) p.sprite.setVisible(false);
-        }
-
-        // --- HUD ---
-        this.scoreText.setText(String(snap.score));
-        this.ballText.setText('● ' + Math.max(0, snap.ballCount));
-        this.waveText.setText(`Wave ${snap.wave}`);
-
-        this.comboText.setVisible(snap.combo > 1);
-        if (snap.combo > 1) this.comboText.setText(`x${snap.combo}`);
-
-        // --- banner + serve countdown ---
-        if (snap.phase === 'banner') {
-            this.bannerText.setVisible(true).setText(`Wave ${snap.wave + 1}`);
-        } else {
-            this.bannerText.setVisible(false);
-        }
-        if (snap.phase === 'serving' && snap.timerSeconds > 0.05) {
-            this.serveText.setVisible(true).setText(String(Math.ceil(snap.timerSeconds)));
-        } else {
-            this.serveText.setVisible(false);
         }
 
         // --- screen shake ---
@@ -328,22 +215,23 @@ export class PhaserRenderer implements RendererPort {
     }
 
     /** Undamaged colour for a brick: the kind, swept by row for basics. */
-    private brickBase(kind: string, y: number): number {
+    private brickBase(kind: BrickKind, y: number): number {
         if (kind === 'basic') {
+            const rows = THEME.brickRows;
             const row = Math.round(
                 (y - this.worldHeight * BRICK_TOP_FRAC - BRICK_H / 2) / (BRICK_H + BRICK_GAP),
             );
-            const index = ((row % BASIC_ROW_COLORS.length) + BASIC_ROW_COLORS.length) % BASIC_ROW_COLORS.length;
-            return BASIC_ROW_COLORS[index];
+            const index = ((row % rows.length) + rows.length) % rows.length;
+            return rows[index];
         }
-        return BRICK_COLORS[kind] ?? 0xffffff;
+        return THEME.bricks[kind];
     }
 
-    private brickColor(kind: string, y: number, hp: number, maxHp: number): number {
+    private brickColor(kind: BrickKind, y: number, hp: number, maxHp: number): number {
         const base = this.brickBase(kind, y);
         if (hp >= maxHp) return base;
         // Dim towards grey as hp drops; a sturdy brick visibly changes colour.
-        return this.mix(base, 0x3a3a3c, (maxHp - hp) / maxHp);
+        return this.mix(base, THEME.brickDamaged, (maxHp - hp) / maxHp);
     }
 
     private mix(a: number, b: number, t: number): number {

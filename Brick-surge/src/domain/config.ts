@@ -17,7 +17,7 @@ export const PADDLE_WIDTH = 20;
 export const PADDLE_HEIGHT = 3;
 export const PADDLE_MIN_WIDTH = 12;    // hard floor — DDA can never go below this
 export const PADDLE_MAX_WIDTH = 30;
-export const PADDLE_BOTTOM_MARGIN = 8; // paddle centre is this far above the bottom
+export const PADDLE_BOTTOM_MARGIN = 12; // paddle centre is this far above the bottom
 
 export const SHIELD_Y_FRAC = 0.985;    // shield line sits just above the world bottom
 

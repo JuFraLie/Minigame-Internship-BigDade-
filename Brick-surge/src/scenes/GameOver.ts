@@ -5,14 +5,17 @@
  * here and nowhere else. Retry goes straight back to gameplay (no Play Screen
  * replay); Exit calls the bridge exit signal exactly once and does nothing else.
  *
- * Layout is in design units, fonts scale with width, and thumb-reachable
- * buttons stay at least ~44pt tall.
+ * The scene only wires things together: viewport.ts measures the screen,
+ * layout.ts stacks the elements (headline, stats, buttons) inside it,
+ * theme.ts provides colours and fonts, ui.ts draws the gradient buttons.
  */
 
 import Phaser from 'phaser';
 import type { AppContext } from '../app/AppContext.ts';
 import { applyRenderScale, measureViewport, VIEWPORT_CHANGED } from '../adapters/phaser/viewport.ts';
-import { backdrop, makeButton } from '../adapters/phaser/theme.ts';
+import { resultLayout } from '../adapters/phaser/layout.ts';
+import { backdrop, makeButton } from '../adapters/phaser/ui.ts';
+import { FONT, THEME } from '../adapters/phaser/theme.ts';
 
 export class GameOver extends Phaser.Scene {
     constructor() {
@@ -31,65 +34,57 @@ export class GameOver extends Phaser.Scene {
 
     create(): void {
         applyRenderScale(this);
-        const { width: w, height: h, safeTop } = measureViewport();
+        const viewport = measureViewport();
+        const { width: w, height: h } = viewport;
+        const layout = resultLayout(viewport);
 
         backdrop(this, w, h);
 
-        // Headline clears the cutout/status-bar inset.
-        const headlineY = Math.max(h * 0.3, safeTop + w * 0.16);
-        this.add.text(w / 2, headlineY, 'GAME OVER', {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${Math.round(w * 0.1)}px`,
+        this.add.text(w / 2, layout.headlineY, 'GAME OVER', {
+            fontFamily: FONT,
+            fontSize: `${layout.headlineSize}px`,
             fontStyle: 'bold',
-            color: '#ff453a',
-            stroke: '#ffd23f',
+            color: THEME.resultHeadline,
+            stroke: THEME.resultHeadlineStroke,
             strokeThickness: Math.max(3, Math.round(w * 0.014)),
         }).setOrigin(0.5);
 
-        this.add.text(w / 2, headlineY + h * 0.075, `Reached wave ${this.wave}`, {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${Math.round(w * 0.05)}px`,
+        this.add.text(w / 2, layout.waveY, `Reached wave ${this.wave}`, {
+            fontFamily: FONT,
+            fontSize: `${layout.waveSize}px`,
             fontStyle: 'bold',
-            color: '#ffd23f',
+            color: THEME.resultWave,
         }).setOrigin(0.5);
 
-        this.add.text(w / 2, headlineY + h * 0.145, `Score: ${this.score}`, {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${Math.round(w * 0.055)}px`,
-            color: '#64d2ff',
+        this.add.text(w / 2, layout.scoreY, `Score: ${this.score}`, {
+            fontFamily: FONT,
+            fontSize: `${layout.scoreSize}px`,
+            color: THEME.resultScore,
         }).setOrigin(0.5);
-
-        const btnW = w * 0.5;
-        const btnH = Math.max(h * 0.075, 44); // never below the ~44pt touch target
-        const btnFont = Math.round(w * 0.05);
 
         // Retry — straight back to gameplay, the Play Screen must not replay.
-        const retryY = headlineY + h * 0.22;
         const retry = makeButton(this, {
             x: w / 2,
-            y: retryY,
-            width: btnW,
-            height: btnH,
-            top: 0x30d158,
-            bottom: 0x0a9e5b,
+            y: layout.retryY,
+            width: layout.buttonWidth,
+            height: layout.buttonHeight,
+            gradient: THEME.retry,
             label: 'RETRY',
-            fontSize: btnFont,
+            fontSize: layout.buttonFontSize,
         });
         retry.image.on('pointerdown', () => {
             this.scene.start('Game', { ctx: this.ctx });
         });
 
         // Exit — the bridge signal fires exactly once and nothing else happens.
-        const exitY = retryY + h * 0.11;
         const exit = makeButton(this, {
             x: w / 2,
-            y: exitY,
-            width: btnW,
-            height: btnH,
-            top: 0x5e5ce6,
-            bottom: 0xaf52de,
+            y: layout.exitY,
+            width: layout.buttonWidth,
+            height: layout.buttonHeight,
+            gradient: THEME.exit,
             label: 'EXIT',
-            fontSize: btnFont,
+            fontSize: layout.buttonFontSize,
         });
         exit.image.on('pointerdown', () => {
             // Endless game: the host contract wants `win: true` (jsbridge.ts §exit).

@@ -1,19 +1,31 @@
 /**
  * MainMenu — the Play Screen (AGENTS.md §2).
  *
- * Shows the title, a Play button, and a 2-sentence how-to. Tapping anywhere
- * also starts. Fires `launch` (once per session, guarded inside the bridge
- * adapter) and then hands over to the Game scene.
+ * Shows the title, a Play button, and a short how-to in Bahasa Indonesia.
+ * Tapping anywhere also starts. Fires `launch` (once per session, guarded
+ * inside the bridge adapter) and then hands over to the Game scene.
  *
- * Layout is in design units (CSS pixels of the portrait playfield); the camera zoom makes
- * the canvas sharp on a high-density phone. Fonts scale with the width, so any
- * portrait phone from a small 720p to a tall 21:9 gets a sensible layout.
+ * The scene only wires things together: viewport.ts measures the screen,
+ * layout.ts says where each element goes (and how wide the how-to may be),
+ * theme.ts provides colours and fonts, ui.ts draws the gradient button.
  */
 
 import Phaser from 'phaser';
 import type { AppContext } from '../app/AppContext.ts';
 import { applyRenderScale, measureViewport, VIEWPORT_CHANGED } from '../adapters/phaser/viewport.ts';
-import { backdrop, makeButton } from '../adapters/phaser/theme.ts';
+import { menuLayout } from '../adapters/phaser/layout.ts';
+import { backdrop, makeButton } from '../adapters/phaser/ui.ts';
+import { FONT, THEME } from '../adapters/phaser/theme.ts';
+
+/**
+ * The how-to: two short sentences in Bahasa Indonesia. On a narrow phone the
+ * old long English line ran off both edges of the screen — layout.ts caps the
+ * wrap width, so every line now stays inside the playfield.
+ */
+const HOW_TO = [
+    'Geser jari untuk menggerakkan paddle.',
+    'Tangkap tetesan kuning untuk menambah bola!',
+].join('\n');
 
 export class MainMenu extends Phaser.Scene {
     constructor() {
@@ -33,45 +45,41 @@ export class MainMenu extends Phaser.Scene {
     create(): void {
         this.started = false;
         applyRenderScale(this);
-        const { width: w, height: h, safeTop } = measureViewport();
+        const viewport = measureViewport();
+        const { width: w, height: h } = viewport;
+        const layout = menuLayout(viewport);
 
         backdrop(this, w, h);
 
-        const titleSize = Math.round(w * 0.11);
-        const bodySize = Math.round(w * 0.045);
-
-        // The title starts below the real cutout/status-bar inset.
-        const titleY = Math.max(h * 0.28, safeTop + titleSize * 1.5);
-        this.add.text(w / 2, titleY, 'BRICKSURGE', {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${titleSize}px`,
+        this.add.text(w / 2, layout.titleY, 'BRICKSURGE', {
+            fontFamily: FONT,
+            fontSize: `${layout.titleSize}px`,
             fontStyle: 'bold',
-            color: '#ffd23f',
-            stroke: '#af52de',
-            strokeThickness: Math.max(2, Math.round(titleSize * 0.08)),
+            color: THEME.title,
+            stroke: THEME.titleStroke,
+            strokeThickness: Math.max(2, Math.round(layout.titleSize * 0.08)),
         }).setOrigin(0.5);
 
-        this.add.text(w / 2, titleY + h * 0.1, 'Drag to move the paddle — catch the yellow drops\nto add balls. Endless waves: when the balls are gone, it\u2019s over!', {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${bodySize}px`,
-            color: '#e6e9ff',
+        this.add.text(w / 2, layout.howToY, HOW_TO, {
+            fontFamily: FONT,
+            fontSize: `${layout.howToSize}px`,
+            color: THEME.howTo,
             align: 'center',
             lineSpacing: 8,
+            wordWrap: { width: layout.howToWrapWidth },
         }).setOrigin(0.5);
 
         // Play button — a clear start action, as required by the flow. Big
-        // enough for a thumb: ~50% of width, ~8% of height.
-        const btnY = titleY + h * 0.28;
+        // enough for a thumb: ~50% of width, ~8% of height (layout.ts).
         const play = makeButton(this, {
             x: w / 2,
-            y: btnY,
-            width: w * 0.5,
-            height: Math.max(h * 0.07, 44), // never below the ~44pt touch target
-            top: 0xffd23f,
-            bottom: 0xff9500,
+            y: layout.playY,
+            width: layout.playWidth,
+            height: layout.playHeight,
+            gradient: THEME.play,
             label: 'PLAY',
-            fontSize: Math.round(w * 0.06),
-            labelColor: '#101426',
+            fontSize: layout.playFontSize,
+            labelColor: THEME.buttonLabelWarm,
         });
 
         const start = (): void => {

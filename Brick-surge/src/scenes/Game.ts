@@ -1,14 +1,18 @@
 /**
- * Game — the round scene. Drives the domain loop and forwards snapshots to the
- * renderer; contains no game logic of its own (AGENTS.md §4.3).
+ * Game — the round scene. Wires the domain loop to the view pieces and holds
+ * no game logic of its own (AGENTS.md §4.3). Each concern lives elsewhere:
  *
- * HUD: live score, ball count, wave, and a Pause button. The pause overlay offers
- * Resume only — no restart, no exit (AGENTS.md §2).
+ *   - GameSession (domain) — the simulation, advanced once per frame.
+ *   - PhaserRenderer (adapter) — draws the world: paddle, balls, bricks, drops.
+ *   - Hud (adapter) — draws the score/wave/ball readouts and banners.
+ *   - PauseMenu (adapter) — the pause button and the resume overlay.
+ *   - PhaserInput (adapter) — relative drag → paddle target X.
  *
- * All layout is in design units (CSS pixels of the portrait playfield) — the camera zoom
- * handles the backing-store density, so the canvas is sharp on a phone and the
- * maths stays readable. A window resize (URL bar collapsing, split screen) is
- * adopted live: the world keeps its aspect and the HUD re-positions.
+ * All layout is in design units (CSS pixels of the portrait playfield) — the
+ * camera zoom handles the backing-store density, so the canvas is sharp on a
+ * phone and the maths stays readable. A window resize (URL bar collapsing,
+ * split screen) is adopted live: the world keeps its aspect and the UI
+ * re-positions.
  */
 
 import Phaser from 'phaser';
@@ -16,11 +20,13 @@ import type { AppContext } from '../app/AppContext.ts';
 import { GameSession } from '../domain/GameSession.ts';
 import { PhaserRenderer } from '../adapters/phaser/PhaserRenderer.ts';
 import { PhaserInput } from '../adapters/phaser/PhaserInput.ts';
+import { Hud } from '../adapters/phaser/Hud.ts';
+import { PauseMenu } from '../adapters/phaser/PauseMenu.ts';
 import {
-    applyRenderScale, hudTop, measureViewport, VIEWPORT_CHANGED, type Viewport,
+    applyRenderScale, measureViewport, VIEWPORT_CHANGED, type Viewport,
 } from '../adapters/phaser/viewport.ts';
-import { backdrop, makeButton, THEME } from '../adapters/phaser/theme.ts';
-import type { DomainEvent } from '../domain/types.ts';
+import { backdrop } from '../adapters/phaser/ui.ts';
+import type { DomainEvent, WorldSnapshot } from '../domain/types.ts';
 
 export class Game extends Phaser.Scene {
     constructor() {
@@ -34,33 +40,36 @@ export class Game extends Phaser.Scene {
     private ctx!: AppContext;
     private session!: GameSession;
     private worldRenderer!: PhaserRenderer;
+    private hud!: Hud;
+    private pauseMenu!: PauseMenu;
     private paddleInput!: PhaserInput;
     private paused = false;
-    private overlay!: Phaser.GameObjects.Container;
     private unsubscribe: (() => void) | null = null;
     /** Guards against double-firing endRound / scene switch. */
     private ended = false;
     private viewport!: Viewport;
     /** World height in world units, recomputed from the viewport aspect. */
     private worldHeight = 200;
-    /** Scene-owned UI (background, pause button) — rebuilt on viewport change.
-     *  The renderer's sprites live in the same display list and must survive. */
-    private ownUi: Phaser.GameObjects.GameObject[] = [];
+    /** Scene-owned background — repositioned on viewport change. */
+    private background!: Phaser.GameObjects.Image;
 
     create(): void {
         this.viewport = measureViewport();
         applyRenderScale(this);
         const { width: w, height: h } = this.viewport;
 
-        const bg = backdrop(this, w, h);
-        bg.setDepth(-10);
-        this.ownUi = [bg];
+        this.background = backdrop(this, w, h);
+        this.background.setDepth(-10);
 
         // A fresh session per round; the DDA is shared via the context so it
         // keeps what it learned across Retries in this session (nothing is stored).
         this.session = new GameSession(this.ctx.random, this.ctx.clock, this.ctx.bus, this.ctx.dda);
+
         this.worldRenderer = new PhaserRenderer(this);
         this.worldRenderer.create(this.viewport);
+        this.hud = new Hud(this);
+        this.hud.create(this.viewport);
+
         this.ended = false;
         this.paused = false;
 
@@ -71,19 +80,14 @@ export class Game extends Phaser.Scene {
         // Domain events → renderer FX and the bridge.
         this.unsubscribe = this.ctx.bus.subscribe((e) => this.onDomainEvent(e));
 
-        // Touch input: relative horizontal drag, anywhere on screen. Pointer
-        // coordinates are in backing-store pixels, so the conversion divides
-        // by the design width times the density.
-        let paddleTargetX = 50; // world centre
-        const unitsPerPixel = (): number => 100 / (this.viewport.width * this.worldRenderer.densityScale);
-        this.paddleInput = new PhaserInput(this, unitsPerPixel, (dx) => {
-            paddleTargetX = Math.max(0, Math.min(100, paddleTargetX + dx));
-            this.session.setPaddleTargetX(paddleTargetX);
-        });
+        this.paddleInput = this.createPaddleInput();
         this.paddleInput.setEnabled(true);
 
-        this.buildPauseButton();
-        this.buildPauseOverlay();
+        this.pauseMenu = new PauseMenu(this, {
+            onPause: () => this.setPaused(true),
+            onResume: () => this.setPaused(false),
+        });
+        this.pauseMenu.build(this.viewport);
 
         // Every round start, including Retry, reports startRound (AGENTS.md §4.2).
         this.ctx.bridge.signalStartRound();
@@ -101,7 +105,31 @@ export class Game extends Phaser.Scene {
     update(_time: number, deltaMs: number): void {
         if (this.paused || this.ended) return;
         this.session.update(deltaMs / 1000);
-        this.worldRenderer.render(this.session.snapshot());
+        this.render(this.session.snapshot());
+    }
+
+    // ---- input ----
+
+    /**
+     * Touch input: a relative horizontal drag moves the paddle, anywhere on
+     * screen. Pointer coordinates are in backing-store pixels, so the
+     * conversion divides by the design width times the density.
+     */
+    private createPaddleInput(): PhaserInput {
+        let paddleTargetX = 50; // world centre
+        const unitsPerPixel = (): number => 100 / (this.viewport.width * this.worldRenderer.densityScale);
+        return new PhaserInput(this, unitsPerPixel, (dx) => {
+            paddleTargetX = Math.max(0, Math.min(100, paddleTargetX + dx));
+            this.session.setPaddleTargetX(paddleTargetX);
+        });
+    }
+
+    // ---- frame ----
+
+    /** Forward the snapshot to the two view pieces: world first, HUD on top. */
+    private render(snap: WorldSnapshot): void {
+        this.worldRenderer.render(snap);
+        this.hud.render(snap);
     }
 
     // ---- domain events ----
@@ -141,56 +169,10 @@ export class Game extends Phaser.Scene {
 
     // ---- pause (resume only) ----
 
-    private buildPauseButton(): void {
-        const { width: w } = this.viewport;
-        // Just under the HUD band, clear of any cutout.
-        const y = hudTop(this.viewport, Math.round(w * 0.045)) + w * 0.055;
-        const size = w * 0.09;
-        const btn = this.add.circle(w * 0.92, y, size / 2, THEME.accent)
-            .setInteractive({ useHandCursor: true });
-        const label = this.add.text(w * 0.92, y, 'II', {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${Math.round(w * 0.04)}px`,
-            fontStyle: 'bold',
-            color: '#ffffff',
-        }).setOrigin(0.5);
-        btn.on('pointerdown', () => this.setPaused(true));
-        this.ownUi.push(btn, label);
-    }
-
-    private buildPauseOverlay(): void {
-        const { width: w, height: h } = this.viewport;
-        this.overlay = this.add.container(0, 0).setVisible(false);
-
-        const dim = this.add.rectangle(w / 2, h / 2, w, h, 0x1b1140, 0.7);
-        const label = this.add.text(w / 2, h * 0.4, 'PAUSED', {
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: `${Math.round(w * 0.09)}px`,
-            fontStyle: 'bold',
-            color: '#ffd23f',
-            stroke: '#af52de',
-            strokeThickness: Math.max(3, Math.round(w * 0.014)),
-        }).setOrigin(0.5);
-
-        // Resume only — no restart, no exit.
-        const resume = makeButton(this, {
-            x: w / 2,
-            y: h * 0.55,
-            width: w * 0.5,
-            height: Math.max(h * 0.07, 44), // never below the ~44pt touch target
-            top: 0x0a84ff,
-            bottom: 0x64d2ff,
-            label: 'RESUME',
-            fontSize: Math.round(w * 0.05),
-        });
-        resume.image.on('pointerdown', () => this.setPaused(false));
-        this.overlay.add([dim, label, resume.image, resume.label]);
-    }
-
     private setPaused(paused: boolean): void {
         if (this.ended) return;
         this.paused = paused;
-        this.overlay.setVisible(paused);
+        this.pauseMenu.setVisible(paused);
         this.paddleInput.setEnabled(!paused);
     }
 
@@ -206,19 +188,11 @@ export class Game extends Phaser.Scene {
         const { width: w, height: h } = this.viewport;
         this.worldHeight = 100 * (h / w);
         this.session.resize(this.worldHeight);
+
         this.worldRenderer.layout(this.viewport);
-
-        // Destroy only what this scene owns; the renderer's pooled sprites stay.
-        for (const obj of this.ownUi) obj.destroy();
-        this.ownUi = [];
-        this.overlay.destroy();
-
-        const bg = backdrop(this, w, h);
-        // Re-added after the renderer's sprites, so push it behind them again.
-        bg.setDepth(-10);
-        this.ownUi.push(bg);
-        this.buildPauseButton();
-        this.buildPauseOverlay();
-        this.overlay.setVisible(this.paused);
+        this.hud.layout(this.viewport);
+        this.background.setPosition(w / 2, h / 2).setDisplaySize(w, h);
+        this.pauseMenu.build(this.viewport);
+        this.pauseMenu.setVisible(this.paused);
     }
 }

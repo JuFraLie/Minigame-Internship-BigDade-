@@ -42,11 +42,18 @@ Strict hexagonal architecture across the whole codebase (AGENTS.md §4.3):
 
 - `src/domain/` — pure TypeScript. Game world, physics, waves, power-ups, DDA,
   scoring and the round state machine. No Phaser, no DOM, runs headless.
-- `src/adapters/` — concrete implementations of the domain ports: the Phaser
-  renderer and input, the host bridge (`window.MpPostMessage` lives only in
-  `bridge/jsbridge.ts`), seeded/system RNG, system clock, event bus.
+- `src/adapters/` — concrete implementations of the domain ports: the host
+  bridge (`window.MpPostMessage` lives only in `bridge/jsbridge.ts`), seeded
+  and system RNG, system clock, event bus. The Phaser presentation side is
+  split by concern into one-job modules: `viewport.ts` measures the device,
+  `theme.ts` holds the palette and fonts (pure data), `layout.ts` computes
+  where every screen element goes (pure maths, unit tested), `ui.ts` draws
+  gradients, buttons and the backdrop, `PhaserRenderer.ts` maps the world half
+  of each snapshot to sprites, `Hud.ts` draws the screen half (score, banners),
+  and `PauseMenu.ts` owns the pause button + overlay.
 - `src/scenes/` — Phaser scenes for the mandatory flow: `MainMenu` (Play
   Screen), `Game` (round + resume-only pause), `GameOver` (Result Panel).
+  Scenes only wire things together: measure, lay out, build, hook up events.
 - `src/main.ts` — the composition root; the only place adapters are wired to
   ports.
 

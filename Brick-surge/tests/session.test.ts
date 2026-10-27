@@ -127,7 +127,10 @@ describe('GameSession (headless)', () => {
 
     it('is endless: a good player sails past wave 3 without the run ending', () => {
         const { session, clock, sink } = setup();
-        run(session, clock, 400);
+        // Generous budget: waves get denser (and the paddle sits well above the
+        // bottom edge), so later clears take longer — the assertion is steady
+        // progress, not a speed run.
+        run(session, clock, 600);
         const lastWave = Math.max(0, ...sink.events
             .filter((e) => e.type === 'waveCleared')
             .map((e) => (e.type === 'waveCleared' ? e.wave : 0)));
