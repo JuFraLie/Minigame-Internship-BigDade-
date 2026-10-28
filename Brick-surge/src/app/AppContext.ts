@@ -6,7 +6,7 @@
  * Scenes never construct adapters themselves.
  */
 
-import type { GameSignalsPort, ClockPort, RandomPort } from '../domain/ports.ts';
+import type { GameSignalsPort, ClockPort, RandomPort, SoundPort } from '../domain/ports.ts';
 import type { DdaController } from '../domain/dda/DdaController.ts';
 import type { EventBus } from '../adapters/events/EventBus.ts';
 
@@ -16,6 +16,8 @@ export interface AppContext {
     bus: EventBus;
     random: RandomPort;
     clock: ClockPort;
+    /** Procedural sound effects — mute state is session-wide like the DDA. */
+    sound: SoundPort;
     /** Final result of the last finished run — used by the exit payload. */
     lastWave: number;
     lastScore: number;

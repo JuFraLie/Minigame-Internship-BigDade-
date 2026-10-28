@@ -9,6 +9,7 @@ import Phaser from 'phaser';
 import { waitForBridge } from './adapters/bridge/jsbridge.ts';
 import { MpBridge } from './adapters/bridge/MpBridge.ts';
 import { EventBus } from './adapters/events/EventBus.ts';
+import { WebAudioSynth } from './adapters/audio/WebAudioSynth.ts';
 import { MathRandom } from './adapters/random/MathRandom.ts';
 import { SystemClock } from './adapters/clock/SystemClock.ts';
 import { DdaController } from './domain/dda/DdaController.ts';
@@ -33,9 +34,16 @@ async function boot(parent: string): Promise<void> {
         bus: new EventBus(),
         random: new MathRandom(),
         clock,
+        sound: new WebAudioSynth(),
         lastWave: 0,
         lastScore: 0,
     };
+
+    // Browsers only start audio inside a user gesture (iOS refuses outright).
+    // The capture phase runs before Phaser's own pointer handlers, so the very
+    // first tap of the run both unlocks audio and can already be heard.
+    const unlockAudio = (): void => ctx.sound.unlock();
+    window.addEventListener('pointerdown', unlockAudio, { capture: true, once: true });
 
     const size = measureViewport(); // portrait playfield, not necessarily the whole window
     const density = renderScale();

@@ -44,7 +44,9 @@ Strict hexagonal architecture across the whole codebase (AGENTS.md §4.3):
   scoring and the round state machine. No Phaser, no DOM, runs headless.
 - `src/adapters/` — concrete implementations of the domain ports: the host
   bridge (`window.MpPostMessage` lives only in `bridge/jsbridge.ts`), seeded
-  and system RNG, system clock, event bus. The Phaser presentation side is
+  and system RNG, system clock, event bus, and `audio/WebAudioSynth.ts` — the
+  sound effects, every note synthesized with WebAudio (like the textures, the
+  game ships no media files at all). The Phaser presentation side is
   split by concern into one-job modules: `viewport.ts` measures the device,
   `theme.ts` holds the palette and fonts (pure data), `layout.ts` computes
   where every screen element goes (pure maths, unit tested), `ui.ts` draws

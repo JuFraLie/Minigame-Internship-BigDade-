@@ -24,6 +24,11 @@ export interface MenuLayout {
     /** Never below the ~44pt touch target. */
     playHeight: number;
     playFontSize: number;
+    /** Round sound toggle in the top-left corner, below the cutout. */
+    soundButtonX: number;
+    soundButtonY: number;
+    /** Never below the ~44pt touch target. */
+    soundButtonSize: number;
 }
 
 export function menuLayout(viewport: Viewport): MenuLayout {
@@ -41,6 +46,9 @@ export function menuLayout(viewport: Viewport): MenuLayout {
         playWidth: w * 0.5,
         playHeight: Math.max(h * 0.07, 44),
         playFontSize: Math.round(w * 0.06),
+        soundButtonX: w * 0.1,
+        soundButtonY: safeTop + w * 0.1,
+        soundButtonSize: Math.max(w * 0.12, 44),
     };
 }
 
@@ -94,10 +102,18 @@ export interface PauseLayout {
     /** Never below the ~44pt touch target. */
     resumeHeight: number;
     resumeFontSize: number;
+    /** Round sound toggle, centred below the resume button. */
+    soundButtonX: number;
+    soundButtonY: number;
+    /** Never below the ~44pt touch target. */
+    soundButtonSize: number;
 }
 
 export function pauseLayout(viewport: Viewport): PauseLayout {
     const { width: w, height: h } = viewport;
+    const resumeY = h * 0.55;
+    const resumeHeight = Math.max(h * 0.07, 44);
+    const soundButtonSize = Math.max(w * 0.15, 44);
     return {
         // Just under the HUD band, clear of any cutout.
         pauseButtonX: w * 0.92,
@@ -106,10 +122,13 @@ export function pauseLayout(viewport: Viewport): PauseLayout {
         pauseButtonFontSize: Math.round(w * 0.04),
         labelSize: Math.round(w * 0.09),
         labelY: h * 0.4,
-        resumeY: h * 0.55,
+        resumeY,
         resumeWidth: w * 0.5,
-        resumeHeight: Math.max(h * 0.07, 44),
+        resumeHeight,
         resumeFontSize: Math.round(w * 0.05),
+        soundButtonX: w * 0.5,
+        soundButtonY: resumeY + resumeHeight / 2 + w * 0.06 + soundButtonSize / 2,
+        soundButtonSize,
     };
 }
 

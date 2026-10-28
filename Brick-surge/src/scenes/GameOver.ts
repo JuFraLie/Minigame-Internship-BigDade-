@@ -73,6 +73,7 @@ export class GameOver extends Phaser.Scene {
             fontSize: layout.buttonFontSize,
         });
         retry.image.on('pointerdown', () => {
+            this.ctx.sound.play('click');
             this.scene.start('Game', { ctx: this.ctx });
         });
 
@@ -87,6 +88,7 @@ export class GameOver extends Phaser.Scene {
             fontSize: layout.buttonFontSize,
         });
         exit.image.on('pointerdown', () => {
+            this.ctx.sound.play('click');
             // Endless game: the host contract wants `win: true` (jsbridge.ts §exit).
             this.ctx.bridge.signalExit(true, this.score);
         });

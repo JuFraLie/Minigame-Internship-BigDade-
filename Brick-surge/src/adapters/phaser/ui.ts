@@ -126,6 +126,40 @@ export function makeButton(scene: Phaser.Scene, options: ButtonOptions): ButtonP
     return { image, label: text };
 }
 
+export interface IconParts {
+    image: Phaser.GameObjects.Arc;
+    label: Phaser.GameObjects.Text;
+}
+
+/**
+ * A round icon button — the flat counterpart to the gradient makeButton, used
+ * for the corner controls (pause, sound). Returned as loose parts so a scene
+ * can re-parent them into an overlay, exactly like makeButton.
+ */
+export function makeIconButton(scene: Phaser.Scene, options: {
+    x: number;
+    y: number;
+    /** Diameter in design units. */
+    size: number;
+    color: number;
+    glyph: string;
+    fontSize?: number;
+}): IconParts {
+    const image = scene.add.circle(options.x, options.y, options.size / 2, options.color)
+        .setInteractive({ useHandCursor: true });
+    const label = scene.add.text(options.x, options.y, options.glyph, {
+        fontFamily: FONT,
+        fontSize: `${options.fontSize ?? Math.round(options.size * 0.5)}px`,
+        color: THEME.buttonLabel,
+    }).setOrigin(0.5);
+    return { image, label };
+}
+
+/** Speaker glyphs for the sound toggle — emoji read instantly at any size. */
+export function soundGlyph(muted: boolean): string {
+    return muted ? '🔇' : '🔊';
+}
+
 const BACKDROP_KEY = 'bricksurge:backdrop';
 
 /**

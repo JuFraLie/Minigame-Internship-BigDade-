@@ -5,8 +5,10 @@
  *   - GameSession (domain) — the simulation, advanced once per frame.
  *   - PhaserRenderer (adapter) — draws the world: paddle, balls, bricks, drops.
  *   - Hud (adapter) — draws the score/wave/ball readouts and banners.
- *   - PauseMenu (adapter) — the pause button and the resume overlay.
+ *   - PauseMenu (adapter) — the pause button, resume overlay, sound toggle.
  *   - PhaserInput (adapter) — relative drag → paddle target X.
+ *   - SoundPort (adapter) — procedural effects, fired straight from the
+ *     domain events below (paddle, bricks, pickups, fanfare, game over).
  *
  * All layout is in design units (CSS pixels of the portrait playfield) — the
  * camera zoom handles the backing-store density, so the canvas is sharp on a
@@ -52,6 +54,8 @@ export class Game extends Phaser.Scene {
     private worldHeight = 200;
     /** Scene-owned background — repositioned on viewport change. */
     private background!: Phaser.GameObjects.Image;
+    /** Last serve-countdown number a tick was played for (0 = none). */
+    private lastCountdownTick = 0;
 
     create(): void {
         this.viewport = measureViewport();
@@ -72,6 +76,7 @@ export class Game extends Phaser.Scene {
 
         this.ended = false;
         this.paused = false;
+        this.lastCountdownTick = 0;
 
         // World height in world units: 100 wide, height follows the aspect ratio.
         this.worldHeight = 100 * (h / w);
@@ -86,6 +91,7 @@ export class Game extends Phaser.Scene {
         this.pauseMenu = new PauseMenu(this, {
             onPause: () => this.setPaused(true),
             onResume: () => this.setPaused(false),
+            sound: this.ctx.sound,
         });
         this.pauseMenu.build(this.viewport);
 
@@ -105,7 +111,22 @@ export class Game extends Phaser.Scene {
     update(_time: number, deltaMs: number): void {
         if (this.paused || this.ended) return;
         this.session.update(deltaMs / 1000);
-        this.render(this.session.snapshot());
+        const snap = this.session.snapshot();
+        this.render(snap);
+        this.tickServeCountdown(snap);
+    }
+
+    /** A soft tick on every new serve-countdown number (3, 2, 1). */
+    private tickServeCountdown(snap: WorldSnapshot): void {
+        if (snap.phase !== 'serving') {
+            this.lastCountdownTick = 0;
+            return;
+        }
+        const n = Math.ceil(snap.timerSeconds);
+        if (n > 0 && n !== this.lastCountdownTick) {
+            this.lastCountdownTick = n;
+            this.ctx.sound.play('tick');
+        }
     }
 
     // ---- input ----
@@ -136,18 +157,41 @@ export class Game extends Phaser.Scene {
 
     private onDomainEvent(e: DomainEvent): void {
         switch (e.type) {
-            case 'brickHit':
+            case 'paddleHit':
+                this.ctx.sound.play('paddle');
+                break;
+            case 'brickHit': {
+                // Brick pitch follows the row: 1 = top of the field (high),
+                // 0 = bottom — the classic Breakout "the higher, the tinklier".
+                const pitch = Math.max(0, Math.min(1, 1 - e.y / this.worldHeight));
                 if (e.destroyed) {
                     this.worldRenderer.burstBrick(e.x, e.y, e.kind);
+                    this.ctx.sound.play('brickBreak', { pitch });
+                } else {
+                    this.ctx.sound.play('brickHit', { pitch });
                 }
                 break;
+            }
             case 'ballLost':
                 // With a full volley the shakes would chain into constant noise;
                 // save the feedback for the moment it actually matters — the
                 // last ball (one more miss = game over).
                 if (e.ballsLeft <= 1) this.worldRenderer.triggerShake();
+                this.ctx.sound.play('lost');
+                break;
+            case 'ballSaved':
+                this.ctx.sound.play('saved');
+                break;
+            case 'waveCleared':
+                this.ctx.sound.play('wave');
+                break;
+            case 'powerUpCollected':
+                // PowerUpKind doubles as its SoundName — each pickup has its
+                // own motif (multi is the happy one, shrink the buzzy down).
+                this.ctx.sound.play(e.kind);
                 break;
             case 'roundEnded':
+                this.ctx.sound.play('gameOver');
                 this.finishRound(e.wave, e.score);
                 break;
             default:

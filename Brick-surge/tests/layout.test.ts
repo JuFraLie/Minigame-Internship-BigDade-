@@ -28,6 +28,13 @@ test('menu layout keeps every element on screen and below the cutout', () => {
             l.howToWrapWidth > 0 && l.howToWrapWidth < v.width,
             'how-to wraps inside the screen (it used to run off both edges)',
         );
+        assert.ok(l.soundButtonY - l.soundButtonSize / 2 >= v.safeTop, 'sound toggle clears the cutout');
+        assert.ok(l.soundButtonX + l.soundButtonSize / 2 <= v.width, 'sound toggle stays on screen');
+        assert.ok(l.soundButtonSize >= 44, 'sound toggle is a ~44pt touch target');
+        assert.ok(
+            l.soundButtonY + l.soundButtonSize / 2 < l.titleY - l.titleSize / 2,
+            'sound toggle clears the title',
+        );
     }
 });
 
@@ -53,6 +60,12 @@ test('pause layout sits below the HUD band and keeps resume on screen', () => {
         assert.ok(l.labelY < l.resumeY, 'PAUSED sits above RESUME');
         assert.ok(l.resumeY + l.resumeHeight / 2 <= v.height, 'resume fully on screen');
         assert.ok(l.resumeHeight >= 44, 'resume is a ~44pt touch target');
+        assert.ok(
+            l.soundButtonY - l.soundButtonSize / 2 >= l.resumeY + l.resumeHeight / 2,
+            'sound toggle sits below RESUME',
+        );
+        assert.ok(l.soundButtonY + l.soundButtonSize / 2 <= v.height, 'sound toggle fully on screen');
+        assert.ok(l.soundButtonSize >= 44, 'sound toggle is a ~44pt touch target');
     }
 });
 

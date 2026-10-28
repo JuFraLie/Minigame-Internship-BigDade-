@@ -14,7 +14,7 @@ import Phaser from 'phaser';
 import type { AppContext } from '../app/AppContext.ts';
 import { applyRenderScale, measureViewport, VIEWPORT_CHANGED } from '../adapters/phaser/viewport.ts';
 import { menuLayout } from '../adapters/phaser/layout.ts';
-import { backdrop, makeButton } from '../adapters/phaser/ui.ts';
+import { backdrop, makeButton, makeIconButton, soundGlyph } from '../adapters/phaser/ui.ts';
 import { FONT, THEME } from '../adapters/phaser/theme.ts';
 
 /**
@@ -51,6 +51,24 @@ export class MainMenu extends Phaser.Scene {
 
         backdrop(this, w, h);
 
+        // Sound toggle — top-left corner, below the cutout and clear of the
+        // centred title (layout.ts guarantees both).
+        const soundButton = makeIconButton(this, {
+            x: layout.soundButtonX,
+            y: layout.soundButtonY,
+            size: layout.soundButtonSize,
+            color: THEME.pauseButton,
+            glyph: soundGlyph(this.ctx.sound.muted),
+            fontSize: Math.round(layout.soundButtonSize * 0.55),
+        });
+        soundButton.image.on('pointerdown', () => {
+            // Flip first: unmuting can then confirm with a click, muting
+            // silences that same click — either way the feedback matches.
+            this.ctx.sound.setMuted(!this.ctx.sound.muted);
+            soundButton.label.setText(soundGlyph(this.ctx.sound.muted));
+            this.ctx.sound.play('click');
+        });
+
         this.add.text(w / 2, layout.titleY, 'BRICKSURGE', {
             fontFamily: FONT,
             fontSize: `${layout.titleSize}px`,
@@ -85,6 +103,10 @@ export class MainMenu extends Phaser.Scene {
         const start = (): void => {
             if (this.started) return;
             this.started = true;
+            // First tap of the run: start the audio device inside the gesture
+            // (window capture in main.ts usually beat us to it — belt and braces).
+            this.ctx.sound.unlock();
+            this.ctx.sound.play('click');
             // `launch` fires here — exactly once, after the player presses Play.
             this.ctx.bridge.signalLaunch();
             this.scene.start('Game', { ctx: this.ctx });
