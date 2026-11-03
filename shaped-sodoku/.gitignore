@@ -1,0 +1,6 @@
+node_modules/
+# dist/ is committed on purpose, matching the sibling games (park-puzzle,
+# rps-brawl, last-bullet, Brick-surge, serpent_rogue): the built output is what
+# actually gets served. Always refresh it with `npm run build`.
+*.local
+.vite/
