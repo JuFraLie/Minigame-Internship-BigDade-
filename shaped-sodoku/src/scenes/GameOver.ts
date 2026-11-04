@@ -40,7 +40,7 @@ export class GameOver extends Phaser.Scene {
         this.add.image(0, 0, 'background-wash').setOrigin(0).setDisplaySize(width, height);
 
         const panelWidth = width * 0.84;
-        const panelHeight = height * 0.5;
+        const panelHeight = height * 0.56;
         const panelTop = (height - panelHeight) / 2;
 
         const panel = this.add.graphics();
@@ -49,28 +49,31 @@ export class GameOver extends Phaser.Scene {
         panel.lineStyle(4, win ? PALETTE.button : PALETTE.danger, 0.85);
         panel.strokeRoundedRect(width / 2 - panelWidth / 2, panelTop, panelWidth, panelHeight, 22);
 
+        // Vertical rhythm inside the panel: icon, verdict, level, score caption, score, then
+        // the two buttons. The fractions are spaced so the big score figure keeps air both
+        // above and below it instead of sitting on top of the primary button.
         const iconSize = width * 0.16;
         this.add
-            .image(width / 2, panelTop + panelHeight * 0.16, shapeTextureKey(win ? 3 : 5, win ? 'normal' : 'surprised'))
+            .image(width / 2, panelTop + panelHeight * 0.145, shapeTextureKey(win ? 3 : 5, win ? 'normal' : 'surprised'))
             .setDisplaySize(iconSize, iconSize);
 
-        addLabel(this, width / 2, panelTop + panelHeight * 0.33, win ? 'You Win!' : 'Out of Hearts', {
+        addLabel(this, width / 2, panelTop + panelHeight * 0.305, win ? 'You Win!' : 'Out of Hearts', {
             fontSize: `${Math.round(width * 0.085)}px`,
             fontStyle: 'bold',
             color: win ? '#74d9c6' : '#ff8fa0',
         });
 
-        addLabel(this, width / 2, panelTop + panelHeight * 0.45, `Level ${level}`, {
+        addLabel(this, width / 2, panelTop + panelHeight * 0.425, `Level ${level}`, {
             fontSize: `${Math.round(width * 0.038)}px`,
             color: '#b9b3d8',
         });
 
-        addLabel(this, width / 2, panelTop + panelHeight * 0.55, 'Score', {
+        addLabel(this, width / 2, panelTop + panelHeight * 0.525, 'Score', {
             fontSize: `${Math.round(width * 0.034)}px`,
             color: '#b9b3d8',
         });
-        addLabel(this, width / 2, panelTop + panelHeight * 0.65, formatScore(score), {
-            fontSize: `${Math.round(width * 0.11)}px`,
+        addLabel(this, width / 2, panelTop + panelHeight * 0.645, formatScore(score), {
+            fontSize: `${Math.round(width * 0.1)}px`,
             fontStyle: 'bold',
             color: '#fdf4e6',
         });
@@ -82,7 +85,7 @@ export class GameOver extends Phaser.Scene {
         // Win offers Next Level; a loss offers Retry, straight back into gameplay.
         createButton(this, {
             x: width / 2,
-            y: panelTop + panelHeight * 0.79,
+            y: panelTop + panelHeight * 0.795,
             width: buttonWidth,
             height: buttonHeight,
             label: win ? 'NEXT LEVEL' : 'RETRY',
@@ -94,7 +97,7 @@ export class GameOver extends Phaser.Scene {
 
         createButton(this, {
             x: width / 2,
-            y: panelTop + panelHeight * 0.92,
+            y: panelTop + panelHeight * 0.925,
             width: buttonWidth * 0.72,
             height: buttonHeight * 0.8,
             label: 'EXIT',

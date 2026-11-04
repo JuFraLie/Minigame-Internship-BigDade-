@@ -145,6 +145,13 @@ which is exactly what the tests exercise.
   style **at construction**, because Phaser stamps `frame.source.resolution` exactly once
   while the Text is being built. Setting it later rebuilds the canvas without re-stamping
   the source and draws every glyph `renderScale()` times too big.
+- **Nothing is tinted.** Phaser's Canvas path draws a sprite with a plain `ctx.drawImage`
+  and never reads `tintTopLeft` / `tintFill` — tinting exists only on the WebGL path, so
+  `setTint()` compiles, runs, and changes nothing. The failure is silent and total: a spent
+  heart would look identical to a full one and the lose condition would be invisible. Colour
+  is therefore baked into textures — the HUD hearts are `hud-heart` / `hud-heart-spent`,
+  confetti is one square per palette colour — and `sync()` swaps textures instead. A test
+  bans `setTint` from `src/` so it cannot come back.
 
 ### Deviations worth knowing
 

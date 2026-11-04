@@ -7,7 +7,7 @@ import type { RoundSnapshot } from '../domain/ports.ts';
 import type { ShapeId } from '../domain/shapes.ts';
 import { formatScore } from '../domain/Scoring.ts';
 import type { GameLayout } from './GameLayout.ts';
-import { ensureTextures, SHAPE_TEXTURE_SIZE, shapeTextureKey } from './ShapeTextures.ts';
+import { CONFETTI_COLOURS, confettiTextureKey, ensureTextures, HEART_KEY, HEART_SPENT_KEY, SHAPE_TEXTURE_SIZE, shapeTextureKey } from './ShapeTextures.ts';
 import { FONT_STACK, PALETTE } from './palette.ts';
 import type { RenderPort } from './RenderPort.ts';
 
@@ -154,10 +154,10 @@ export class PhaserCanvasRenderer implements RenderPort {
             .setDepth(DEPTH.hud);
 
         this.#hearts = Array.from({ length: 3 }, () =>
-            scene.add.image(0, 0, 'hud-heart').setDepth(DEPTH.hud).setScale(0.3),
+            scene.add.image(0, 0, HEART_KEY).setDepth(DEPTH.hud).setScale(0.3),
         );
         this.#confetti = Array.from({ length: CONFETTI_COUNT }, () =>
-            scene.add.image(0, 0, 'confetti').setDepth(DEPTH.confetti).setVisible(false),
+            scene.add.image(0, 0, confettiTextureKey(0)).setDepth(DEPTH.confetti).setVisible(false),
         );
 
         this.relayout(layout);
@@ -401,8 +401,9 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#scoreText?.setText(formatScore(snapshot.score));
         this.#levelText?.setText(`Level ${snapshot.level}`);
         this.#timeText?.setText(`${Math.max(0, Math.ceil(snapshot.secondsLeft))}s`);
+        // Texture swap, not setTint: the Canvas renderer ignores tint entirely.
         this.#hearts.forEach((heart, index) => {
-            heart.setTint(index < snapshot.hearts ? PALETTE.heart : PALETTE.heartSpent);
+            heart.setTexture(index < snapshot.hearts ? HEART_KEY : HEART_SPENT_KEY);
         });
     }
 
@@ -533,7 +534,6 @@ export class PhaserCanvasRenderer implements RenderPort {
     #burst(originX: number, originY: number, radius: number): void {
         if (this.#confetti.length === 0) return;
         const scene = this.#scene;
-        const tints = [PALETTE.cell, PALETTE.highlight, PALETTE.button, PALETTE.buttonAlt, PALETTE.heart, 0xffffff];
 
         for (let i = 0; i < CONFETTI_PER_LINE; i++) {
             const sprite = this.#confetti[this.#confettiCursor % this.#confetti.length];
@@ -542,7 +542,7 @@ export class PhaserCanvasRenderer implements RenderPort {
             // Visual confetti may be random; game logic never is.
             const angle = (i / CONFETTI_PER_LINE) * Math.PI * 2 + Math.random() * 0.5;
             const distance = radius * (0.7 + Math.random() * 0.8);
-            const tint = tints[Math.floor(Math.random() * tints.length)];
+            const colour = Math.floor(Math.random() * CONFETTI_COLOURS.length);
 
             scene.tweens.killTweensOf(sprite as unknown as object);
             sprite
@@ -550,7 +550,8 @@ export class PhaserCanvasRenderer implements RenderPort {
                 .setAlpha(1)
                 .setScale(1)
                 .setAngle(0)
-                .setTint(tint)
+                // Texture swap, not setTint: the Canvas renderer ignores tint entirely.
+                .setTexture(confettiTextureKey(colour))
                 .setPosition(originX + Math.cos(angle) * 6, originY + Math.sin(angle) * 6);
 
             scene.tweens.add({

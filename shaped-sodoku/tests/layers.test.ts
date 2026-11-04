@@ -215,6 +215,22 @@ test('the game forbids networking, storage and WebGL outright', () => {
     }
 });
 
+test('nothing in src/ tints, because the Canvas renderer silently ignores it', () => {
+    // Phaser 3 draws a Canvas sprite with a plain ctx.drawImage and never reads
+    // tintTopLeft / tintFill — tinting exists only on the WebGL path. This game is
+    // Canvas-only by contract, so setTint() would compile, run, and change nothing: a
+    // spent heart would look identical to a full one and the lose condition would be
+    // invisible. Colour is baked into textures and swapped with setTexture instead.
+    const banned = ['setTint', 'tintFill', 'tintTopLeft'];
+
+    for (const [relative, source] of SOURCE) {
+        const code = stripComments(source);
+        for (const needle of banned) {
+            assert.ok(!code.includes(needle), `${relative} uses ${needle}, which the Canvas renderer ignores`);
+        }
+    }
+});
+
 test('Phaser is instantiated as CANVAS, and only there', () => {
     // Comments are ignored: the rule is about how Phaser is *configured*, not what any
     // doc-comment claims about it.

@@ -68,7 +68,16 @@ export function createGame(parent: string): Phaser.Game {
             const next = designSize();
             const nextScale = renderScale();
             game.scale.setGameSize(Math.round(next.width * nextScale), Math.round(next.height * nextScale));
-            for (const scene of game.scene.scenes) applyRenderScale(scene);
+            for (const scene of game.scene.scenes) {
+                // A scene that is currently stopped — MainMenu as soon as Play is pressed,
+                // Game as soon as the round ends — has had its CameraManager shut down, and
+                // Phaser's shutdown sets `main` to undefined. Skipping those is not just
+                // defensive: without the guard the first stopped scene throws, the loop is
+                // abandoned, and VIEWPORT_CHANGED below never reaches the scene the player
+                // is actually looking at. Every scene re-applies its own render scale in
+                // create() when it comes back, so nothing is lost by leaving them alone.
+                if (scene.cameras?.main) applyRenderScale(scene);
+            }
             game.events.emit(VIEWPORT_CHANGED);
         }, RESIZE_DEBOUNCE_MS);
     };

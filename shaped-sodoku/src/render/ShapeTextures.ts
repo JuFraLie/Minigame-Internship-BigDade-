@@ -1,6 +1,6 @@
 ﻿import Phaser from 'phaser';
 
-import { shapeStyle } from './palette.ts';
+import { PALETTE, shapeStyle } from './palette.ts';
 
 /**
  * Every shape in the game, drawn in code.
@@ -213,30 +213,65 @@ export function ensureShapeTextures(scene: Phaser.Scene): void {
 }
 
 /** A face-less heart for the HUD, where a tiny grin would only read as noise. */
-export function ensureHeartTexture(scene: Phaser.Scene): void {
-    const key = 'hud-heart';
-    if (scene.textures.exists(key)) return;
+export const HEART_KEY = 'hud-heart';
+/** The same heart, in the colour it goes once it has been spent. */
+export const HEART_SPENT_KEY = 'hud-heart-spent';
 
-    const graphics = scene.add.graphics();
-    graphics.fillStyle(0xffffff, 1);
-    graphics.lineStyle(4, 0xffffff, 1);
-    const points = fitPoints(heartPolygon(72), HALF, HALF, RADIUS * 2, RADIUS * 2);
-    graphics.fillPoints(points, true);
-    graphics.strokePoints(points, true, true);
-    graphics.generateTexture(key, SIZE, SIZE);
-    graphics.destroy();
+/**
+ * Both heart states, baked as separate textures.
+ *
+ * Phaser's Canvas renderer draws a sprite with a plain `ctx.drawImage` and never reads
+ * `tintTopLeft` / `tintFill` — tinting is a WebGL-only path in Phaser 3. This project is
+ * Canvas-only by contract, so `setTint()` would silently do nothing: every heart would
+ * stay white and a spent heart would be indistinguishable from a full one, making the
+ * lose condition invisible. The colours are baked in here instead and the renderer swaps
+ * textures, which the Canvas path does honour.
+ */
+export function ensureHeartTextures(scene: Phaser.Scene): void {
+    for (const [key, colour] of [
+        [HEART_KEY, PALETTE.heart],
+        [HEART_SPENT_KEY, PALETTE.heartSpent],
+    ] as const) {
+        if (scene.textures.exists(key)) continue;
+
+        const graphics = scene.add.graphics();
+        graphics.fillStyle(colour, 1);
+        graphics.lineStyle(4, colour, 1);
+        const points = fitPoints(heartPolygon(72), HALF, HALF, RADIUS * 2, RADIUS * 2);
+        graphics.fillPoints(points, true);
+        graphics.strokePoints(points, true, true);
+        graphics.generateTexture(key, SIZE, SIZE);
+        graphics.destroy();
+    }
 }
 
-/** The 4px solid square confetti bursts are tinted from. */
-export function ensureConfettiTexture(scene: Phaser.Scene): void {
-    const key = 'confetti';
-    if (scene.textures.exists(key)) return;
+/** One colour per confetti flake, baked for the same reason as the hearts above. */
+export const CONFETTI_COLOURS: readonly number[] = [
+    PALETTE.cell,
+    PALETTE.highlight,
+    PALETTE.button,
+    PALETTE.buttonAlt,
+    PALETTE.heart,
+    0xffffff,
+];
 
-    const graphics = scene.add.graphics();
-    graphics.fillStyle(0xffffff, 1);
-    graphics.fillRect(0, 0, CONFETTI, CONFETTI);
-    graphics.generateTexture(key, CONFETTI, CONFETTI);
-    graphics.destroy();
+/** Key of the baked confetti square for a colour index. */
+export function confettiTextureKey(index: number): string {
+    return `confetti-${index % CONFETTI_COLOURS.length}`;
+}
+
+/** The 4px solid squares the confetti bursts are built from, one texture per colour. */
+export function ensureConfettiTextures(scene: Phaser.Scene): void {
+    CONFETTI_COLOURS.forEach((colour, index) => {
+        const key = confettiTextureKey(index);
+        if (scene.textures.exists(key)) return;
+
+        const graphics = scene.add.graphics();
+        graphics.fillStyle(colour, 1);
+        graphics.fillRect(0, 0, CONFETTI, CONFETTI);
+        graphics.generateTexture(key, CONFETTI, CONFETTI);
+        graphics.destroy();
+    });
 }
 
 /**
@@ -266,7 +301,7 @@ export function ensureBackgroundTexture(scene: Phaser.Scene): void {
 /** Builds every texture the game uses. Idempotent â€” callers need not check first. */
 export function ensureTextures(scene: Phaser.Scene): void {
     ensureShapeTextures(scene);
-    ensureHeartTexture(scene);
-    ensureConfettiTexture(scene);
+    ensureHeartTextures(scene);
+    ensureConfettiTextures(scene);
     ensureBackgroundTexture(scene);
 }
