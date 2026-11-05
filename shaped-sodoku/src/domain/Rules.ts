@@ -1,4 +1,5 @@
-import { type Board, cellIndex, gridFor } from './Board.ts';
+import { type Board, cellIndex, gridFor, withPlacement } from './Board.ts';
+import { countSolutions } from './PuzzleGenerator.ts';
 import type { ShapeId } from './shapes.ts';
 
 /** The three kinds of line a shape must not repeat along. */
@@ -42,12 +43,24 @@ export function findConflict(board: Board, row: number, col: number, shape: Shap
     return null;
 }
 
-/** True when `shape` may legally be written into the empty cell at `row`, `col`. */
+/**
+ * True when `shape` may legally be written into the empty cell at `row`, `col`.
+ *
+ * Clearing the row, column and box is necessary but not sufficient. A puzzle is dealt with
+ * exactly one solution, which means every empty cell has exactly one shape that still
+ * leads somewhere; a shape that merely fails to collide *right now* is accepted by the
+ * line rules and quietly makes the board unfinishable. Nothing can then complete it, and
+ * because a round has no time limit the player would be left tapping a grid that can
+ * never end. So the placement is also asked whether the puzzle survives it — cheap,
+ * because the search stops at the first solution.
+ */
 export function canPlace(board: Board, row: number, col: number, shape: ShapeId): boolean {
     const n = board.size.size;
     if (row < 0 || col < 0 || row >= n || col >= n) return false;
     if (board.cells[cellIndex(n, row, col)] !== null) return false;
-    return findConflict(board, row, col, shape) === null;
+    if (findConflict(board, row, col, shape) !== null) return false;
+
+    return countSolutions(withPlacement(board, row, col, shape), 1) > 0;
 }
 
 /** True when a line holds every shape exactly once. */

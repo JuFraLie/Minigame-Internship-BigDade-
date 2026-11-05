@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { GRID_4, cellIndex } from '../src/domain/Board.ts';
 import { RoundState, configForLevel } from '../src/domain/RoundState.ts';
 import type { RoundEvent } from '../src/domain/ports.ts';
-import { boardFrom, fakeClock, recorder } from './helpers.ts';
+import { boardFrom, fakeClock, recorder, solve, TRAP_4 } from './helpers.ts';
 
 /** One cell short of finished: filling (0,0) with 0 wins the round outright. */
 const ONE_AWAY = [
@@ -191,4 +191,32 @@ test('a round tracks its own elapsed time through the clock port', () => {
     clock.advance(12_500);
     assert.equal(round.elapsedSeconds(), 12.5);
     assert.equal(round.snapshot().secondsLeft, 77.5, '90s par minus 12.5s spent');
+});
+
+test('a pick that would strand the round is refused, and the round still finishes', () => {
+    const clock = fakeClock(1_000);
+    const { events, port } = recorder<RoundEvent>();
+    const round = new RoundState(configForLevel(1), boardFrom(GRID_4, TRAP_4), clock, port);
+
+    // A 0 at (0,1) collides with nothing anywhere on the board — and leaves a grid that
+    // can never be completed, which with no time limit would strand the player forever.
+    round.handle({ kind: 'selectCell', row: 0, col: 1 });
+    round.handle({ kind: 'pickShape', shape: 0 });
+
+    assert.ok(events.some((event) => event.type === 'wrong'), 'it must be scored as a mistake');
+    assert.equal(round.hearts, 2, 'the mistake costs a heart');
+    assert.equal(round.board.cells[1], null, 'nothing was written into the cell');
+    assert.equal(round.snapshot().selected, 1, 'the cell stays selected for the real answer');
+    assert.equal(round.phase, 'playing', 'one mistake does not end the round');
+
+    // The proof the refusal was survivable: play the real solution through and win.
+    const solution = solve(round.board);
+    assert.ok(solution.length > 0, 'the puzzle must still be solvable afterwards');
+    for (let index = 0; index < solution.length; index++) {
+        if (round.board.cells[index] !== null) continue;
+        round.handle({ kind: 'selectCell', row: Math.floor(index / 4), col: index % 4 });
+        round.handle({ kind: 'pickShape', shape: solution[index] ?? 0 });
+    }
+
+    assert.equal(round.phase, 'won', 'the round is still possible to complete');
 });

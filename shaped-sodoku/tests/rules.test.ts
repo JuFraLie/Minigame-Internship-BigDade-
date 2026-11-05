@@ -10,7 +10,8 @@ import {
     isConsistent,
     isLineComplete,
 } from '../src/domain/Rules.ts';
-import { boardFrom } from './helpers.ts';
+import { countSolutions } from '../src/domain/PuzzleGenerator.ts';
+import { boardFrom, TRAP_4 } from './helpers.ts';
 
 /** A finished four-by-four: two 2x2 boxes, every line holding 0-3 exactly once. */
 const SOLVED_4 = [
@@ -120,6 +121,17 @@ test('a filled cell cannot be played, an open legal cell can', () => {
     const board = boardFrom(GRID_4, OPEN_4);
     assert.equal(canPlace(board, 1, 0, 2), false, '(1,0) already holds a 2');
     assert.equal(canPlace(board, 0, 0, 0), true, 'the free cell can take its one legal shape');
+});
+
+test('a shape that clears every line but strands the puzzle cannot be placed', () => {
+    const board = boardFrom(GRID_4, TRAP_4);
+    assert.equal(countSolutions(board, 2), 1, 'the fixture is a one-solution puzzle');
+
+    // Row 0, column 1 and box 0 are each free of a 0, so the collision rules approve it.
+    assert.equal(findConflict(board, 0, 1, 0), null, 'nothing blocks it on the line rules');
+
+    assert.equal(canPlace(board, 0, 1, 0), false, 'and yet it leaves no board to finish');
+    assert.equal(canPlace(board, 0, 1, 1), true, 'the cell keeps its one real answer');
 });
 
 test('coordinates outside the grid are rejected rather than throwing', () => {

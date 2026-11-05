@@ -21,6 +21,21 @@ export function givenCount(board: Board): number {
     return board.givens.reduce((total, given) => total + (given ? 1 : 0), 0);
 }
 
+/**
+ * A dealt 4x4 in which a plausible-looking pick is a trap.
+ *
+ * Cell (0,1) has no 0 in its row, its column or its box, so the line rules alone wave a 0
+ * straight through — and because this puzzle has exactly one solution, writing it leaves
+ * no board that can ever be completed. Both suites use it to pin down the difference
+ * between "does not collide anywhere" and "may actually be written".
+ */
+export const TRAP_4: ReadonlyArray<ReadonlyArray<number | null>> = [
+    [null, null, null, 2],
+    [2, null, 3, null],
+    [1, 3, null, null],
+    [0, 2, 1, null],
+];
+
 /** A `ClockPort` that only moves when a test tells it to. */
 export function fakeClock(start = 0): { now(): number; advance(ms: number): void } {
     let time = start;

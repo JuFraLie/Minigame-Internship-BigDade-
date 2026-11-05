@@ -1,6 +1,6 @@
 import { type Board, type BoardSize, GRID_4, GRID_6, cellIndex, countOf, withPlacement } from './Board.ts';
 import { generatePuzzle, mulberry32 } from './PuzzleGenerator.ts';
-import { completedLinesAfter, findConflict, isBoardComplete } from './Rules.ts';
+import { canPlace, completedLinesAfter, isBoardComplete } from './Rules.ts';
 import { DEFAULT_SCORING, type ScoringConfig, ScoreLedger } from './Scoring.ts';
 import type { ClockPort, EventsOutPort, GameCommand, RoundPhase, RoundSnapshot } from './ports.ts';
 import type { ShapeId } from './shapes.ts';
@@ -165,9 +165,10 @@ export class RoundState {
         const n = this.#config.grid.size;
         const row = Math.floor(selected / n);
         const col = selected % n;
-        const conflict = findConflict(this.#board, row, col, shape);
 
-        if (conflict) {
+        // `canPlace` refuses both a collision and a pick that would strand the puzzle, so
+        // a round can only ever move toward a board it is still able to finish.
+        if (!canPlace(this.#board, row, col, shape)) {
             const penalty = this.#ledger.recordWrong();
             this.#hearts -= 1;
             this.#events.emit({

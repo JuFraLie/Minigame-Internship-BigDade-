@@ -1,5 +1,6 @@
 ﻿import Phaser from 'phaser';
 
+import { darken } from './Chunky.ts';
 import { PALETTE, shapeStyle } from './palette.ts';
 
 /**
@@ -115,39 +116,42 @@ function heartPolygon(steps: number): Point[] {
     return points;
 }
 
-/** Paints the silhouette of `shape` centred in the texture, outline included. */
-function drawSilhouette(graphics: Phaser.GameObjects.Graphics, shape: number): void {
-    const style = shapeStyle(shape);
-    graphics.fillStyle(style.fill, 1);
-    graphics.lineStyle(OUTLINE, style.outline, 1);
-
+/**
+ * Traces the silhouette of `shape` as the current path, centred in the texture.
+ *
+ * Geometry only — every painter below reuses this so the edge, the face, the gloss and
+ * the outline can never drift apart by a pixel.
+ */
+function traceShape(ctx: CanvasRenderingContext2D, shape: number): void {
+    const { name } = shapeStyle(shape);
     const span = RADIUS * 2;
 
-    const polygon = (points: Point[]): void => {
-        graphics.fillPoints(points, true);
-        graphics.strokePoints(points, true, true);
+    const polygon = (points: readonly Point[]): void => {
+        points.forEach((point, index) => {
+            if (index === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+        });
+        ctx.closePath();
     };
 
-    switch (style.name) {
+    switch (name) {
         case 'circle':
-            graphics.fillCircle(HALF, HALF, RADIUS);
-            graphics.strokeCircle(HALF, HALF, RADIUS);
+            ctx.moveTo(HALF + RADIUS, HALF);
+            ctx.arc(HALF, HALF, RADIUS, 0, Math.PI * 2);
             break;
-        case 'square': {
-            const corner = RADIUS * 0.24;
-            graphics.fillRoundedRect(HALF - RADIUS, HALF - RADIUS, span, span, corner);
-            graphics.strokeRoundedRect(HALF - RADIUS, HALF - RADIUS, span, span, corner);
+        case 'square':
+            roundedRectPath(ctx, HALF - RADIUS, HALF - RADIUS, span, span, RADIUS * 0.24);
             break;
-        }
-        case 'triangle': {
-            const raw: Point[] = [
-                { x: 0, y: -RADIUS },
-                { x: -RADIUS * 0.95, y: RADIUS * 0.78 },
-                { x: RADIUS * 0.95, y: RADIUS * 0.78 },
-            ];
-            polygon(fitPoints(raw, HALF, HALF, span, span));
+        case 'triangle':
+            polygon(fitPoints(
+                [
+                    { x: 0, y: -RADIUS },
+                    { x: -RADIUS * 0.95, y: RADIUS * 0.78 },
+                    { x: RADIUS * 0.95, y: RADIUS * 0.78 },
+                ],
+                HALF, HALF, span, span,
+            ));
             break;
-        }
         case 'star':
             polygon(fitPoints(starPolygon(5, RADIUS, RADIUS * 0.46), HALF, HALF, span, span));
             break;
@@ -161,45 +165,147 @@ function drawSilhouette(graphics: Phaser.GameObjects.Graphics, shape: number): v
     }
 }
 
-/** Paints the face for `mood` on top of an already-drawn silhouette. */
-function drawFace(graphics: Phaser.GameObjects.Graphics, shape: number, mood: ShapeMood): void {
+/** A rounded rectangle drawn as a path, built by hand so no platform-specific call is needed. */
+function roundedRectPath(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+): void {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+const cssColour = (colour: number): string => `#${colour.toString(16).padStart(6, '0')}`;
+
+/** How far the shaded underside hangs below the face — the shape's thickness. */
+const EDGE = 5;
+/** Gloss strength across the top of every shape. */
+const GLOSS = 'rgba(255, 255, 255, 0.3)';
+
+/**
+ * Paints one shape body: dropped dark edge, lit face, gloss, then the outline.
+ *
+ * This is `drawBevel` in miniature — the same vocabulary the buttons, tray slots and panel
+ * are built from — so a shape on a cell reads as a small slab of the same material as the
+ * furniture around it rather than as a flat sticker.
+ *
+ * The outline is stroked *inside* the silhouette. Stroking it centred, as a Graphics shape
+ * would, pushes the silhouette 2.5px outward and buries almost all of the dark edge; an
+ * inner stroke keeps the footprint honest and leaves the full thickness visible below.
+ */
+function paintShape(ctx: CanvasRenderingContext2D, shape: number): void {
+    const style = shapeStyle(shape);
+
+    ctx.save();
+    ctx.translate(0, EDGE);
+    ctx.beginPath();
+    traceShape(ctx, shape);
+    ctx.fillStyle = cssColour(darken(style.fill, 0.45));
+    ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath();
+    traceShape(ctx, shape);
+    ctx.fillStyle = cssColour(style.fill);
+    ctx.fill();
+
+    // Gloss: one soft, slightly tilted ellipse — a sheen, not a lid. Clipped to the body so
+    // it can never spill past an edge, which is what lets a single shape serve all six.
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = GLOSS;
+    ctx.beginPath();
+    ctx.ellipse(
+        HALF - RADIUS * 0.12,
+        HALF - RADIUS * 0.46,
+        RADIUS * 0.46,
+        RADIUS * 0.2,
+        -0.3,
+        0,
+        Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    traceShape(ctx, shape);
+    ctx.clip();
+    ctx.beginPath();
+    traceShape(ctx, shape);
+    ctx.lineWidth = OUTLINE * 2; // only the inner half survives the clip
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = cssColour(style.outline);
+    ctx.stroke();
+    ctx.restore();
+}
+
+/** Paints the face for `mood` on top of an already-drawn body. */
+function drawFace(ctx: CanvasRenderingContext2D, shape: number, mood: ShapeMood): void {
     const style = shapeStyle(shape);
     const face = FACE_LAYOUTS[style.name];
-    const ink = style.outline;
+    const ink = cssColour(style.outline);
 
     const eyeY = HALF + face.dy - 4;
     const leftX = HALF - face.eyeSpacing;
     const rightX = HALF + face.eyeSpacing;
     const mouthY = HALF + face.dy + 8;
 
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
+    ctx.lineCap = 'round';
+
     if (mood === 'blink') {
         // Two short strokes read as closed eyes at any size the shape is drawn at.
-        graphics.lineStyle(Math.max(2.5, face.eyeRadius * 0.8), ink, 1);
-        graphics.lineBetween(leftX - face.eyeRadius, eyeY, leftX + face.eyeRadius, eyeY);
-        graphics.lineBetween(rightX - face.eyeRadius, eyeY, rightX + face.eyeRadius, eyeY);
+        ctx.lineWidth = Math.max(2.5, face.eyeRadius * 0.8);
+        for (const x of [leftX, rightX]) {
+            ctx.beginPath();
+            ctx.moveTo(x - face.eyeRadius, eyeY);
+            ctx.lineTo(x + face.eyeRadius, eyeY);
+            ctx.stroke();
+        }
     } else {
         const eyeRadius = mood === 'surprised' ? face.eyeRadius * 1.4 : face.eyeRadius;
-        graphics.fillStyle(ink, 1);
-        graphics.fillCircle(leftX, eyeY, eyeRadius);
-        graphics.fillCircle(rightX, eyeY, eyeRadius);
+        for (const x of [leftX, rightX]) {
+            ctx.beginPath();
+            ctx.arc(x, eyeY, eyeRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
-    graphics.lineStyle(Math.max(2.5, face.eyeRadius * 0.75), ink, 1);
+    ctx.lineWidth = Math.max(2.5, face.eyeRadius * 0.75);
 
     if (mood === 'surprised') {
-        graphics.strokeCircle(HALF, mouthY, face.mouthWidth * 0.3);
+        ctx.beginPath();
+        ctx.arc(HALF, mouthY, face.mouthWidth * 0.3, 0, Math.PI * 2);
+        ctx.stroke();
         return;
     }
 
     // A shallow downward arc: a small, friendly smile.
-    graphics.beginPath();
-    graphics.arc(HALF, mouthY - face.mouthWidth * 0.18, face.mouthWidth * 0.5, Math.PI * 0.15, Math.PI * 0.85, false);
-    graphics.strokePath();
+    ctx.beginPath();
+    ctx.arc(HALF, mouthY - face.mouthWidth * 0.18, face.mouthWidth * 0.5, Math.PI * 0.15, Math.PI * 0.85);
+    ctx.stroke();
 }
 
 /**
  * Generates every shape texture the game needs. Idempotent, so scenes can call it on
  * `create` without checking first.
+ *
+ * Canvas textures rather than `Graphics.generateTexture`: the gloss and the inner outline
+ * both have to be clipped to the silhouette, which Graphics has no way to express.
  */
 export function ensureShapeTextures(scene: Phaser.Scene): void {
     for (const shape of [0, 1, 2, 3, 4, 5]) {
@@ -207,11 +313,13 @@ export function ensureShapeTextures(scene: Phaser.Scene): void {
             const key = shapeTextureKey(shape, mood);
             if (scene.textures.exists(key)) continue;
 
-            const graphics = scene.add.graphics();
-            drawSilhouette(graphics, shape);
-            drawFace(graphics, shape, mood);
-            graphics.generateTexture(key, SIZE, SIZE);
-            graphics.destroy();
+            const texture = scene.textures.createCanvas(key, SIZE, SIZE);
+            if (!texture) continue;
+
+            const ctx = texture.getContext();
+            paintShape(ctx, shape);
+            drawFace(ctx, shape, mood);
+            texture.refresh();
         }
     }
 }
