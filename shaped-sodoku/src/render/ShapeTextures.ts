@@ -53,8 +53,8 @@ const FACE_LAYOUTS: Record<string, FaceLayout> = {
     // The star's inner radius is tight, so the whole face shrinks to fit.
     star: { dy: 0, eyeSpacing: 9, eyeRadius: 3.6, mouthWidth: 9 },
     hexagon: { dy: 0, eyeSpacing: 11, eyeRadius: 4.2, mouthWidth: 12 },
-    // The heart's lobes leave its usable centre a little below the middle.
-    heart: { dy: 4, eyeSpacing: 10, eyeRadius: 4, mouthWidth: 11 },
+    // The lobes crown the upright heart, so the face rides a little above its middle.
+    heart: { dy: -2, eyeSpacing: 10, eyeRadius: 4, mouthWidth: 11 },
 };
 
 type Point = { x: number; y: number };
@@ -100,13 +100,17 @@ function starPolygon(spikes: number, outer: number, inner: number): Point[] {
     return points;
 }
 
+/**
+ * The classic cardioid is written for a y-up canvas, and everything here draws
+ * y-down — so the y term is negated or the tip would point at the sky.
+ */
 function heartPolygon(steps: number): Point[] {
     const points: Point[] = [];
     for (let i = 0; i <= steps; i++) {
         const t = (i / steps) * Math.PI * 2;
         const x = 16 * Math.sin(t) ** 3;
         const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-        points.push({ x, y });
+        points.push({ x, y: -y });
     }
     return points;
 }

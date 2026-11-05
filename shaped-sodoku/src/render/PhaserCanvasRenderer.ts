@@ -6,9 +6,10 @@ import type { LineRef } from '../domain/Rules.ts';
 import type { RoundSnapshot } from '../domain/ports.ts';
 import type { ShapeId } from '../domain/shapes.ts';
 import { formatScore } from '../domain/Scoring.ts';
+import { darken, drawBevel } from './Chunky.ts';
 import type { GameLayout } from './GameLayout.ts';
 import { CONFETTI_COLOURS, confettiTextureKey, ensureTextures, HEART_KEY, HEART_SPENT_KEY, SHAPE_TEXTURE_SIZE, shapeTextureKey } from './ShapeTextures.ts';
-import { FONT_STACK, PALETTE } from './palette.ts';
+import { FONT_STACK, DISPLAY_STACK, PALETTE } from './palette.ts';
 import type { RenderPort } from './RenderPort.ts';
 
 /** Layers, so a highlight wash never paints over a sprite that belongs above it. */
@@ -19,10 +20,12 @@ const DEPTH = {
     cells: 3,
     tray: 4,
     trayShapes: 5,
-    trayBadges: 6,
-    hud: 7,
-    danger: 8,
-    confetti: 9,
+    trayChips: 6,
+    trayBadges: 7,
+    hudChrome: 8,
+    hud: 9,
+    danger: 10,
+    confetti: 11,
 } as const;
 
 const CONFETTI_COUNT = 48;
@@ -69,10 +72,12 @@ export class PhaserCanvasRenderer implements RenderPort {
     #boardGfx: Phaser.GameObjects.Graphics | null = null;
     #highlightGfx: Phaser.GameObjects.Graphics | null = null;
     #trayGfx: Phaser.GameObjects.Graphics | null = null;
+    #hudGfx: Phaser.GameObjects.Graphics | null = null;
     #dangerGfx: Phaser.GameObjects.Graphics | null = null;
 
     #cells: Phaser.GameObjects.Image[] = [];
     #trayShapes: Phaser.GameObjects.Image[] = [];
+    #trayChips: Phaser.GameObjects.Graphics[] = [];
     #trayBadges: Phaser.GameObjects.Text[] = [];
     #hearts: Phaser.GameObjects.Image[] = [];
     #confetti: Phaser.GameObjects.Image[] = [];
@@ -80,6 +85,17 @@ export class PhaserCanvasRenderer implements RenderPort {
     #scoreText: Phaser.GameObjects.Text | null = null;
     #levelText: Phaser.GameObjects.Text | null = null;
     #timeText: Phaser.GameObjects.Text | null = null;
+
+    /**
+     * What the HUD said on the previous pass, so a change can be *felt* rather than merely
+     * shown: a heart that just went out is bumped, a score that just moved is popped. Both
+     * compare against the last value written, so a resize — which redraws without changing
+     * anything — can never fire them.
+     */
+    #lastHearts: number | null = null;
+    #lastScore: number | null = null;
+    /** Resting heart scale, re-derived on every layout so the bump always returns to it. */
+    #heartBase = 0.3;
 
     constructor(scene: Phaser.Scene, renderScale: () => number) {
         this.#scene = scene;
@@ -97,6 +113,7 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#boardGfx = scene.add.graphics().setDepth(DEPTH.board);
         this.#highlightGfx = scene.add.graphics().setDepth(DEPTH.highlight);
         this.#trayGfx = scene.add.graphics().setDepth(DEPTH.tray);
+        this.#hudGfx = scene.add.graphics().setDepth(DEPTH.hudChrome);
         this.#dangerGfx = scene.add.graphics().setDepth(DEPTH.danger).setAlpha(0);
 
         const shapeCount = Math.min(grid.size, 6);
@@ -107,15 +124,18 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#trayShapes = Array.from({ length: shapeCount }, () =>
             scene.add.image(0, 0, shapeTextureKey(0, 'normal')).setDepth(DEPTH.trayShapes),
         );
+        // The remaining-count coin sits under the numeral it belongs to; both are made here
+        // so a depleted slot can dim them together.
+        this.#trayChips = Array.from({ length: shapeCount }, () =>
+            scene.add.graphics().setDepth(DEPTH.trayChips),
+        );
         this.#trayBadges = Array.from({ length: shapeCount }, () =>
             scene.add
                 .text(0, 0, '0', {
-                    fontFamily: FONT_STACK,
+                    fontFamily: DISPLAY_STACK,
                     fontSize: '14px',
                     fontStyle: 'bold',
-                    color: '#1c2148',
-                    backgroundColor: '#fdf4e6',
-                    padding: { x: 5, y: 1 },
+                    color: '#15183c',
                     resolution: this.#renderScale(),
                 })
                 .setOrigin(0.5)
@@ -172,28 +192,38 @@ export class PhaserCanvasRenderer implements RenderPort {
         const grid = gridFor(this.#grid);
         const cellSpriteScale = (board.cell - board.inset * 2) / SHAPE_TEXTURE_SIZE;
 
-        this.#background?.setDisplaySize(viewport.width, viewport.height);
+        // The wash bleeds past every edge. The camera shakes on a mistake, and without the
+        // bleed a shake would drag bare canvas in at the sides.
+        const BLEED = 0.04;
+        this.#background
+            ?.setPosition(-viewport.width * BLEED, -viewport.height * BLEED)
+            .setDisplaySize(viewport.width * (1 + BLEED * 2), viewport.height * (1 + BLEED * 2));
+
         this.#drawBoard(layout, gridSize, grid);
         this.#drawTray(layout);
 
         // Level labels the left, score takes centre stage, clock and hearts hold the right.
         const hudMidY = hud.y + hud.height / 2;
-        const scoreFont = Math.round(hud.height * 0.52);
+        const scoreFont = Math.round(hud.height * 0.6);
         this.#scoreText?.setPosition(viewport.width / 2, hudMidY).setFontSize(scoreFont);
         this.#levelText?.setPosition(viewport.width * 0.06, hudMidY).setFontSize(Math.round(hud.height * 0.3));
         this.#levelText?.setVisible(true);
 
-        const heartGap = Math.max(16, hud.height * 0.42);
+        this.#heartBase = Math.max(0.24, Math.min(0.4, hud.height * 0.0068));
+        const heartGap = Math.max(17, hud.height * 0.44);
         const heartsWidth = heartGap * (this.#hearts.length - 1);
         const heartsRight = viewport.width * 0.94;
         this.#hearts.forEach((heart, index) => {
-            heart.setPosition(heartsRight - heartsWidth + index * heartGap, hudMidY);
+            heart.setPosition(heartsRight - heartsWidth + index * heartGap, hudMidY).setScale(this.#heartBase);
         });
 
         this.#timeText?.setFontSize(Math.round(hud.height * 0.27));
         this.#timeText?.setPosition(heartsRight - heartsWidth - heartGap * 0.8, hudMidY);
 
+        this.#drawHud(layout);
+
         const badgeFont = Math.max(11, Math.round(hud.height * 0.27));
+        const chipRadius = badgeFont * 0.98;
         this.#cells.forEach((cell, index) => {
             cell.setPosition(
                 board.x + (index % gridSize) * board.cell + board.cell / 2,
@@ -204,14 +234,71 @@ export class PhaserCanvasRenderer implements RenderPort {
         });
 
         tray.slots.forEach((slot, index) => {
+            const badgeX = slot.cx + tray.slotWidth * 0.3;
+            const badgeY = tray.y + tray.height * 0.22;
+
             this.#trayShapes[index]?.setPosition(slot.cx, slot.cy).setScale((slot.radius * 2) / SHAPE_TEXTURE_SIZE);
-            this.#trayBadges[index]
-                ?.setPosition(slot.cx + tray.slotWidth * 0.3, tray.y + tray.height * 0.22)
-                .setFontSize(badgeFont);
+            this.#trayBadges[index]?.setPosition(badgeX, badgeY).setFontSize(badgeFont);
+
+            const chip = this.#trayChips[index];
+            if (chip) {
+                chip.clear();
+                chip.setPosition(badgeX, badgeY);
+                drawBevel(chip, -chipRadius, -chipRadius, chipRadius * 2, chipRadius * 2, chipRadius, {
+                    fill: PALETTE.gold,
+                    depth: 3,
+                    outline: PALETTE.ink,
+                    outlineWidth: 2.5,
+                    gloss: 0.22,
+                });
+            }
         });
 
         this.#redrawHighlight();
         if (this.#snapshot) this.#applyState(this.#snapshot);
+    }
+
+    /**
+     * Three capsules behind the HUD — level, score, clock-and-hearts — so the strip reads as
+     * furniture bolted to the screen rather than three pieces of loose text.
+     *
+     * Drawn last of the chrome because it measures the labels it sits behind: their widths
+     * are only known once their font sizes have just been set.
+     */
+    #drawHud(layout: GameLayout): void {
+        const gfx = this.#hudGfx;
+        const level = this.#levelText;
+        const score = this.#scoreText;
+        const time = this.#timeText;
+        const lastHeart = this.#hearts[this.#hearts.length - 1];
+        if (!gfx || !level || !score || !time || !lastHeart) return;
+
+        const { viewport, hud } = layout;
+        const midY = hud.y + hud.height / 2;
+        const padX = Math.max(9, hud.height * 0.2);
+        const pillHeight = Math.max(score.height + 14, hud.height * 0.92);
+
+        gfx.clear();
+
+        const capsule = (left: number, right: number): void => {
+            const width = Math.max(30, right - left);
+            drawBevel(gfx, left, midY - pillHeight / 2, width, pillHeight, pillHeight / 2, {
+                fill: PALETTE.hudPill,
+                depth: 3,
+                outline: PALETTE.hudPillEdge,
+                outlineWidth: 2,
+                gloss: 0.14,
+            });
+        };
+
+        capsule(viewport.width * 0.03, level.x + level.width + padX);
+
+        // A single digit otherwise squeezes this into a circle that reads as a bubble
+        // rather than a capsule, so the pill keeps a floor of roughly 2.3:1.
+        const scoreWidth = Math.max(score.width + padX * 3, pillHeight * 2.3);
+        capsule(viewport.width / 2 - scoreWidth / 2, viewport.width / 2 + scoreWidth / 2);
+
+        capsule(time.x - time.width - padX, lastHeart.x + lastHeart.displayWidth * 0.5 + 6);
     }
 
     sync(snapshot: RoundSnapshot): void {
@@ -318,6 +405,10 @@ export class PhaserCanvasRenderer implements RenderPort {
         gfx.strokeRect(0, 0, layout.viewport.width, layout.viewport.height);
         gfx.setAlpha(0);
 
+        // The screen flinches with it. `main` is already gone if a mistake lands on the very
+        // frame the scene is shutting down on, which is the one case this could still run.
+        this.#scene.cameras?.main?.shake(150, 0.006);
+
         this.#scene.tweens.killTweensOf(gfx as unknown as object);
         this.#scene.tweens.add({
             targets: gfx,
@@ -333,12 +424,14 @@ export class PhaserCanvasRenderer implements RenderPort {
         const objects: Phaser.GameObjects.GameObject[] = [
             ...this.#cells,
             ...this.#trayShapes,
+            ...this.#trayChips,
             ...this.#trayBadges,
             ...this.#hearts,
             ...this.#confetti,
         ];
         for (const text of [this.#scoreText, this.#levelText, this.#timeText]) if (text) objects.push(text);
-        for (const gfx of [this.#boardGfx, this.#highlightGfx, this.#trayGfx, this.#dangerGfx]) if (gfx) objects.push(gfx);
+        for (const gfx of [this.#boardGfx, this.#highlightGfx, this.#trayGfx, this.#hudGfx, this.#dangerGfx])
+            if (gfx) objects.push(gfx);
         if (this.#background) objects.push(this.#background);
 
         for (const object of objects) {
@@ -350,9 +443,11 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#boardGfx = null;
         this.#highlightGfx = null;
         this.#trayGfx = null;
+        this.#hudGfx = null;
         this.#dangerGfx = null;
         this.#cells = [];
         this.#trayShapes = [];
+        this.#trayChips = [];
         this.#trayBadges = [];
         this.#hearts = [];
         this.#confetti = [];
@@ -363,6 +458,8 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#layout = null;
         this.#grid = null;
         this.#busy.clear();
+        this.#lastHearts = null;
+        this.#lastScore = null;
     }
 
     // ---- state -------------------------------------------------------------
@@ -396,6 +493,7 @@ export class PhaserCanvasRenderer implements RenderPort {
             const depleted = needed <= 0;
             this.#trayShapes[index]?.setTexture(shapeTextureKey(index, 'normal')).setAlpha(depleted ? 0.3 : 1);
             this.#trayBadges[index]?.setText(String(needed)).setAlpha(depleted ? 0.45 : 1);
+            this.#trayChips[index]?.setAlpha(depleted ? 0.35 : 1);
         }
 
         this.#scoreText?.setText(formatScore(snapshot.score));
@@ -404,6 +502,63 @@ export class PhaserCanvasRenderer implements RenderPort {
         // Texture swap, not setTint: the Canvas renderer ignores tint entirely.
         this.#hearts.forEach((heart, index) => {
             heart.setTexture(index < snapshot.hearts ? HEART_KEY : HEART_SPENT_KEY);
+        });
+
+        // Feel the change, don't merely show it. Both compare against the previous value,
+        // so the tick that follows a resize — same numbers, new geometry — stays still.
+        if (this.#lastScore !== null && snapshot.score !== this.#lastScore) this.#popScore();
+        this.#lastScore = snapshot.score;
+
+        if (this.#lastHearts !== null && snapshot.hearts < this.#lastHearts) {
+            const justLost = this.#hearts[snapshot.hearts];
+            if (justLost) this.#bumpHeart(justLost);
+        }
+        this.#lastHearts = snapshot.hearts;
+
+        // Last, because the capsules hug whatever the labels just became: sized once at
+        // creation they would keep a clock-sized hole around an empty string forever.
+        this.#drawHud(layout);
+    }
+
+    /** Throws a spent heart outward, so losing one lands as a physical event. */
+    #bumpHeart(heart: Phaser.GameObjects.Image): void {
+        const scene = this.#scene;
+        const base = this.#heartBase;
+
+        scene.tweens.killTweensOf(heart as unknown as object);
+        scene.tweens.add({
+            targets: heart,
+            scale: base * 1.8,
+            duration: 150,
+            yoyo: true,
+            ease: 'Back.easeOut',
+            onComplete: () => heart.setScale(base),
+        });
+        scene.tweens.add({
+            targets: heart,
+            angle: 18,
+            duration: 90,
+            yoyo: true,
+            repeat: 3,
+            ease: 'Sine.easeInOut',
+            onComplete: () => heart.setAngle(0),
+        });
+    }
+
+    /** The score figure briefly larger than it is, so a move registers without being read. */
+    #popScore(): void {
+        const text = this.#scoreText;
+        if (!text) return;
+
+        const scene = this.#scene;
+        scene.tweens.killTweensOf(text as unknown as object);
+        scene.tweens.add({
+            targets: text,
+            scale: 1.25,
+            duration: 120,
+            yoyo: true,
+            ease: 'Back.easeOut',
+            onComplete: () => text.setScale(1),
         });
     }
 
@@ -416,9 +571,20 @@ export class PhaserCanvasRenderer implements RenderPort {
 
         gfx.clear();
 
-        const corner = Math.max(4, cell * 0.14);
+        const corner = Math.max(5, cell * 0.16);
+        const frame = 6;
+        const frameWidth = size + frame * 2;
+        const frameHeight = size + frame * 2;
+
+        // Shadow first, dropped straight down. The x is left alone so it can never peek out
+        // at the sides: the board sits on the screen rather than hovering above it.
+        gfx.fillStyle(PALETTE.drop, 0.36);
+        gfx.fillRoundedRect(x - frame, y - frame + 8, frameWidth, frameHeight, corner + frame);
+
         gfx.fillStyle(PALETTE.boardFrame, 1);
-        gfx.fillRoundedRect(x - 5, y - 5, size + 10, size + 10, corner + 5);
+        gfx.fillRoundedRect(x - frame, y - frame, frameWidth, frameHeight, corner + frame);
+        gfx.lineStyle(4, PALETTE.boardEdge, 1);
+        gfx.strokeRoundedRect(x - frame, y - frame, frameWidth, frameHeight, corner + frame);
 
         const face = cell - inset * 2;
         for (let row = 0; row < gridSize; row++) {
@@ -454,9 +620,18 @@ export class PhaserCanvasRenderer implements RenderPort {
 
         gfx.clear();
         for (const slot of tray.slots) {
-            const width = tray.slotWidth - 8;
-            gfx.fillStyle(PALETTE.boardFrame, 0.9);
-            gfx.fillRoundedRect(slot.cx - width / 2, tray.y + 4, width, tray.height - 8, 12);
+            const width = tray.slotWidth - 9;
+            const height = tray.height - 12;
+            // Sized from the slot's own centre, so the shape inside is centred in the well
+            // it sits in rather than floating above the drop shadow.
+            drawBevel(gfx, slot.cx - width / 2, slot.cy - height / 2, width, height, Math.min(16, height * 0.32), {
+                fill: PALETTE.traySlot,
+                depth: 5,
+                drop: 4,
+                outline: PALETTE.traySlotEdge,
+                outlineWidth: 2.5,
+                gloss: 0.14,
+            });
         }
     }
 
@@ -478,7 +653,7 @@ export class PhaserCanvasRenderer implements RenderPort {
 
         const { x, y, cell, inset } = layout.board;
         const face = cell - inset * 2;
-        const corner = Math.max(4, cell * 0.14);
+        const corner = Math.max(5, cell * 0.16);
 
         const fillCell = (cellIndex: number, colour: number, alpha: number): void => {
             gfx.fillStyle(colour, alpha);
@@ -496,9 +671,15 @@ export class PhaserCanvasRenderer implements RenderPort {
         for (const member of grid.cols[col]) fillCell(member, PALETTE.highlight, 0.16);
         for (const member of grid.boxes[boxIndex]) fillCell(member, PALETTE.highlight, 0.16);
 
-        // …and a decisive ring on the cell actually waiting for a shape.
-        gfx.lineStyle(3, PALETTE.selection, 1);
-        gfx.strokeRoundedRect(x + col * cell + inset, y + row * cell + inset, face, face, corner);
+        // …and a decisive ring on the cell actually waiting for a shape. Two passes: a fat
+        // darker ring underneath, a crisp one on top, which is what makes the selection read
+        // as pressed into the board rather than drawn on it.
+        const ring = (thickness: number, colour: number, alpha: number): void => {
+            gfx.lineStyle(thickness, colour, alpha);
+            gfx.strokeRoundedRect(x + col * cell + inset, y + row * cell + inset, face, face, corner);
+        };
+        ring(7, darken(PALETTE.selection, 0.35), 1);
+        ring(3.5, PALETTE.selection, 1);
     }
 
     // ---- celebration -------------------------------------------------------

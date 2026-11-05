@@ -71,7 +71,40 @@ export const PALETTE = {
     buttonAlt: 0xb9a2ff,
     /** Danger tint used for the screen-edge pulse when a heart is lost. */
     danger: 0xff6b7f,
+
+    // The chrome, i.e. the raised cartoon furniture every screen is built from.
+
+    /** Ink every outline and every title stroke is drawn in. */
+    ink: 0x15183c,
+    /** The single shadow colour under slabs, panels and the board. */
+    drop: 0x090c22,
+    /** HUD capsule face. */
+    hudPill: 0x171b48,
+    /** HUD capsule outline. */
+    hudPillEdge: 0x646ab4,
+    /** Tray slot face. */
+    traySlot: 0x1c2050,
+    /** Tray slot outline. */
+    traySlotEdge: 0x4a4f9c,
+    /** Verdict ribbon on a win. */
+    ribbon: 0xffd166,
+    /** Verdict ribbon on a loss. */
+    ribbonLoss: 0xff8296,
+    /** The big score figure, and the level chip's outline. */
+    gold: 0xffd76a,
+    /** Board frame outline, one shade off the frame itself. */
+    boardEdge: 0x12153a,
 } as const;
 
 /** The font stack: bundled system faces only, never a CDN. */
 export const FONT_STACK = "'Trebuchet MS', 'Segoe UI', Roboto, system-ui, sans-serif";
+
+/**
+ * The display face: heavy, wide and geometric, for anything that has to shout.
+ *
+ * Also a system-only stack. `Arial Black` on Windows and macOS, `Segoe UI Black` where
+ * that is the local ultra-heavy, Android's `sans-serif-black`, and a plain bold sans as
+ * the last resort so a device with none of them still gets a heavy title rather than thin.
+ */
+export const DISPLAY_STACK =
+    "'Arial Black', 'Segoe UI Black', 'sans-serif-black', 'Helvetica Neue', Arial, sans-serif";
