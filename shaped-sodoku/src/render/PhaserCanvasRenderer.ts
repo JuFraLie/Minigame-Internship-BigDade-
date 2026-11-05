@@ -30,8 +30,6 @@ const DEPTH = {
 
 const CONFETTI_COUNT = 48;
 const CONFETTI_PER_LINE = 14;
-const BLINK_AT_MS = 360;
-const BLINK_OFF_MS = 500;
 const PLACEMENT_BUSY_MS = 620;
 
 /**

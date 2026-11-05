@@ -6,57 +6,30 @@ import { PALETTE, shapeStyle } from './palette.ts';
 /**
  * Every shape in the game, drawn in code.
  *
- * There are no image files anywhere in this project: silhouettes, faces and confetti are
- * rasterised once through Phaser's Graphics into generated textures, then reused as
- * plain sprites. That keeps the bundle tiny, keeps everything crisp at any density, and
- * honours the offline rule by never fetching anything.
+ * There are no image files anywhere in this project: silhouettes, gloss and confetti are
+ * rasterised once into generated textures, then reused as plain sprites. That keeps the
+ * bundle tiny, keeps everything crisp at any density, and honours the offline rule by
+ * never fetching anything.
  *
- * Each shape is baked in three moods so a placement can react without redrawing:
- * `normal` (two dot eyes and a small smile), `blink` (eyes closed, for the correct-placement
- * flourish) and `surprised` (wide eyes and an O mouth, for a wrong one).
+ * A shape is a solid chip, not a character: a dropped dark edge gives it thickness, an
+ * inner outline keeps it crisp against both the cream cells and the indigo background,
+ * and one soft ellipse of gloss says where the light is. Reactions are carried by the
+ * tween on the sprite — a wobble, a pop — rather than by repainting a face.
  */
-
-export type ShapeMood = 'normal' | 'blink' | 'surprised';
-
-export type MoodKey = `shape-${number}-${ShapeMood}`;
 
 /** Side length of every generated shape texture. */
 export const SHAPE_TEXTURE_SIZE = 72;
 const SIZE = SHAPE_TEXTURE_SIZE;
 const HALF = SIZE / 2;
-/** Silhouette radius before fitting; leaves room for the outline stroke. */
+/** Silhouette radius before fitting; the outline is stroked inside it, so nothing overhangs. */
 const RADIUS = 30;
 const OUTLINE = 5;
 /** Confetti is a 4px solid square, tinted per particle. */
 const CONFETTI = 4;
 
-const MOODS: readonly ShapeMood[] = ['normal', 'blink', 'surprised'];
-
-export function shapeTextureKey(shape: number, mood: ShapeMood): MoodKey {
-    return `shape-${shape}-${mood}`;
+export function shapeTextureKey(shape: number): string {
+    return `shape-${shape}`;
 }
-
-/** Per-shape face placement: the silhouette's visual centre is not always its geometric one. */
-interface FaceLayout {
-    /** Vertical offset of the face from the centre of the texture. */
-    readonly dy: number;
-    /** Horizontal distance between the two eyes. */
-    readonly eyeSpacing: number;
-    readonly eyeRadius: number;
-    readonly mouthWidth: number;
-}
-
-const FACE_LAYOUTS: Record<string, FaceLayout> = {
-    circle: { dy: 0, eyeSpacing: 11, eyeRadius: 4.2, mouthWidth: 12 },
-    square: { dy: 0, eyeSpacing: 11, eyeRadius: 4.2, mouthWidth: 12 },
-    // A triangle's mass sits low, so its face drops to stay inside the silhouette.
-    triangle: { dy: 9, eyeSpacing: 9, eyeRadius: 3.8, mouthWidth: 10 },
-    // The star's inner radius is tight, so the whole face shrinks to fit.
-    star: { dy: 0, eyeSpacing: 9, eyeRadius: 3.6, mouthWidth: 9 },
-    hexagon: { dy: 0, eyeSpacing: 11, eyeRadius: 4.2, mouthWidth: 12 },
-    // The lobes crown the upright heart, so the face rides a little above its middle.
-    heart: { dy: -2, eyeSpacing: 10, eyeRadius: 4, mouthWidth: 11 },
-};
 
 type Point = { x: number; y: number };
 
@@ -116,23 +89,56 @@ function heartPolygon(steps: number): Point[] {
     return points;
 }
 
+/** Walks `points` as a closed subpath of the current path. */
+function tracePolygon(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
+    points.forEach((point, index) => {
+        if (index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+}
+
+/**
+ * The silhouette of `name` as a polygon, or `null` for the two shapes drawn from curves.
+ *
+ * Shared by the tracer and the thickness sweep below, so the two can never disagree about
+ * where a shape's edge is. The circle and the rounded square are `null`: their downward
+ * translate already meets itself cleanly, so there is no corner for a gap to open in.
+ */
+function silhouettePolygon(name: ReturnType<typeof shapeStyle>['name']): Point[] | null {
+    const span = RADIUS * 2;
+
+    switch (name) {
+        case 'triangle':
+            return fitPoints(
+                [
+                    { x: 0, y: -RADIUS },
+                    { x: -RADIUS * 0.95, y: RADIUS * 0.78 },
+                    { x: RADIUS * 0.95, y: RADIUS * 0.78 },
+                ],
+                HALF, HALF, span, span,
+            );
+        case 'star':
+            return fitPoints(starPolygon(5, RADIUS, RADIUS * 0.46), HALF, HALF, span, span);
+        case 'hexagon':
+            // Flat-topped: the classic nut silhouette, unmistakable against the circle.
+            return fitPoints(regularPolygon(6, RADIUS), HALF, HALF, span, span);
+        case 'heart':
+            return fitPoints(heartPolygon(72), HALF, HALF, span, span);
+        default:
+            return null;
+    }
+}
+
 /**
  * Traces the silhouette of `shape` as the current path, centred in the texture.
  *
- * Geometry only — every painter below reuses this so the edge, the face, the gloss and
- * the outline can never drift apart by a pixel.
+ * Geometry only — every painter below reuses this so the edge, the gloss and the outline
+ * can never drift apart by a pixel.
  */
 function traceShape(ctx: CanvasRenderingContext2D, shape: number): void {
     const { name } = shapeStyle(shape);
     const span = RADIUS * 2;
-
-    const polygon = (points: readonly Point[]): void => {
-        points.forEach((point, index) => {
-            if (index === 0) ctx.moveTo(point.x, point.y);
-            else ctx.lineTo(point.x, point.y);
-        });
-        ctx.closePath();
-    };
 
     switch (name) {
         case 'circle':
@@ -142,26 +148,36 @@ function traceShape(ctx: CanvasRenderingContext2D, shape: number): void {
         case 'square':
             roundedRectPath(ctx, HALF - RADIUS, HALF - RADIUS, span, span, RADIUS * 0.24);
             break;
-        case 'triangle':
-            polygon(fitPoints(
-                [
-                    { x: 0, y: -RADIUS },
-                    { x: -RADIUS * 0.95, y: RADIUS * 0.78 },
-                    { x: RADIUS * 0.95, y: RADIUS * 0.78 },
-                ],
-                HALF, HALF, span, span,
-            ));
+        default: {
+            const polygon = silhouettePolygon(name);
+            if (polygon) tracePolygon(ctx, polygon);
             break;
-        case 'star':
-            polygon(fitPoints(starPolygon(5, RADIUS, RADIUS * 0.46), HALF, HALF, span, span));
-            break;
-        case 'hexagon':
-            // Flat-topped: the classic nut silhouette, unmistakable against the circle.
-            polygon(fitPoints(regularPolygon(6, RADIUS), HALF, HALF, span, span));
-            break;
-        case 'heart':
-            polygon(fitPoints(heartPolygon(72), HALF, HALF, span, span));
-            break;
+        }
+    }
+}
+
+/**
+ * Sweeps every edge of the silhouette straight down by `thickness`.
+ *
+ * Translating the whole shape downward and stopping there leaves a notch wherever a foot
+ * is not flat: a triangle's base would let the cream cell show through the corner where
+ * its sloped side meets it, and the hexagon and heart have the same problem. Sweeping
+ * each edge closes those corners exactly — this is the same region, described as the
+ * outline dragged down rather than the shape copied down. Because a sweep only ever
+ * moves *down*, it can never widen a shape sideways.
+ */
+function traceThickness(ctx: CanvasRenderingContext2D, shape: number, thickness: number): void {
+    const polygon = silhouettePolygon(shapeStyle(shape).name);
+    if (!polygon) return;
+
+    for (let index = 0; index < polygon.length; index++) {
+        const from = polygon[index];
+        const to = polygon[(index + 1) % polygon.length];
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.lineTo(to.x, to.y + thickness);
+        ctx.lineTo(from.x, from.y + thickness);
+        ctx.closePath();
     }
 }
 
@@ -201,20 +217,29 @@ const GLOSS = 'rgba(255, 255, 255, 0.3)';
  * are built from — so a shape on a cell reads as a small slab of the same material as the
  * furniture around it rather than as a flat sticker.
  *
- * The outline is stroked *inside* the silhouette. Stroking it centred, as a Graphics shape
- * would, pushes the silhouette 2.5px outward and buries almost all of the dark edge; an
- * inner stroke keeps the footprint honest and leaves the full thickness visible below.
+ * The outline is stroked *inside* the silhouette. Stroking it centred would push the
+ * silhouette 2.5px outward and bury almost all of the dark edge; an inner stroke keeps the
+ * footprint honest and leaves the full thickness visible below.
  */
 function paintShape(ctx: CanvasRenderingContext2D, shape: number): void {
     const style = shapeStyle(shape);
+    const edge = cssColour(darken(style.fill, 0.45));
 
+    // The thickness: the silhouette dropped, plus its outline swept down to close the
+    // corners a plain drop would leave open. Painted first, so the body below covers
+    // everything that falls inside the shape and only the underside shows.
     ctx.save();
     ctx.translate(0, EDGE);
     ctx.beginPath();
     traceShape(ctx, shape);
-    ctx.fillStyle = cssColour(darken(style.fill, 0.45));
+    ctx.fillStyle = edge;
     ctx.fill();
     ctx.restore();
+
+    ctx.beginPath();
+    traceThickness(ctx, shape, EDGE);
+    ctx.fillStyle = edge;
+    ctx.fill();
 
     ctx.beginPath();
     traceShape(ctx, shape);
@@ -252,54 +277,6 @@ function paintShape(ctx: CanvasRenderingContext2D, shape: number): void {
     ctx.restore();
 }
 
-/** Paints the face for `mood` on top of an already-drawn body. */
-function drawFace(ctx: CanvasRenderingContext2D, shape: number, mood: ShapeMood): void {
-    const style = shapeStyle(shape);
-    const face = FACE_LAYOUTS[style.name];
-    const ink = cssColour(style.outline);
-
-    const eyeY = HALF + face.dy - 4;
-    const leftX = HALF - face.eyeSpacing;
-    const rightX = HALF + face.eyeSpacing;
-    const mouthY = HALF + face.dy + 8;
-
-    ctx.fillStyle = ink;
-    ctx.strokeStyle = ink;
-    ctx.lineCap = 'round';
-
-    if (mood === 'blink') {
-        // Two short strokes read as closed eyes at any size the shape is drawn at.
-        ctx.lineWidth = Math.max(2.5, face.eyeRadius * 0.8);
-        for (const x of [leftX, rightX]) {
-            ctx.beginPath();
-            ctx.moveTo(x - face.eyeRadius, eyeY);
-            ctx.lineTo(x + face.eyeRadius, eyeY);
-            ctx.stroke();
-        }
-    } else {
-        const eyeRadius = mood === 'surprised' ? face.eyeRadius * 1.4 : face.eyeRadius;
-        for (const x of [leftX, rightX]) {
-            ctx.beginPath();
-            ctx.arc(x, eyeY, eyeRadius, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-
-    ctx.lineWidth = Math.max(2.5, face.eyeRadius * 0.75);
-
-    if (mood === 'surprised') {
-        ctx.beginPath();
-        ctx.arc(HALF, mouthY, face.mouthWidth * 0.3, 0, Math.PI * 2);
-        ctx.stroke();
-        return;
-    }
-
-    // A shallow downward arc: a small, friendly smile.
-    ctx.beginPath();
-    ctx.arc(HALF, mouthY - face.mouthWidth * 0.18, face.mouthWidth * 0.5, Math.PI * 0.15, Math.PI * 0.85);
-    ctx.stroke();
-}
-
 /**
  * Generates every shape texture the game needs. Idempotent, so scenes can call it on
  * `create` without checking first.
@@ -309,22 +286,18 @@ function drawFace(ctx: CanvasRenderingContext2D, shape: number, mood: ShapeMood)
  */
 export function ensureShapeTextures(scene: Phaser.Scene): void {
     for (const shape of [0, 1, 2, 3, 4, 5]) {
-        for (const mood of MOODS) {
-            const key = shapeTextureKey(shape, mood);
-            if (scene.textures.exists(key)) continue;
+        const key = shapeTextureKey(shape);
+        if (scene.textures.exists(key)) continue;
 
-            const texture = scene.textures.createCanvas(key, SIZE, SIZE);
-            if (!texture) continue;
+        const texture = scene.textures.createCanvas(key, SIZE, SIZE);
+        if (!texture) continue;
 
-            const ctx = texture.getContext();
-            paintShape(ctx, shape);
-            drawFace(ctx, shape, mood);
-            texture.refresh();
-        }
+        paintShape(texture.getContext(), shape);
+        texture.refresh();
     }
 }
 
-/** A face-less heart for the HUD, where a tiny grin would only read as noise. */
+/** A face-less heart for the HUD, kept separate from the board's pink heart. */
 export const HEART_KEY = 'hud-heart';
 /** The same heart, in the colour it goes once it has been spent. */
 export const HEART_SPENT_KEY = 'hud-heart-spent';
