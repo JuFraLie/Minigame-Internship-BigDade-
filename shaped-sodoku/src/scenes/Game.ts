@@ -5,7 +5,7 @@ import { applyRenderScale, VIEWPORT_CHANGED } from '../app/viewport.ts';
 import type { GameCommand, RoundEvent, EventsOutPort } from '../domain/ports.ts';
 import { RoundState } from '../domain/RoundState.ts';
 import type { InputPort } from '../input/InputAdapter.ts';
-import { computeLayout, type GameLayout } from '../render/GameLayout.ts';
+import { computeLayout, hitSoundToggle, type GameLayout } from '../render/GameLayout.ts';
 import type { RenderPort } from '../render/RenderPort.ts';
 import { SCENE_GAME, SCENE_RESULT } from './keys.ts';
 
@@ -63,6 +63,7 @@ export class Game extends Phaser.Scene {
         this.#input = this.#deps.createInput(() => this.#layout);
 
         this.#renderer.sync(this.#round.snapshot());
+        this.#renderer.setMuted(this.#deps.sound.muted);
         this.#deps.bridge.startRound();
 
         // Phaser's Clock is torn down with the scene, so this loop needs no cleanup of its own.
@@ -87,6 +88,17 @@ export class Game extends Phaser.Scene {
         const input = this.#input;
         if (!round || !input || this.#ended) return;
 
+        // The sound toggle is HUD furniture rather than puzzle, so it gets first refusal:
+        // only a tap it rejects is allowed to reach the board.
+        const layout = this.#layout;
+        if (layout && hitSoundToggle(layout, pointer.worldX, pointer.worldY)) {
+            const muted = this.#deps.sound.toggleMute();
+            this.#renderer?.setMuted(muted);
+            // A confirmation only when sound is coming back; muting is its own feedback.
+            if (!muted) this.#deps.sound.play('select');
+            return;
+        }
+
         const command: GameCommand | null = input.pick(pointer.worldX, pointer.worldY);
         if (!command) return;
 
@@ -100,25 +112,38 @@ export class Game extends Phaser.Scene {
         for (const event of pending) this.#apply(event);
     }
 
+    /**
+     * Turns each event the round earned into something that moves — and now, something
+     * that sounds. The pitch of a correct placement climbs with the streak, so a run of
+     * them is audible as a run rather than as the same note nine times.
+     */
     #apply(event: RoundEvent): void {
         switch (event.type) {
             case 'correct':
                 this.#renderer?.celebratePlacement(event.index, event.shape);
+                this.#deps.sound.play('place', event.multiplier);
                 break;
             case 'wrong':
                 this.#renderer?.celebrateMistake(event.index, event.shape);
                 this.#renderer?.pulseDanger();
+                this.#deps.sound.play('mistake');
                 break;
             case 'linesCompleted':
                 this.#renderer?.celebrateLines(event.lines);
+                this.#deps.sound.play('lines', event.lines.length);
+                break;
+            case 'selected':
+                this.#deps.sound.play('select');
                 break;
             case 'won':
+                this.#deps.sound.play('win');
                 this.#endRound(true, event.score);
                 break;
             case 'lost':
+                this.#deps.sound.play('lose');
                 this.#endRound(false, event.score);
                 break;
-            // 'selected' and 'timeBonus' are already visible in the redraw that followed.
+            // 'timeBonus' is already visible in the redraw that followed.
             default:
                 break;
         }

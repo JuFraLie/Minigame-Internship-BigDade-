@@ -26,6 +26,18 @@ export interface GameLayout {
         readonly y: number;
         readonly height: number;
     };
+    /**
+     * The sound toggle, parked in the HUD strip between the level capsule and the score.
+     *
+     * Placed by ratio rather than measured: the layout is arithmetic with no text to
+     * measure, and the gap it aims at is the one part of the strip nothing else claims.
+     */
+    readonly sound: {
+        readonly cx: number;
+        readonly cy: number;
+        /** Painted radius. The tap target is a little more generous than this. */
+        readonly radius: number;
+    };
     readonly board: {
         readonly x: number;
         readonly y: number;
@@ -74,6 +86,11 @@ const MIN_GAP = 6;
 /** Smallest board we will lay out before letting it overflow rather than vanish. */
 const MIN_BOARD = 120;
 
+/** Portion of the width the sound toggle's centre sits at, inside the HUD strip. */
+const SOUND_CX_RATIO = 0.29;
+/** Tap forgiveness beyond the painted radius; a thumb is not a stylus. */
+const SOUND_HIT_SLACK = 1.3;
+
 export function computeLayout(input: LayoutInput): GameLayout {
     const width = Math.max(1, input.width);
     const height = Math.max(1, input.height);
@@ -97,6 +114,7 @@ export function computeLayout(input: LayoutInput): GameLayout {
     const offset = slack / 2;
 
     const hudY = topPad + offset;
+    const hudMidY = hudY + hudHeight / 2;
     const boardY = hudY + hudHeight + gap;
     const boardX = (width - boardSize) / 2;
     const trayY = boardY + boardSize + gap;
@@ -124,9 +142,23 @@ export function computeLayout(input: LayoutInput): GameLayout {
         viewport: { width, height },
         topPad,
         hud: { y: hudY, height: hudHeight },
+        sound: { cx: width * SOUND_CX_RATIO, cy: hudMidY, radius: Math.max(11, hudHeight * 0.3) },
         board: { x: boardX, y: boardY, size: boardSize, cell, inset },
         tray: { y: trayY, height: trayHeight, slotWidth, slots },
     };
+}
+
+/**
+ * True when a design-space tap lands on the sound toggle.
+ *
+ * It sits outside the board and the tray, so `hitTest` already refuses it — the play
+ * scene asks this first, because the HUD belongs to the chrome rather than to the puzzle.
+ */
+export function hitSoundToggle(layout: GameLayout, x: number, y: number): boolean {
+    const radius = layout.sound.radius * SOUND_HIT_SLACK;
+    const dx = x - layout.sound.cx;
+    const dy = y - layout.sound.cy;
+    return dx * dx + dy * dy <= radius * radius;
 }
 
 /** Maps a design-space tap to the command it means, or `null` when it means nothing. */

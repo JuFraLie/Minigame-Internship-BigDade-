@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { computeLayout, hitTest, type LayoutInput } from '../src/render/GameLayout.ts';
+import { computeLayout, hitSoundToggle, hitTest, type LayoutInput } from '../src/render/GameLayout.ts';
 
 /** The awkward viewports a phone actually produces: short, tall, narrow and cut-out. */
 const VIEWPORTS: readonly LayoutInput[] = [
@@ -152,4 +152,20 @@ test('the whole tray band stays tappable, not just the artwork', () => {
     const slot = layout.tray.slots[0];
     assert.ok(hitTest(layout, slot.cx, layout.tray.y + 2) !== null, 'top edge of the tray band');
     assert.ok(hitTest(layout, slot.cx, layout.tray.y + layout.tray.height - 2) !== null, 'bottom edge of the tray band');
+});
+
+test('the sound toggle has its own target and never reads as a puzzle tap', () => {
+    const layout = computeLayout({ width: 390, height: 844, safeTop: 44, safeBottom: 0, gridSize: 4, shapeCount: 4 });
+
+    assert.ok(hitSoundToggle(layout, layout.sound.cx, layout.sound.cy), 'dead centre');
+    assert.ok(
+        hitSoundToggle(layout, layout.sound.cx + layout.sound.radius, layout.sound.cy),
+        'the painted edge, which a thumb should still reach',
+    );
+    assert.ok(!hitSoundToggle(layout, layout.sound.cx, layout.hud.y - 10), 'above the strip');
+    assert.ok(!hitSoundToggle(layout, layout.board.x, layout.board.y), 'on the board');
+
+    // It is chrome, not puzzle: the play scene asks about it first, and only a tap it
+    // rejects may fall through to the board and tray.
+    assert.equal(hitTest(layout, layout.sound.cx, layout.sound.cy), null, 'neither a cell nor a tray slot');
 });

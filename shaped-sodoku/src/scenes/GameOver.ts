@@ -300,6 +300,7 @@ export class GameOver extends Phaser.Scene {
     #retry(): void {
         if (this.#acting) return;
         this.#acting = true;
+        this.#deps.sound.play('tap');
         this.scene.start(SCENE_GAME);
     }
 
@@ -308,6 +309,8 @@ export class GameOver extends Phaser.Scene {
         if (this.#acting) return;
         this.#acting = true;
         this.#deps.session.advanceLevel();
+        // The only button that gets a fanfare rather than a click.
+        this.#deps.sound.play('levelUp');
         this.scene.start(SCENE_GAME);
     }
 
@@ -315,6 +318,7 @@ export class GameOver extends Phaser.Scene {
     #exit(): void {
         if (this.#acting) return;
         this.#acting = true;
+        this.#deps.sound.play('tap');
         this.#deps.bridge.exit(this.#deps.session.lastWin, this.#deps.session.lastScore);
     }
 }

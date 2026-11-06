@@ -43,6 +43,9 @@ export interface RenderPort {
     /** Pulses the screen edge to say a heart was lost. */
     pulseDanger(): void;
 
+    /** Repaints the HUD's sound toggle to read as muted, or as live. */
+    setMuted(muted: boolean): void;
+
     /** Releases display objects when the scene shuts down. */
     destroy(): void;
 }

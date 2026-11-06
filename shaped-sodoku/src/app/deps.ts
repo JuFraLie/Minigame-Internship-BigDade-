@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 
-import type { BridgePort, SessionPort, ClockPort, ViewportPort } from '../domain/ports.ts';
+import type { BridgePort, SessionPort, ClockPort, SoundPort, ViewportPort } from '../domain/ports.ts';
 import type { GameLayout } from '../render/GameLayout.ts';
 import type { RenderPort } from '../render/RenderPort.ts';
 import type { InputPort } from '../input/InputAdapter.ts';
@@ -18,6 +18,8 @@ export interface AppDeps {
     readonly session: SessionPort;
     readonly clock: ClockPort;
     readonly viewport: ViewportPort;
+    /** Everything the game plays out loud, through its port rather than an audio device. */
+    readonly sound: SoundPort;
     /** Builds the renderer for a scene. The scene only ever sees `RenderPort`. */
     readonly createRenderer: (scene: Phaser.Scene) => RenderPort;
     /** Builds the input adapter, fed by whatever layout the scene currently holds. */

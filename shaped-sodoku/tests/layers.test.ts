@@ -26,11 +26,22 @@ function walk(directory: string, base = ''): string[] {
     return found.sort();
 }
 
-type Layer = 'domain' | 'input' | 'render-pure' | 'render-phaser' | 'bridge-module' | 'bridge-adapter' | 'app' | 'scenes' | 'entry';
+type Layer =
+    | 'domain'
+    | 'input'
+    | 'render-pure'
+    | 'render-phaser'
+    | 'bridge-module'
+    | 'bridge-adapter'
+    | 'audio'
+    | 'app'
+    | 'scenes'
+    | 'entry';
 
 function layerOf(relative: string): Layer | null {
     if (relative.startsWith('domain/')) return 'domain';
     if (relative.startsWith('input/')) return 'input';
+    if (relative.startsWith('audio/')) return 'audio';
     if (relative.startsWith('render/')) {
         const name = relative.slice('render/'.length);
         return ['GameLayout.ts', 'palette.ts', 'RenderPort.ts'].includes(name) ? 'render-pure' : 'render-phaser';
@@ -55,6 +66,9 @@ const ALLOWED_TARGETS: Record<Layer, (target: string) => boolean> = {
     'render-phaser': (target) => target.startsWith('domain/') || target.startsWith('render/'),
     'bridge-module': () => false,
     'bridge-adapter': (target) => target === 'bridge/MpBridge.ts' || target === 'domain/ports.ts',
+    // Sound is an output adapter like the bridge: it speaks the domain's vocabulary and
+    // reaches for nothing else — in particular, it never imports Phaser.
+    audio: (target) => target.startsWith('domain/'),
     app: () => true,
     scenes: (target) =>
         target.startsWith('domain/') ||

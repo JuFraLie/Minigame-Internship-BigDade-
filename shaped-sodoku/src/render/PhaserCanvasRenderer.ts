@@ -83,6 +83,8 @@ export class PhaserCanvasRenderer implements RenderPort {
     #scoreText: Phaser.GameObjects.Text | null = null;
     #levelText: Phaser.GameObjects.Text | null = null;
     #timeText: Phaser.GameObjects.Text | null = null;
+    /** Mirrors the sound port, so the HUD's toggle can be repainted on the spot. */
+    #muted = false;
 
     /**
      * What the HUD said on the previous pass, so a change can be *felt* rather than merely
@@ -297,6 +299,64 @@ export class PhaserCanvasRenderer implements RenderPort {
         capsule(viewport.width / 2 - scoreWidth / 2, viewport.width / 2 + scoreWidth / 2);
 
         capsule(time.x - time.width - padX, lastHeart.x + lastHeart.displayWidth * 0.5 + 6);
+
+        this.#drawSoundToggle(gfx, layout);
+    }
+
+    /**
+     * The sound toggle: a well of its own, drawn as a speaker with waves when live and
+     * with a slash through it when not.
+     *
+     * The silhouette is a block joined to a horn that flares outward — the shape reads as
+     * a speaker at eighteen pixels, where a triangle would just read as an arrow. It is
+     * vector rather than a glyph because the emoji for a speaker differs per platform and
+     * this game ships no font of its own.
+     */
+    #drawSoundToggle(gfx: Phaser.GameObjects.Graphics, layout: GameLayout): void {
+        const { cx, cy, radius } = layout.sound;
+        const r = radius;
+        const colour = this.#muted ? PALETTE.textMuted : PALETTE.text;
+
+        drawBevel(gfx, cx - r, cy - r, r * 2, r * 2, r, {
+            fill: PALETTE.hudPill,
+            depth: 3,
+            outline: PALETTE.hudPillEdge,
+            outlineWidth: 2,
+            gloss: 0.14,
+        });
+
+        // Block, then horn: the outline steps out at the join, which is what makes the
+        // shape a speaker rather than a pointer.
+        const blockLeft = cx - r * 0.6;
+        const join = cx - r * 0.26;
+        const mouth = cx + r * 0.22;
+        gfx.fillStyle(colour, 1);
+        gfx.fillPoints([
+            { x: blockLeft, y: cy - r * 0.17 },
+            { x: join, y: cy - r * 0.17 },
+            { x: mouth, y: cy - r * 0.38 },
+            { x: mouth, y: cy + r * 0.38 },
+            { x: join, y: cy + r * 0.17 },
+            { x: blockLeft, y: cy + r * 0.17 },
+        ]);
+
+        if (this.#muted) {
+            // A single slash, not a cross: at this size a cross reads as a close button.
+            gfx.lineStyle(Math.max(2, r * 0.16), PALETTE.danger, 1);
+            gfx.beginPath();
+            gfx.moveTo(cx - r * 0.55, cy - r * 0.55);
+            gfx.lineTo(cx + r * 0.65, cy + r * 0.55);
+            gfx.strokePath();
+            return;
+        }
+
+        // Two arcs springing from the mouth of the horn.
+        gfx.lineStyle(Math.max(2, r * 0.14), colour, 1);
+        for (const spread of [0.36, 0.6]) {
+            gfx.beginPath();
+            gfx.arc(mouth, cy, r * spread, -0.9, 0.9);
+            gfx.strokePath();
+        }
     }
 
     sync(snapshot: RoundSnapshot): void {
@@ -409,6 +469,13 @@ export class PhaserCanvasRenderer implements RenderPort {
             ease: 'Sine.easeInOut',
             onComplete: () => gfx.setAlpha(0),
         });
+    }
+
+    setMuted(muted: boolean): void {
+        if (this.#muted === muted) return;
+        this.#muted = muted;
+        // The HUD chrome is repainted wholesale, and it already owns this button.
+        if (this.#layout) this.#drawHud(this.#layout);
     }
 
     destroy(): void {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { createLoFiSound } from '../audio/lofi.ts';
 import type { ClockPort } from '../domain/ports.ts';
 import { createHostBridge } from '../bridge/hostBridge.ts';
 import { InputAdapter } from '../input/InputAdapter.ts';
@@ -18,9 +19,9 @@ const RESIZE_DEBOUNCE_MS = 80;
  * classes exist.
  *
  * The scenes declare what they need (`AppDeps`) and this function decides that means a
- * `PhaserCanvasRenderer`, an `InputAdapter`, the host bridge and a session. Nothing else
- * reaches for a concrete implementation: the render, input and bridge layers never import
- * one another, and the domain imports none of them.
+ * `PhaserCanvasRenderer`, an `InputAdapter`, a `SoundPort`, the host bridge and a
+ * session. Nothing else reaches for a concrete implementation: the render, input, audio
+ * and bridge layers never import one another, and the domain imports none of them.
  *
  * Phaser is instantiated as `Phaser.CANVAS`, never AUTO or WEBGL.
  */
@@ -30,12 +31,14 @@ export function createGame(parent: string): Phaser.Game {
     const scale = renderScale();
 
     const clock: ClockPort = { now: () => Date.now() };
+    const sound = createLoFiSound();
 
     const deps: AppDeps = {
         bridge: createHostBridge(),
         session: createSession(sessionSeed()),
         clock,
         viewport,
+        sound,
         createRenderer: (scene) => new PhaserCanvasRenderer(scene, renderScale),
         createInput: (layoutOf) => new InputAdapter(layoutOf),
     };
@@ -84,6 +87,16 @@ export function createGame(parent: string): Phaser.Game {
 
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
+
+    // Browsers only start audio from inside a gesture, so the first tap anywhere hands
+    // the device over. Capture phase, so Phaser's own pointer handler cannot consume the
+    // event first; the listener removes itself, because a context must be created from a
+    // real gesture exactly once.
+    const unlockAudio = (): void => {
+        sound.unlock();
+        window.removeEventListener('pointerdown', unlockAudio, true);
+    };
+    window.addEventListener('pointerdown', unlockAudio, true);
 
     return game;
 }

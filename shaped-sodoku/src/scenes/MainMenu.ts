@@ -48,6 +48,10 @@ export class MainMenu extends Phaser.Scene {
         applyRenderScale(this);
         ensureTextures(this);
 
+        // The one screen that asks for the loop. It starts on the first tap, because
+        // that is the first moment a browser will let audio run at all.
+        this.#deps.sound.music('lofi');
+
         const { width, height, safeTop } = this.#deps.viewport.current();
 
         this.add
@@ -258,6 +262,7 @@ export class MainMenu extends Phaser.Scene {
     #begin(): void {
         if (this.#starting) return;
         this.#starting = true;
+        this.#deps.sound.play('tap');
         this.#deps.bridge.launch();
         this.scene.start(SCENE_GAME);
     }

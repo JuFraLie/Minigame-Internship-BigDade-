@@ -85,6 +85,63 @@ export interface EventsOutPort {
 }
 
 /**
+ * One-shots the game can ask to hear.
+ *
+ * Every one of these is synthesised at play time from oscillators and shaped noise. There
+ * is not an audio file anywhere in the project, for the same reason there is no image
+ * file: nothing to fetch, nothing to license, nothing that can 404 on a static host.
+ */
+export type SoundName =
+    /** A button went down. */
+    | 'tap'
+    /** A cell or a shape was highlighted. */
+    | 'select'
+    /** A shape landed where it belongs; `step` is the streak. */
+    | 'place'
+    /** A shape landed somewhere it does not. */
+    | 'mistake'
+    /** A row, column or box closed; `step` is how many closed at once. */
+    | 'lines'
+    /** The round was cleared. */
+    | 'win'
+    /** The hearts ran out. */
+    | 'lose'
+    /** A level was rolled forward. */
+    | 'levelUp';
+
+/** The loop playing underneath a screen. One track so far, named for its style. */
+export type MusicTrack = 'lofi';
+
+/**
+ * What the game plays out loud.
+ *
+ * A port like every other: the scenes say *what* should be heard, and `src/app/` decides
+ * which synthesiser provides it. Nothing here knows that an `AudioContext` exists.
+ */
+export interface SoundPort {
+    /**
+     * Hands the audio device over to the game.
+     *
+     * Browsers refuse to start audio outside a user gesture, so the composition root
+     * calls this on the first tap. Calling it twice is harmless; never calling it means
+     * the game runs silent rather than broken.
+     */
+    unlock(): void;
+
+    /** Plays a one-shot. `step` raises the pitch — a streak, a double line, a new level. */
+    play(name: SoundName, step?: number): void;
+
+    /** Starts the loop, or fades it out with `null`. Asking for the current track is a no-op. */
+    music(track: MusicTrack | null): void;
+
+    /** Whether audio is currently silenced. */
+    readonly muted: boolean;
+
+    /** Flips mute and reports the state it landed on. */
+    toggleMute(): boolean;
+}
+
+/**
  * The host shell.
  *
  * `launch` fires once per session after Play, `startRound` at every round start,
