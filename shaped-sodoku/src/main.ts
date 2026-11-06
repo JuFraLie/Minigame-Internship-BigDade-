@@ -7,11 +7,15 @@ import { waitForBridge } from './bridge/MpBridge.ts';
  * the repository rules require the game code to wait for the host, so `launch` is
  * guaranteed to have somewhere to go by the time a player can press Play. The composition
  * root is imported lazily for exactly that reason.
+ *
+ * If no host ever shows up the game still starts. Every bridge signal is optional —
+ * the bridge module guards each send — so with nobody listening they are simply dropped,
+ * which is what makes the same build runnable on its own, for instance from the committed
+ * `dist/` on GitHub Pages. Refusing to start would leave that page blank forever.
  */
 const boot = async (): Promise<void> => {
     if (!(await waitForBridge())) {
-        console.error('The host bridge is not available; the game was not started.');
-        return;
+        console.warn('The host bridge is not available; starting the game without it.');
     }
 
     const { createGame } = await import('./app/composition.ts');
