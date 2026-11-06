@@ -124,7 +124,7 @@ export class GameOver extends Phaser.Scene {
         const scoreCy = cursor + scoreH / 2;
 
         const icon = this.add
-            .image(cx, iconCy, shapeTextureKey(win ? 3 : 5, win ? 'normal' : 'surprised'))
+            .image(cx, iconCy, shapeTextureKey(win ? 3 : 5))
             .setDisplaySize(iconSize, iconSize)
             .setDepth(1);
 

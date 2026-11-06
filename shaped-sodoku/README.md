@@ -137,10 +137,10 @@ which is exactly what the tests exercise.
 - `Scale.FIT` with `NO_CENTER` — centring is CSS's job (`public/style.css`), not the
   canvas's. The design size tracks the window height, so the fit factor is exactly
   `1 / renderScale()` and there is no resampling blur.
-- **All art is generated in code.** `ShapeTextures.ts` rasterises silhouettes, faces
-  (normal / blink / surprised), confetti and the background wash into textures through
-  Phaser Graphics and `textures.createCanvas`. There are no image files anywhere in this
-  project, so there is nothing to fetch.
+- **All art is generated in code.** `ShapeTextures.ts` rasterises silhouettes (with their
+  bevel, gloss and inner outline), confetti and the background wash into textures through
+  `textures.createCanvas`. There are no image files anywhere in this project, so there is
+  nothing to fetch.
 - Text is rasterised at device density: `resolution: renderScale()` is passed in the
   style **at construction**, because Phaser stamps `frame.source.resolution` exactly once
   while the Text is being built. Setting it later rebuilds the canvas without re-stamping

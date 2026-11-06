@@ -162,7 +162,7 @@ export class MainMenu extends Phaser.Scene {
 
         CLUSTER.forEach((item, index) => {
             const sprite = this.add
-                .image(cx + item.dx * width, cy + item.dy * height, shapeTextureKey(item.shape, 'normal'))
+                .image(cx + item.dx * width, cy + item.dy * height, shapeTextureKey(item.shape))
                 .setDisplaySize(item.size * unit, item.size * unit);
             this.#bobbers.push(sprite);
 

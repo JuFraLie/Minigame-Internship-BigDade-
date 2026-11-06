@@ -117,10 +117,10 @@ export class PhaserCanvasRenderer implements RenderPort {
         const shapeCount = Math.min(grid.size, 6);
 
         this.#cells = Array.from({ length: grid.size * grid.size }, () =>
-            scene.add.image(0, 0, 'shape-0-normal').setDepth(DEPTH.cells).setVisible(false),
+            scene.add.image(0, 0, 'shape-0').setDepth(DEPTH.cells).setVisible(false),
         );
         this.#trayShapes = Array.from({ length: shapeCount }, () =>
-            scene.add.image(0, 0, shapeTextureKey(0, 'normal')).setDepth(DEPTH.trayShapes),
+            scene.add.image(0, 0, shapeTextureKey(0)).setDepth(DEPTH.trayShapes),
         );
         // The remaining-count coin sits under the numeral it belongs to; both are made here
         // so a depleted slot can dim them together.
@@ -322,7 +322,7 @@ export class PhaserCanvasRenderer implements RenderPort {
         const scene = this.#scene;
 
         scene.tweens.killTweensOf(sprite as unknown as object);
-        sprite.setTexture(shapeTextureKey(shape, 'normal')).setVisible(true).setAlpha(1).setAngle(0);
+        sprite.setTexture(shapeTextureKey(shape)).setVisible(true).setAlpha(1).setAngle(0);
         sprite.setScale(target * 0.2);
 
         // Squash-and-stretch in: `Back` overshoots on the way, which reads as a bounce.
@@ -337,13 +337,6 @@ export class PhaserCanvasRenderer implements RenderPort {
             ease: 'Sine.easeInOut',
         });
 
-        // A blink so the shape looks pleased with where it landed.
-        scene.time.delayedCall(BLINK_AT_MS, () => {
-            if (sprite.active) sprite.setTexture(shapeTextureKey(shape, 'blink'));
-        });
-        scene.time.delayedCall(BLINK_OFF_MS, () => {
-            if (sprite.active) sprite.setTexture(shapeTextureKey(shape, 'normal'));
-        });
         scene.time.delayedCall(PLACEMENT_BUSY_MS, () => this.#releaseBusy(index, token));
     }
 
@@ -357,7 +350,7 @@ export class PhaserCanvasRenderer implements RenderPort {
         const scene = this.#scene;
 
         scene.tweens.killTweensOf(sprite as unknown as object);
-        sprite.setTexture(shapeTextureKey(shape, 'surprised')).setVisible(true).setAlpha(1).setScale(target);
+        sprite.setTexture(shapeTextureKey(shape)).setVisible(true).setAlpha(1).setScale(target);
 
         // A wobble rather than an x-shake: the sprite expresses surprise without owning a
         // coordinate that a viewport change could also be writing to.
@@ -479,7 +472,7 @@ export class PhaserCanvasRenderer implements RenderPort {
                 continue;
             }
             sprite
-                .setTexture(shapeTextureKey(shape, 'normal'))
+                .setTexture(shapeTextureKey(shape))
                 .setVisible(true)
                 .setAlpha(1)
                 .setAngle(0)
@@ -489,7 +482,7 @@ export class PhaserCanvasRenderer implements RenderPort {
         for (let index = 0; index < this.#trayShapes.length; index++) {
             const needed = snapshot.tray[index] ?? 0;
             const depleted = needed <= 0;
-            this.#trayShapes[index]?.setTexture(shapeTextureKey(index, 'normal')).setAlpha(depleted ? 0.3 : 1);
+            this.#trayShapes[index]?.setTexture(shapeTextureKey(index)).setAlpha(depleted ? 0.3 : 1);
             this.#trayBadges[index]?.setText(String(needed)).setAlpha(depleted ? 0.45 : 1);
             this.#trayChips[index]?.setAlpha(depleted ? 0.35 : 1);
         }

@@ -31,7 +31,7 @@ export interface RenderPort {
     /** Highlights the selected cell, plus its row, column and box. */
     highlight(index: number | null): void;
 
-    /** Squash, stretch and blink for a correct placement. */
+    /** Squash and stretch for a correct placement. */
     celebratePlacement(index: number, shape: ShapeId): void;
 
     /** Shake and surprise for a wrong placement, then pop the shape back out. */

@@ -157,27 +157,34 @@ function traceShape(ctx: CanvasRenderingContext2D, shape: number): void {
 }
 
 /**
- * Sweeps every edge of the silhouette straight down by `thickness`.
+ * Paints the outline of `shape` swept straight down by `thickness`.
  *
  * Translating the whole shape downward and stopping there leaves a notch wherever a foot
- * is not flat: a triangle's base would let the cream cell show through the corner where
- * its sloped side meets it, and the hexagon and heart have the same problem. Sweeping
- * each edge closes those corners exactly — this is the same region, described as the
- * outline dragged down rather than the shape copied down. Because a sweep only ever
- * moves *down*, it can never widen a shape sideways.
+ * is not flat: a triangle's base would let the cell show through the corner where its
+ * sloped side meets it, and the hexagon and heart have the same problem. Sweeping each
+ * edge closes those corners exactly — the same region, described as the outline dragged
+ * down rather than the shape copied down. Because a sweep only ever moves *down*, it can
+ * never widen a shape sideways.
+ *
+ * Every band is filled in its own call. Adjacent edges of a polygon run in opposite
+ * directions, so a shared path gives their windings opposite signs and they cancel
+ * precisely where two bands overlap — which is the corner this exists to repair.
  */
-function traceThickness(ctx: CanvasRenderingContext2D, shape: number, thickness: number): void {
+function paintThickness(ctx: CanvasRenderingContext2D, shape: number, thickness: number, colour: string): void {
     const polygon = silhouettePolygon(shapeStyle(shape).name);
     if (!polygon) return;
 
+    ctx.fillStyle = colour;
     for (let index = 0; index < polygon.length; index++) {
         const from = polygon[index];
         const to = polygon[(index + 1) % polygon.length];
+        ctx.beginPath();
         ctx.moveTo(from.x, from.y);
         ctx.lineTo(to.x, to.y);
         ctx.lineTo(to.x, to.y + thickness);
         ctx.lineTo(from.x, from.y + thickness);
         ctx.closePath();
+        ctx.fill();
     }
 }
 
@@ -236,10 +243,7 @@ function paintShape(ctx: CanvasRenderingContext2D, shape: number): void {
     ctx.fill();
     ctx.restore();
 
-    ctx.beginPath();
-    traceThickness(ctx, shape, EDGE);
-    ctx.fillStyle = edge;
-    ctx.fill();
+    paintThickness(ctx, shape, EDGE, edge);
 
     ctx.beginPath();
     traceShape(ctx, shape);
