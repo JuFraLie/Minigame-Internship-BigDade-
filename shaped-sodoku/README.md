@@ -50,6 +50,13 @@ advances the level and draws a fresh one.
   only on the Result Panel, which appears after the score has been finalised and reported.
 - Retry goes **straight back to gameplay**; the Play Screen does not replay.
 - Exit calls the bridge exit signal once and does nothing else.
+- **Sound starts on the first tap.** Browsers only allow audio inside a gesture, so the
+  composition root unlocks the device on the first pointer-down and the loop begins there.
+  Both the loop and every one-shot are synthesised from oscillators in `src/audio/lofi.ts` —
+  there is no audio file anywhere in the project, for the same reason there is no image file.
+- **The HUD carries a speaker button** between the level capsule and the score. It silences
+  the loop and the one-shots for the session; nothing is persisted, so a reload comes back
+  audible.
 
 ---
 
@@ -86,7 +93,7 @@ src/
     PuzzleGenerator.ts seeded generation + unique-solution check
     RoundState.ts      the whole round: commands in, events out
     ports.ts           the contracts — ClockPort, BridgePort, SessionPort,
-                       ViewportPort, EventsOutPort, GameCommand, RoundSnapshot
+                       ViewportPort, EventsOutPort, SoundPort, GameCommand, RoundSnapshot
   render/
     GameLayout.ts      pure geometry: viewport → board / tray / HUD coordinates
     palette.ts         colour and font stack (shape identity → hue)
@@ -95,6 +102,8 @@ src/
     PhaserCanvasRenderer.ts  the only class in the project that draws
   input/
     InputAdapter.ts    design-space tap → { row, col } | { shape }
+  audio/
+    lofi.ts            SoundPort impl — the whole soundtrack synthesised from oscillators
   bridge/
     MpBridge.ts        preserved host bridge — the ONLY file touching window.MpPostMessage
     hostBridge.ts      BridgePort adapter with once-guards per signal
@@ -105,7 +114,7 @@ src/
     composition.ts     composition root — the only file naming concrete classes
   scenes/
     keys.ts widgets.ts MainMenu.ts Game.ts GameOver.ts
-  main.ts              waits for the bridge, then boots the game
+  main.ts              waits for the bridge, then boots the game — with it or without
 public/style.css       layout only; the game draws nothing in CSS
 index.html
 tests/                 Node's native test runner
@@ -199,7 +208,8 @@ that draws anything loads second.
   difficulty table across levels.
 - `scoring` — multiplier ladder, streak break, penalty floor, line bonus, time bonus.
 - `layout` — the board sits below the HUD and above the tray on awkward viewports, short
-  screens shrink the board rather than overflowing, and the cutout is respected.
+  screens shrink the board rather than overflowing, the cutout is respected, and the
+  sound toggle has its own tap target without ever reading as a puzzle tap.
 - `bridge` — `launch` once, `startRound` per round, `endRound` re-armed per round,
   `exit` at most once.
 - `perf` — a headless round against a frame budget, so logic regressions are caught
