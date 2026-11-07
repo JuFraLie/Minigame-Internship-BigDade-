@@ -54,9 +54,11 @@ advances the level and draws a fresh one.
   composition root unlocks the device on the first pointer-down and the loop begins there.
   Both the loop and every one-shot are synthesised from oscillators in `src/audio/lofi.ts` —
   there is no audio file anywhere in the project, for the same reason there is no image file.
-- **The HUD carries a speaker button** between the level capsule and the score. It silences
-  the loop and the one-shots for the session; nothing is persisted, so a reload comes back
-  audible.
+- **The HUD carries a speaker button** leading the strip from the left — a capsule of the
+  same height as the level, score and hearts capsules, so the row stays one piece of
+  furniture. It silences the loop and the one-shots for the session; nothing is persisted,
+  so a reload comes back audible. There is no countdown in that strip any more: par still
+  sets a time bonus, it is simply never shown.
 
 ---
 
@@ -168,7 +170,8 @@ which is exactly what the tests exercise.
   keeps `puzzleSeed` per level so Retry is an honest second attempt at the same board,
   while `advanceLevel()` draws a fresh seed.
 - **No time-based loss.** Par only sets the time bonus; a round ends on a completed board
-  or on the last heart. The HUD clock counts down to zero and then stops.
+  or on the last heart. The countdown is not shown at all — the bonus still accrues quietly,
+  so a fast round is paid for without a clock ever appearing on screen.
 - `src/bridge/MpBridge.ts` keeps `IS_DEVELOPMENT_MODE = true` in source so the game runs
   in a plain browser. `vite.config.ts` rewrites it to `false` during `npm run build` and
   **fails the build** if the rewrite ever stops matching.

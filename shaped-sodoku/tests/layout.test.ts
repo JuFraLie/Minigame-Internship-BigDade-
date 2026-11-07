@@ -157,15 +157,18 @@ test('the whole tray band stays tappable, not just the artwork', () => {
 test('the sound toggle has its own target and never reads as a puzzle tap', () => {
     const layout = computeLayout({ width: 390, height: 844, safeTop: 44, safeBottom: 0, gridSize: 4, shapeCount: 4 });
 
-    assert.ok(hitSoundToggle(layout, layout.sound.cx, layout.sound.cy), 'dead centre');
+    const cx = layout.sound.x + layout.sound.width / 2;
+    const midY = layout.hud.y + layout.hud.height / 2;
+
+    assert.ok(hitSoundToggle(layout, cx, midY), 'dead centre');
     assert.ok(
-        hitSoundToggle(layout, layout.sound.cx + layout.sound.radius, layout.sound.cy),
+        hitSoundToggle(layout, layout.sound.x + layout.sound.width, midY),
         'the painted edge, which a thumb should still reach',
     );
-    assert.ok(!hitSoundToggle(layout, layout.sound.cx, layout.hud.y - 10), 'above the strip');
+    assert.ok(!hitSoundToggle(layout, cx, layout.hud.y - 10), 'above the strip');
     assert.ok(!hitSoundToggle(layout, layout.board.x, layout.board.y), 'on the board');
 
     // It is chrome, not puzzle: the play scene asks about it first, and only a tap it
     // rejects may fall through to the board and tray.
-    assert.equal(hitTest(layout, layout.sound.cx, layout.sound.cy), null, 'neither a cell nor a tray slot');
+    assert.equal(hitTest(layout, cx, midY), null, 'neither a cell nor a tray slot');
 });

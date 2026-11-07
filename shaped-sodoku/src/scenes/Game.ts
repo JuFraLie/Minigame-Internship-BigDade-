@@ -11,13 +11,6 @@ import { SCENE_GAME, SCENE_RESULT } from './keys.ts';
 
 /** Lets the last placement animation play out before the Result Panel replaces it. */
 const RESULT_DELAY_MS = 750;
-/**
- * How often the HUD refreshes itself between taps.
- *
- * The clock lives in the snapshot, and a snapshot is only pushed when the player acts —
- * without this the countdown would freeze on whatever it last said until the next move.
- */
-const HUD_TICK_MS = 500;
 
 /**
  * The gameplay screen: HUD, board and shape tray.
@@ -66,19 +59,9 @@ export class Game extends Phaser.Scene {
         this.#renderer.setMuted(this.#deps.sound.muted);
         this.#deps.bridge.startRound();
 
-        // Phaser's Clock is torn down with the scene, so this loop needs no cleanup of its own.
-        this.time.addEvent({ delay: HUD_TICK_MS, loop: true, callback: () => this.#tick() });
-
         this.input.on('pointerdown', this.#onPointerDown, this);
         this.game.events.on(VIEWPORT_CHANGED, this.#onViewportChanged);
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.#teardown, this);
-    }
-
-    /** Re-pushes the snapshot so the HUD clock keeps counting between taps. */
-    #tick(): void {
-        const round = this.#round;
-        if (!round || this.#ended) return;
-        this.#renderer?.sync(round.snapshot());
     }
 
     // ---- input -------------------------------------------------------------

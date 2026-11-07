@@ -82,7 +82,6 @@ export class PhaserCanvasRenderer implements RenderPort {
     #confettiCursor = 0;
     #scoreText: Phaser.GameObjects.Text | null = null;
     #levelText: Phaser.GameObjects.Text | null = null;
-    #timeText: Phaser.GameObjects.Text | null = null;
     /** Mirrors the sound port, so the HUD's toggle can be repainted on the spot. */
     #muted = false;
 
@@ -163,16 +162,6 @@ export class PhaserCanvasRenderer implements RenderPort {
             .setOrigin(0, 0.5)
             .setDepth(DEPTH.hud);
 
-        this.#timeText = scene.add
-            .text(0, 0, '', {
-                fontFamily: FONT_STACK,
-                fontSize: '15px',
-                color: '#b9b3d8',
-                resolution: this.#renderScale(),
-            })
-            .setOrigin(1, 0.5)
-            .setDepth(DEPTH.hud);
-
         this.#hearts = Array.from({ length: 3 }, () =>
             scene.add.image(0, 0, HEART_KEY).setDepth(DEPTH.hud).setScale(0.3),
         );
@@ -202,11 +191,13 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#drawBoard(layout, gridSize, grid);
         this.#drawTray(layout);
 
-        // Level labels the left, score takes centre stage, clock and hearts hold the right.
+        // Level labels the left of the strip, score takes centre stage, hearts hold the
+        // right. Where the level capsule *starts* depends on the sound toggle standing in
+        // front of it, which `#drawHud` works out once it has the score measured.
         const hudMidY = hud.y + hud.height / 2;
         const scoreFont = Math.round(hud.height * 0.6);
         this.#scoreText?.setPosition(viewport.width / 2, hudMidY).setFontSize(scoreFont);
-        this.#levelText?.setPosition(viewport.width * 0.06, hudMidY).setFontSize(Math.round(hud.height * 0.3));
+        this.#levelText?.setFontSize(Math.round(hud.height * 0.3));
         this.#levelText?.setVisible(true);
 
         this.#heartBase = Math.max(0.24, Math.min(0.4, hud.height * 0.0068));
@@ -216,9 +207,6 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#hearts.forEach((heart, index) => {
             heart.setPosition(heartsRight - heartsWidth + index * heartGap, hudMidY).setScale(this.#heartBase);
         });
-
-        this.#timeText?.setFontSize(Math.round(hud.height * 0.27));
-        this.#timeText?.setPosition(heartsRight - heartsWidth - heartGap * 0.8, hudMidY);
 
         this.#drawHud(layout);
 
@@ -259,19 +247,21 @@ export class PhaserCanvasRenderer implements RenderPort {
     }
 
     /**
-     * Three capsules behind the HUD — level, score, clock-and-hearts — so the strip reads as
-     * furniture bolted to the screen rather than three pieces of loose text.
+     * Four capsules behind the HUD — sound, level, score, hearts — so the strip reads as
+     * furniture bolted to the screen rather than four pieces of loose text.
      *
      * Drawn last of the chrome because it measures the labels it sits behind: their widths
-     * are only known once their font sizes have just been set.
+     * are only known once their font sizes have just been set, and the level capsule can
+     * only begin where the sound capsule in front of it ends. There is no countdown any
+     * more, so the right-hand capsule wraps the hearts and nothing else.
      */
     #drawHud(layout: GameLayout): void {
         const gfx = this.#hudGfx;
         const level = this.#levelText;
         const score = this.#scoreText;
-        const time = this.#timeText;
+        const firstHeart = this.#hearts[0];
         const lastHeart = this.#hearts[this.#hearts.length - 1];
-        if (!gfx || !level || !score || !time || !lastHeart) return;
+        if (!gfx || !level || !score || !firstHeart || !lastHeart) return;
 
         const { viewport, hud } = layout;
         const midY = hud.y + hud.height / 2;
@@ -291,70 +281,75 @@ export class PhaserCanvasRenderer implements RenderPort {
             });
         };
 
-        capsule(viewport.width * 0.03, level.x + level.width + padX);
+        // The sound toggle leads the strip at exactly the height of the other three. The
+        // layout gives it its width, but a capsule has to be wider than it is tall or it
+        // collapses into a circle — and a measured score can always push the pill taller
+        // than the layout's figure assumed, so the pill is widened here if it must be.
+        const soundWidth = Math.max(layout.sound.width, pillHeight * 1.15);
+        const soundRight = layout.sound.x + soundWidth;
+        capsule(layout.sound.x, soundRight);
+
+        // Level follows, padded off the capsule the way it used to pad off the screen edge.
+        const levelLeft = soundRight + padX;
+        level.setPosition(levelLeft + padX, midY);
+        capsule(levelLeft, level.x + level.width + padX);
 
         // A single digit otherwise squeezes this into a circle that reads as a bubble
-        // rather than a capsule, so the pill keeps a floor of roughly 2.3:1.
-        const scoreWidth = Math.max(score.width + padX * 3, pillHeight * 2.3);
+        // rather than a capsule, so the pill keeps a floor — but only of 1.7:1, because
+        // anything wider would swallow the gap the two capsules before it need.
+        const scoreWidth = Math.max(score.width + padX * 3, pillHeight * 1.7);
         capsule(viewport.width / 2 - scoreWidth / 2, viewport.width / 2 + scoreWidth / 2);
 
-        capsule(time.x - time.width - padX, lastHeart.x + lastHeart.displayWidth * 0.5 + 6);
+        capsule(
+            firstHeart.x - firstHeart.displayWidth * 0.5 - 6,
+            lastHeart.x + lastHeart.displayWidth * 0.5 + 6,
+        );
 
-        this.#drawSoundToggle(gfx, layout);
+        this.#drawSoundToggle(gfx, layout.sound.x + soundWidth / 2, midY, pillHeight);
     }
 
     /**
-     * The sound toggle: a well of its own, drawn as a speaker with waves when live and
-     * with a slash through it when not.
+     * The speaker itself: a block joined to a horn that flares outward, with waves when
+     * live and a slash through it when not.
      *
-     * The silhouette is a block joined to a horn that flares outward — the shape reads as
-     * a speaker at eighteen pixels, where a triangle would just read as an arrow. It is
-     * vector rather than a glyph because the emoji for a speaker differs per platform and
-     * this game ships no font of its own.
+     * The step at the join is what makes the shape read as a speaker at thirty pixels,
+     * where a plain triangle just reads as an arrow. It is vector rather than a glyph
+     * because the emoji for a speaker differs per platform and this game ships no font
+     * of its own.
      */
-    #drawSoundToggle(gfx: Phaser.GameObjects.Graphics, layout: GameLayout): void {
-        const { cx, cy, radius } = layout.sound;
-        const r = radius;
+    #drawSoundToggle(gfx: Phaser.GameObjects.Graphics, cx: number, midY: number, h: number): void {
         const colour = this.#muted ? PALETTE.textMuted : PALETTE.text;
 
-        drawBevel(gfx, cx - r, cy - r, r * 2, r * 2, r, {
-            fill: PALETTE.hudPill,
-            depth: 3,
-            outline: PALETTE.hudPillEdge,
-            outlineWidth: 2,
-            gloss: 0.14,
-        });
-
-        // Block, then horn: the outline steps out at the join, which is what makes the
-        // shape a speaker rather than a pointer.
-        const blockLeft = cx - r * 0.6;
-        const join = cx - r * 0.26;
-        const mouth = cx + r * 0.22;
+        // Block, then horn — sized so the silhouette is centred on the capsule: it reaches
+        // 0.44 of the height either side of centre, which is as far as the waves spring.
+        const blockLeft = cx - h * 0.44;
+        const join = cx - h * 0.16;
+        const mouth = cx + h * 0.09;
         gfx.fillStyle(colour, 1);
         gfx.fillPoints([
-            { x: blockLeft, y: cy - r * 0.17 },
-            { x: join, y: cy - r * 0.17 },
-            { x: mouth, y: cy - r * 0.38 },
-            { x: mouth, y: cy + r * 0.38 },
-            { x: join, y: cy + r * 0.17 },
-            { x: blockLeft, y: cy + r * 0.17 },
+            { x: blockLeft, y: midY - h * 0.11 },
+            { x: join, y: midY - h * 0.11 },
+            { x: mouth, y: midY - h * 0.25 },
+            { x: mouth, y: midY + h * 0.25 },
+            { x: join, y: midY + h * 0.11 },
+            { x: blockLeft, y: midY + h * 0.11 },
         ]);
 
         if (this.#muted) {
             // A single slash, not a cross: at this size a cross reads as a close button.
-            gfx.lineStyle(Math.max(2, r * 0.16), PALETTE.danger, 1);
+            gfx.lineStyle(Math.max(2, h * 0.07), PALETTE.danger, 1);
             gfx.beginPath();
-            gfx.moveTo(cx - r * 0.55, cy - r * 0.55);
-            gfx.lineTo(cx + r * 0.65, cy + r * 0.55);
+            gfx.moveTo(cx - h * 0.4, midY - h * 0.32);
+            gfx.lineTo(cx + h * 0.44, midY + h * 0.32);
             gfx.strokePath();
             return;
         }
 
         // Two arcs springing from the mouth of the horn.
-        gfx.lineStyle(Math.max(2, r * 0.14), colour, 1);
-        for (const spread of [0.36, 0.6]) {
+        gfx.lineStyle(Math.max(2, h * 0.06), colour, 1);
+        for (const spread of [0.21, 0.35]) {
             gfx.beginPath();
-            gfx.arc(mouth, cy, r * spread, -0.9, 0.9);
+            gfx.arc(mouth, midY, h * spread, -0.9, 0.9);
             gfx.strokePath();
         }
     }
@@ -487,7 +482,7 @@ export class PhaserCanvasRenderer implements RenderPort {
             ...this.#hearts,
             ...this.#confetti,
         ];
-        for (const text of [this.#scoreText, this.#levelText, this.#timeText]) if (text) objects.push(text);
+        for (const text of [this.#scoreText, this.#levelText]) if (text) objects.push(text);
         for (const gfx of [this.#boardGfx, this.#highlightGfx, this.#trayGfx, this.#hudGfx, this.#dangerGfx])
             if (gfx) objects.push(gfx);
         if (this.#background) objects.push(this.#background);
@@ -511,7 +506,6 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#confetti = [];
         this.#scoreText = null;
         this.#levelText = null;
-        this.#timeText = null;
         this.#snapshot = null;
         this.#layout = null;
         this.#grid = null;
@@ -556,7 +550,6 @@ export class PhaserCanvasRenderer implements RenderPort {
 
         this.#scoreText?.setText(formatScore(snapshot.score));
         this.#levelText?.setText(`Level ${snapshot.level}`);
-        this.#timeText?.setText(`${Math.max(0, Math.ceil(snapshot.secondsLeft))}s`);
         // Texture swap, not setTint: the Canvas renderer ignores tint entirely.
         this.#hearts.forEach((heart, index) => {
             heart.setTexture(index < snapshot.hearts ? HEART_KEY : HEART_SPENT_KEY);
@@ -574,7 +567,7 @@ export class PhaserCanvasRenderer implements RenderPort {
         this.#lastHearts = snapshot.hearts;
 
         // Last, because the capsules hug whatever the labels just became: sized once at
-        // creation they would keep a clock-sized hole around an empty string forever.
+        // creation they would keep a hole around the text the labels held first.
         this.#drawHud(layout);
     }
 

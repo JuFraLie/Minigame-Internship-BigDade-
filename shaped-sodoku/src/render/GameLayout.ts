@@ -27,16 +27,17 @@ export interface GameLayout {
         readonly height: number;
     };
     /**
-     * The sound toggle, parked in the HUD strip between the level capsule and the score.
+     * The sound toggle, which leads the HUD strip from the left.
      *
-     * Placed by ratio rather than measured: the layout is arithmetic with no text to
-     * measure, and the gap it aims at is the one part of the strip nothing else claims.
+     * Horizontal placement only: the strip's centre line and the shared pill height come
+     * from `hud`, because the renderer sizes the pill against the measured score and the
+     * layout has no text to read. Anchored by its left edge at the same margin the level
+     * capsule used to start at, so the rest of the row is pushed along by its width.
      */
     readonly sound: {
-        readonly cx: number;
-        readonly cy: number;
-        /** Painted radius. The tap target is a little more generous than this. */
-        readonly radius: number;
+        readonly x: number;
+        /** Painted width. Wide enough to be a capsule rather than a circle. */
+        readonly width: number;
     };
     readonly board: {
         readonly x: number;
@@ -86,10 +87,19 @@ const MIN_GAP = 6;
 /** Smallest board we will lay out before letting it overflow rather than vanish. */
 const MIN_BOARD = 120;
 
-/** Portion of the width the sound toggle's centre sits at, inside the HUD strip. */
-const SOUND_CX_RATIO = 0.29;
-/** Tap forgiveness beyond the painted radius; a thumb is not a stylus. */
-const SOUND_HIT_SLACK = 1.3;
+/** The toggle's left edge: the same margin the HUD strip has always started at. */
+const SOUND_LEFT_RATIO = 0.03;
+/**
+ * The toggle's width as a multiple of the strip's height.
+ *
+ * A capsule has to be wider than it is tall or it reads as a circle, which is the one
+ * shape this row must not grow. 1.15 clears the shared pill height everywhere, and the
+ * renderer widens the painted pill again if the measured score pushes the pill taller
+ * than this figure assumed.
+ */
+const SOUND_WIDTH_RATIO = 1.15;
+/** Extra tap margin either side of the painted rect; a thumb is not a stylus. */
+const SOUND_HIT_PAD = 0.1;
 
 export function computeLayout(input: LayoutInput): GameLayout {
     const width = Math.max(1, input.width);
@@ -114,7 +124,6 @@ export function computeLayout(input: LayoutInput): GameLayout {
     const offset = slack / 2;
 
     const hudY = topPad + offset;
-    const hudMidY = hudY + hudHeight / 2;
     const boardY = hudY + hudHeight + gap;
     const boardX = (width - boardSize) / 2;
     const trayY = boardY + boardSize + gap;
@@ -142,7 +151,7 @@ export function computeLayout(input: LayoutInput): GameLayout {
         viewport: { width, height },
         topPad,
         hud: { y: hudY, height: hudHeight },
-        sound: { cx: width * SOUND_CX_RATIO, cy: hudMidY, radius: Math.max(11, hudHeight * 0.3) },
+        sound: { x: width * SOUND_LEFT_RATIO, width: hudHeight * SOUND_WIDTH_RATIO },
         board: { x: boardX, y: boardY, size: boardSize, cell, inset },
         tray: { y: trayY, height: trayHeight, slotWidth, slots },
     };
@@ -153,12 +162,15 @@ export function computeLayout(input: LayoutInput): GameLayout {
  *
  * It sits outside the board and the tray, so `hitTest` already refuses it — the play
  * scene asks this first, because the HUD belongs to the chrome rather than to the puzzle.
+ * The target is the painted capsule plus a little, and as tall as the strip: nothing
+ * else in that band is tappable, so a generous miss costs nothing.
  */
 export function hitSoundToggle(layout: GameLayout, x: number, y: number): boolean {
-    const radius = layout.sound.radius * SOUND_HIT_SLACK;
-    const dx = x - layout.sound.cx;
-    const dy = y - layout.sound.cy;
-    return dx * dx + dy * dy <= radius * radius;
+    const { x: left, width } = layout.sound;
+    const centre = left + width / 2;
+    const halfWidth = (width * (1 + SOUND_HIT_PAD)) / 2;
+    const withinRow = y >= layout.hud.y && y <= layout.hud.y + layout.hud.height;
+    return withinRow && Math.abs(x - centre) <= halfWidth;
 }
 
 /** Maps a design-space tap to the command it means, or `null` when it means nothing. */
