@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    HOW_TO_HEIGHT,
     MIN_TAP,
     computeMenuLayout,
     computePlayLayout,
@@ -164,6 +165,23 @@ test('the Result Panel stacks the title above the buttons, primary above exit', 
         assert.ok(result.primary.y > result.bodyY, 'primary is under the body');
         assert.ok(result.exit.y >= result.primary.y + result.primary.height, 'exit is under primary');
         assert.ok(result.exit.y + result.exit.height <= result.panel.y + result.panel.height + 1e-9);
+    }
+});
+
+test('the credit sits at the bottom with a 44 px target, clear of the how-to text', () => {
+    for (const { width, height, safeTop, safeBottom } of everyScreen()) {
+        const menu = computeMenuLayout(input(width, height, safeTop, safeBottom));
+        const credit = menu.credit;
+
+        assert.ok(credit.width >= MIN_TAP && credit.height >= MIN_TAP, `${width}x${height}: credit is too small to tap`);
+        assert.ok(credit.x >= 0 && credit.x + credit.width <= width + 1e-9, `${width}x${height}: credit leaves the screen`);
+        assert.ok(
+            credit.y >= 0 && credit.y + credit.height <= height - safeBottom + 1e-9,
+            `${width}x${height}: credit leaves the screen`,
+        );
+        assert.ok(credit.y >= menu.howToY + HOW_TO_HEIGHT, `${width}x${height}: credit overlaps the how-to text`);
+        assert.ok(credit.y > menu.play.y + menu.play.height, `${width}x${height}: credit overlaps Play`);
+        assert.ok(Math.abs(credit.x + credit.width / 2 - width / 2) < 1e-9, 'the credit is centred');
     }
 });
 

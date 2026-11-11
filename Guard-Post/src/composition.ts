@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { createHostBridge } from './adapters/hostBridge.ts';
+import { createCreditLink } from './adapters/creditLink.ts';
 import { InputAdapter } from './adapters/phaser/inputAdapter.ts';
 import { PhaserCanvasRenderer } from './adapters/phaser/renderer.ts';
 import { Game } from './adapters/phaser/scenes/Game.ts';
@@ -33,6 +34,7 @@ export function createGame(parent: string): Phaser.Game {
     const deps: AppDeps = {
         flow: createSessionFlow(createHostBridge()),
         viewport,
+        credit: createCreditLink(),
         createView: (scene) => new PhaserCanvasRenderer(scene),
         createInput: (contextOf) => new InputAdapter(contextOf),
     };

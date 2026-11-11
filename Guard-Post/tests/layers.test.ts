@@ -31,7 +31,7 @@ type Layer =
     | 'app'
     | 'testing'
     | 'bridge-module'
-    | 'bridge-adapter'
+    | 'adapter'
     | 'render'
     | 'root'
     | 'entry';
@@ -41,8 +41,8 @@ function layerOf(relative: string): Layer | null {
     if (relative.startsWith('app/')) return 'app';
     if (relative.startsWith('testing/')) return 'testing';
     if (relative === 'adapters/MpBridge.ts') return 'bridge-module';
-    if (relative === 'adapters/hostBridge.ts') return 'bridge-adapter';
     if (relative.startsWith('adapters/phaser/')) return 'render';
+    if (relative.startsWith('adapters/')) return 'adapter';
     if (relative === 'composition.ts') return 'root';
     if (relative === 'main.ts') return 'entry';
     return null;
@@ -69,7 +69,8 @@ const ALLOWED_TARGETS: Record<Layer, (target: string, dependency: Dependency) =>
     testing: (target) => target.startsWith('domain/') || target.startsWith('app/'),
     // The bridge module is preserved verbatim: it imports nothing at all.
     'bridge-module': () => false,
-    'bridge-adapter': (target) => target === 'adapters/MpBridge.ts' || target === 'app/ports.ts',
+    // Output adapters over the app's ports: the host bridge and the credit link.
+    adapter: (target) => target === 'adapters/MpBridge.ts' || target === 'app/ports.ts',
     // The Phaser world may speak to the domain, to the app's ports and to its siblings;
     // it may not reach the testing layer or the composition root.
     render: (target) =>
@@ -190,6 +191,17 @@ test('only MpBridge.ts touches window.MpPostMessage', () => {
     assert.deepEqual(offenders, [], 'host communication must be auditable in exactly one file');
 });
 
+test('only the credit adapter opens an external page', () => {
+    const offenders = [...SOURCE]
+        .filter(([relative, source]) => {
+            if (relative === 'adapters/creditLink.ts') return false;
+            const code = stripComments(source);
+            return code.includes('window.open') || code.includes('location.href') || code.includes('location.assign');
+        })
+        .map(([relative]) => relative);
+    assert.deepEqual(offenders, [], 'outbound navigation must be auditable in exactly one file');
+});
+
 test('the bridge module is preserved as written', () => {
     const source = readFileSync(join(SRC, 'adapters/MpBridge.ts'), 'utf8');
     assert.ok(source.includes('FOR AI AGENTS: AVOID MODIFYING'), 'the bridge module keeps its standing header');
@@ -282,13 +294,22 @@ test('Phaser is instantiated as CANVAS, and only there', () => {
 
 test('nothing in src/ reaches for an external resource or a bundled asset file', () => {
     const banned = [/https?:\/\//, /\/\/[\w-]+\.\w+\//, /\burl\s*\(/, /\.(png|jpe?g|gif|svg|mp3|ogg|wav|m4a)'/];
+    // The credit link is the one sanctioned outbound URL; everything else must be
+    // offline and self-contained (AGENTS.md §3.4: all assets bundled locally).
+    const LINK_ADAPTER = 'adapters/creditLink.ts';
 
     for (const [relative, source] of SOURCE) {
+        if (relative === LINK_ADAPTER) continue;
         const code = stripComments(source);
         for (const pattern of banned) {
             assert.ok(!pattern.test(code), `${relative} references an external or pre-made asset: ${pattern}`);
         }
     }
+
+    const linked = [...SOURCE]
+        .filter(([, source]) => /https?:\/\//.test(stripComments(source)))
+        .map(([relative]) => relative);
+    assert.deepEqual(linked, [LINK_ADAPTER], 'the credit link must be the only URL in the codebase');
 });
 
 test('the scripts never invoke the removed log.js', () => {

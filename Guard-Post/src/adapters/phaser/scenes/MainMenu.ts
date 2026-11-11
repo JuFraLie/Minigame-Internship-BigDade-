@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
 import { COLORS, ensureTextures, hex } from '../textures.ts';
-import { computeMenuLayout } from '../layout.ts';
+import { computeMenuLayout, hitRect, type MenuLayout } from '../layout.ts';
 import { applyRenderScale } from '../scale.ts';
 import { SCENE_GAME, SCENE_MENU } from './keys.ts';
 
@@ -13,13 +13,15 @@ const FONT = 'Segoe UI, Arial, sans-serif';
 const HOW_TO = 'Tap a spot to build a tower.\nStop the enemies before they reach the gate.';
 
 /**
- * The Play Screen: title, Play button, a small tap icon and the how-to text.
+ * The Play Screen: title, Play button, a small tap icon, the how-to text and the credit.
  *
  * It shows only on launch — Retry and Next Level go straight back to gameplay — and a
- * tap anywhere on it starts the game, exactly as the host app expects.
+ * tap anywhere on it starts the game, exactly as the host app expects. The credit line
+ * is the one exception: tapping it opens the credited page and starts nothing.
  */
 export class MainMenu extends Phaser.Scene {
     readonly #deps: AppDeps;
+    #layout: MenuLayout | null = null;
     #started = false;
 
     readonly #onViewportChanged = (): void => {
@@ -38,6 +40,7 @@ export class MainMenu extends Phaser.Scene {
 
         const viewport = this.#deps.viewport.current();
         const layout = computeMenuLayout(viewport);
+        this.#layout = layout;
 
         // The tap icon: a ring with a dot, drawn once.
         const icon = this.add.graphics().setDepth(5);
@@ -78,13 +81,36 @@ export class MainMenu extends Phaser.Scene {
             .setOrigin(0.5, 0)
             .setDepth(5);
 
+        // The credit, underlined so it reads as a link. Tapping it opens skyel's page
+        // and deliberately does NOT start the game — see #onPointerDown.
+        const credit = this.add
+            .text(layout.credit.x + layout.credit.width / 2, layout.credit.y + layout.credit.height / 2, this.#deps.credit.label, {
+                fontFamily: FONT,
+                fontSize: '16px',
+                color: hex(COLORS.textDim),
+            })
+            .setOrigin(0.5)
+            .setDepth(5);
+        const underline = this.add.graphics().setDepth(5);
+        underline.beginPath();
+        underline.lineStyle(1, COLORS.textDim, 0.9);
+        underline.moveTo(credit.x - credit.width / 2, credit.y + credit.height / 2 + 3);
+        underline.lineTo(credit.x + credit.width / 2, credit.y + credit.height / 2 + 3);
+        underline.strokePath();
+
         this.input.on('pointerdown', this.#onPointerDown, this);
         this.game.events.on(VIEWPORT_CHANGED, this.#onViewportChanged);
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.#teardown, this);
     }
 
-    #onPointerDown(): void {
-        // A deliberate tap anywhere starts the game; the Play button is the visible cue.
+    #onPointerDown(pointer: Phaser.Input.Pointer): void {
+        const layout = this.#layout;
+        if (layout && hitRect(layout.credit, pointer.worldX, pointer.worldY)) {
+            // The credit is the one tap on this screen that does not start the game.
+            this.#deps.credit.open();
+            return;
+        }
+        // A deliberate tap anywhere else starts the game; the Play button is the visible cue.
         this.#start();
     }
 
@@ -98,5 +124,6 @@ export class MainMenu extends Phaser.Scene {
     #teardown(): void {
         this.input.off('pointerdown', this.#onPointerDown, this);
         this.game.events.off(VIEWPORT_CHANGED, this.#onViewportChanged);
+        this.#layout = null;
     }
 }
