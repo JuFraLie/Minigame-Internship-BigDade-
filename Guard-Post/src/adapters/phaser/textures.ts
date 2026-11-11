@@ -1,16 +1,21 @@
 import Phaser from 'phaser';
 
-import type { GameMap } from '../../domain/maps.ts';
+import { GRID_HEIGHT, GRID_WIDTH, MAPS, distanceToRoad, measureRoad, type GameMap } from '../../domain/maps.ts';
 import { TOWER_TYPES, type EnemyType, type TowerType } from '../../domain/types.ts';
+import { CASTLES, SCENERY } from './assetManifest.ts';
+import { assetImage, bakeSprites } from './assets.ts';
 
 /**
- * Every pixel this game draws is generated here at boot.
+ * Textures: everything the game draws with.
  *
- * There is no image file and no CDN in the project (AGENTS.md §3.4): towers, enemies,
- * projectiles and UI chrome are drawn once into textures with `Phaser.Graphics`, and the
- * board is redrawn only when the layout changes. Textures are authored at a nominal
- * tile of `NOMINAL_TILE` px and scaled by the renderer, so a resize never regenerates
- * anything but the board itself.
+ * UI chrome (buttons, panels, capsules) is generated at boot with `Phaser.Graphics`
+ * — no image file and no CDN (AGENTS.md §3.4). The sprite pack in `public/` supplies
+ * the game world: enemies, towers, shots, the grass field, the gate castle and the
+ * scenery, baked into the renderer's texture keys by `assets.ts`. Entity textures are
+ * authored at a nominal tile of `NOMINAL_TILE` px and scaled by the renderer, so a
+ * resize never regenerates anything but the board itself. Any entity texture the pack
+ * did not provide falls back to the old procedural drawing, so a missing file never
+ * stops a round.
  */
 
 export const NOMINAL_TILE = 44;
@@ -112,9 +117,15 @@ function ensureChrome(scene: Phaser.Scene): void {
     });
 }
 
+// -- procedural fallbacks ---------------------------------------------------
+//
+// The pack normally provides every entity texture, so these run only when a file is
+// missing. They keep the old shapes under the pack's texture keys (`enemy-<type>-0`),
+// so the renderer needs no branch either way.
+
 function ensureEnemies(scene: Phaser.Scene): void {
     const enemy = (type: EnemyType, size: number, draw: (g: Phaser.GameObjects.Graphics) => void): void => {
-        ensure(scene, `enemy-${type}`, size, size, (g) => {
+        ensure(scene, `enemy-${type}-0`, size, size, (g) => {
             g.lineStyle(3, 0x0d1524, 1);
             draw(g);
         });
@@ -200,10 +211,21 @@ function ensureShots(scene: Phaser.Scene): void {
     }
 }
 
-/** Generates every entity and UI texture. Idempotent, so a scene restart is free. */
+// -- texture entry points ---------------------------------------------------
+
+/** Generates the UI chrome. Idempotent, so a scene restart is free. */
 export function ensureTextures(scene: Phaser.Scene): void {
     ensureWhite(scene);
     ensureChrome(scene);
+}
+
+/**
+ * Generates every entity texture: the sprite pack where it is loaded, the procedural
+ * shapes wherever it is not. Runs from the renderer's `create()`, i.e. after the Game
+ * scene's `preload()` has fetched the pack.
+ */
+export function ensureEntityTextures(scene: Phaser.Scene): void {
+    bakeSprites(scene);
     ensureEnemies(scene);
     ensureTowers(scene);
     ensureShots(scene);
@@ -214,62 +236,159 @@ export function ensureTextures(scene: Phaser.Scene): void {
 // ---------------------------------------------------------------------------
 
 export const BOARD_KEY = 'board';
+const FIELD_KEY = 'field-tiles';
+
+type Ctx = CanvasRenderingContext2D;
 
 /**
- * Draws grass, road, spots and the gate into a texture sized for `tile`.
- * Regenerated when the layout changes; everything else is drawn once.
+ * Paints grass, road, spots, scenery and the gate into a canvas texture sized for
+ * `tile`. Regenerated when the layout changes; everything else is drawn once.
  */
 export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: number): void {
-    const width = Math.ceil(tile * 9);
-    const height = Math.ceil(tile * 12);
+    const width = Math.ceil(tile * GRID_WIDTH);
+    const height = Math.ceil(tile * GRID_HEIGHT);
 
-    const g = scene.add.graphics();
+    if (scene.textures.exists(BOARD_KEY)) scene.textures.remove(BOARD_KEY);
+    const texture = scene.textures.createCanvas(BOARD_KEY, width, height);
+    if (!texture) return;
+    const ctx = texture.context;
+    ctx.imageSmoothingEnabled = false;
 
-    // Grass with a slightly darker rim, so the board reads as a distinct field.
-    g.fillStyle(COLORS.grass, 1);
-    g.fillRect(0, 0, width, height);
-    g.lineStyle(Math.max(2, tile * 0.08), COLORS.grassEdge, 1);
-    g.strokeRect(0, 0, width, height);
+    paintField(ctx, scene, width, height, tile);
+    paintRoad(ctx, map, tile);
+    paintSpots(ctx, map, tile);
+    paintScenery(ctx, scene, map, tile, width, height);
+    paintGate(ctx, scene, map, tile);
 
-    // Road: a wide dark edge under a lighter dirt surface.
+    texture.refresh();
+}
+
+/** The grass field: a repeating pattern of the pack's three grass tiles, rimmed dark. */
+function paintField(ctx: Ctx, scene: Phaser.Scene, width: number, height: number, tile: number): void {
+    const source = scene.textures.exists(FIELD_KEY) ? scene.textures.get(FIELD_KEY).getSourceImage() : null;
+    const field = source instanceof HTMLImageElement || source instanceof HTMLCanvasElement ? source : null;
+    const pattern = field ? ctx.createPattern(field, 'repeat') : null;
+    ctx.fillStyle = pattern ?? hex(COLORS.grass);
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = hex(COLORS.grassEdge);
+    ctx.lineWidth = Math.max(2, tile * 0.08);
+    ctx.strokeRect(0, 0, width, height);
+}
+
+/** The road: a wide dark edge under a lighter dirt surface. */
+function paintRoad(ctx: Ctx, map: GameMap, tile: number): void {
     const roadWidth = tile * 1.05;
-    const trace = (): void => {
-        g.beginPath();
-        g.moveTo(map.waypoints[0].x * tile, map.waypoints[0].y * tile);
+    const trace = (style: string, width: number): void => {
+        ctx.strokeStyle = style;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(map.waypoints[0].x * tile, map.waypoints[0].y * tile);
         for (let i = 1; i < map.waypoints.length; i++) {
-            g.lineTo(map.waypoints[i].x * tile, map.waypoints[i].y * tile);
+            ctx.lineTo(map.waypoints[i].x * tile, map.waypoints[i].y * tile);
         }
-        g.strokePath();
+        ctx.stroke();
     };
-    g.lineStyle(roadWidth + tile * 0.18, COLORS.roadEdge, 1);
-    trace();
-    g.lineStyle(roadWidth, COLORS.road, 1);
-    trace();
+    trace(hex(COLORS.roadEdge), roadWidth + tile * 0.18);
+    trace(hex(COLORS.road), roadWidth);
+}
 
-    // Build spots: pads with a ring, 1–2 tiles off the road.
+/** Build spots: pads with a ring, 1–2 tiles off the road. */
+function paintSpots(ctx: Ctx, map: GameMap, tile: number): void {
     for (const spot of map.spots) {
         const cx = spot.x * tile;
         const cy = spot.y * tile;
-        g.fillStyle(COLORS.spot, 1);
-        g.lineStyle(Math.max(2, tile * 0.07), COLORS.spotRing, 1);
-        g.fillCircle(cx, cy, tile * 0.42);
-        g.strokeCircle(cx, cy, tile * 0.42);
-        g.lineStyle(Math.max(1, tile * 0.04), COLORS.spotRing, 0.6);
-        g.strokeCircle(cx, cy, tile * 0.22);
-    }
+        ctx.fillStyle = hex(COLORS.spot);
+        ctx.strokeStyle = hex(COLORS.spotRing);
+        ctx.lineWidth = Math.max(2, tile * 0.07);
+        ctx.beginPath();
+        ctx.arc(cx, cy, tile * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
 
-    // The gate the player is defending, at the last waypoint.
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = Math.max(1, tile * 0.04);
+        ctx.beginPath();
+        ctx.arc(cx, cy, tile * 0.22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+}
+
+/**
+ * Trees, rocks and mushrooms, stamped off the road by a hash of the cell and the map
+ * name — the same scenery every round, a different set on every layout.
+ */
+function paintScenery(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number, width: number, height: number): void {
+    const road = measureRoad(map);
+    const gate = map.waypoints[map.waypoints.length - 1];
+    let seed = 17;
+    for (const char of map.name) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
+
+    for (let cy = 0; cy < GRID_HEIGHT; cy++) {
+        for (let cx = 0; cx < GRID_WIDTH; cx++) {
+            const center = { x: cx + 0.5, y: cy + 0.5 };
+            if (distanceToRoad(map, road, center) < 1.35) continue;
+            if (map.spots.some((spot) => Math.hypot(spot.x - center.x, spot.y - center.y) < 1.1)) continue;
+            if (Math.hypot(gate.x - center.x, gate.y - center.y) < 1.7) continue;
+
+            const hash = ((cx * 73856093) ^ (cy * 19349663) ^ seed) >>> 0;
+            const roll = hash % 100;
+            // 8% trees, 5% rocks, 4% mushrooms, of the eligible cells.
+            const spec =
+                roll < 8
+                    ? SCENERY[hash % 5]
+                    : roll < 13
+                      ? SCENERY[5 + ((hash >> 5) % 3)]
+                      : roll < 17
+                        ? SCENERY[8 + ((hash >> 9) % 2)]
+                        : undefined;
+            if (!spec) continue;
+
+            const source = assetImage(scene, spec.file);
+            if (!source) continue;
+            const scale = Math.max(1, Math.round((spec.heightTiles * tile) / source.height));
+            const w = source.width * scale;
+            const h = source.height * scale;
+            const x = Math.round(Math.min(Math.max(cx * tile + tile / 2 - w / 2, 0), width - w));
+            const y = Math.round(Math.min((cy + 1) * tile - h + tile * 0.12, height - h));
+            ctx.drawImage(source, x, y, w, h);
+        }
+    }
+}
+
+/**
+ * The gate the player is defending: a gold threshold with the pack's castle standing
+ * on it (blue / green / red in map order). Without the pack, the old door shows.
+ */
+function paintGate(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number): void {
     const gate = map.waypoints[map.waypoints.length - 1];
     const gx = gate.x * tile;
     const gy = gate.y * tile;
-    g.fillStyle(COLORS.gate, 1);
-    g.lineStyle(Math.max(2, tile * 0.08), 0x8a7426, 1);
-    g.fillCircle(gx, gy, tile * 0.5);
-    g.strokeCircle(gx, gy, tile * 0.5);
-    g.fillStyle(0x101a2e, 1);
-    g.fillRoundedRect(gx - tile * 0.26, gy - tile * 0.1, tile * 0.52, tile * 0.5, 6);
 
-    if (scene.textures.exists(BOARD_KEY)) scene.textures.remove(BOARD_KEY);
-    g.generateTexture(BOARD_KEY, width, height);
-    g.destroy();
+    ctx.fillStyle = hex(COLORS.gate);
+    ctx.strokeStyle = '#8a7426';
+    ctx.lineWidth = Math.max(2, tile * 0.08);
+    ctx.beginPath();
+    ctx.arc(gx, gy, tile * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const index = Math.max(0, MAPS.indexOf(map)) % CASTLES.length;
+    const spec = CASTLES[index];
+    const source = spec ? assetImage(scene, spec.file) : null;
+    if (spec && source) {
+        const scale = Math.max(1, Math.round((tile * 1.3) / spec.frameWidth));
+        const w = spec.frameWidth * scale;
+        const h = spec.frameHeight * scale;
+        const x = Math.round(gx - w / 2);
+        const y = Math.round(gy + tile * 0.32 - h);
+        ctx.drawImage(source, 0, 0, spec.frameWidth, spec.frameHeight, x, y, w, h);
+        return;
+    }
+
+    ctx.fillStyle = hex(COLORS.void);
+    ctx.fillRect(gx - tile * 0.26, gy - tile * 0.1, tile * 0.52, tile * 0.5);
 }

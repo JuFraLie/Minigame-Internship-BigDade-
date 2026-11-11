@@ -292,17 +292,17 @@ test('Phaser is instantiated as CANVAS, and only there', () => {
     assert.ok(/type:\s*Phaser\.CANVAS/.test(stripComments(source)), 'the game config must set Phaser.CANVAS');
 });
 
-test('nothing in src/ reaches for an external resource or a bundled asset file', () => {
-    const banned = [/https?:\/\//, /\/\/[\w-]+\.\w+\//, /\burl\s*\(/, /\.(png|jpe?g|gif|svg|mp3|ogg|wav|m4a)'/];
-    // The credit link is the one sanctioned outbound URL; everything else must be
-    // offline and self-contained (AGENTS.md §3.4: all assets bundled locally).
+test('nothing in src/ reaches for an external resource', () => {
+    const banned = [/https?:\/\//, /\/\/[\w-]+\.\w+\//, /\burl\s*\(/];
+    // Bundled assets are legal (AGENTS.md §3.4 requires them); external ones are not.
+    // The credit link is the one sanctioned outbound URL.
     const LINK_ADAPTER = 'adapters/creditLink.ts';
 
     for (const [relative, source] of SOURCE) {
         if (relative === LINK_ADAPTER) continue;
         const code = stripComments(source);
         for (const pattern of banned) {
-            assert.ok(!pattern.test(code), `${relative} references an external or pre-made asset: ${pattern}`);
+            assert.ok(!pattern.test(code), `${relative} references an external resource: ${pattern}`);
         }
     }
 
@@ -310,6 +310,17 @@ test('nothing in src/ reaches for an external resource or a bundled asset file',
         .filter(([, source]) => /https?:\/\//.test(stripComments(source)))
         .map(([relative]) => relative);
     assert.deepEqual(linked, [LINK_ADAPTER], 'the credit link must be the only URL in the codebase');
+});
+
+test('every image reference lives in the asset manifest', () => {
+    // One file names the sprite pack, exactly like MpBridge.ts names the host channel:
+    // paths can then be audited (relative, on disk, no CDN) in a single place.
+    const MANIFEST = 'adapters/phaser/assetManifest.ts';
+    const media = /\.(png|jpe?g|gif|svg|mp3|ogg|wav|m4a)['"]/;
+    const offenders = [...SOURCE]
+        .filter(([relative, source]) => relative !== MANIFEST && media.test(stripComments(source)))
+        .map(([relative]) => relative);
+    assert.deepEqual(offenders, [], 'declare bundled assets in assetManifest.ts only');
 });
 
 test('the scripts never invoke the removed log.js', () => {

@@ -6,13 +6,14 @@ import {
     TOWER_SPECS,
     TOWER_TYPES,
     WAVES_PER_LEVEL,
+    type EnemyType,
     type RoundEvent,
     type RoundSnapshot,
 } from '../../domain/types.ts';
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
-import { BOARD_KEY, COLORS, NOMINAL_TILE, ensureTextures, hex, renderBoardTexture } from './textures.ts';
+import { BOARD_KEY, COLORS, NOMINAL_TILE, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
 import { createViewTransform, type ViewTransform } from './viewTransform.ts';
 
 /**
@@ -67,9 +68,11 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #under: Phaser.GameObjects.Graphics | null = null;
     #over: Phaser.GameObjects.Graphics | null = null;
 
-    #enemySprites: Phaser.GameObjects.Image[] = [];
+    #enemySprites: Phaser.GameObjects.Sprite[] = [];
     #towerSprites: Phaser.GameObjects.Image[] = [];
     #shotSprites: Phaser.GameObjects.Image[] = [];
+    /** Whether the walk cycles are held mid-stride behind the pause overlay. */
+    #animPaused = false;
 
     #level!: Capsule;
     #wave!: Capsule;
@@ -116,6 +119,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
         const scene = this.#scene;
         ensureTextures(scene);
+        ensureEntityTextures(scene);
         renderBoardTexture(scene, map, layout.board.tile);
 
         this.#board = this.#add(scene.add.image(layout.board.x, layout.board.y, BOARD_KEY).setOrigin(0, 0).setDepth(1));
@@ -124,7 +128,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
         this.#enemySprites = [];
         for (let i = 0; i < ENEMY_POOL; i++) {
-            this.#enemySprites.push(this.#add(scene.add.image(0, 0, 'enemy-grunt').setVisible(false).setDepth(8).setScale(this.#entityScale)));
+            this.#enemySprites.push(this.#add(scene.add.sprite(0, 0, 'enemy-grunt-0').setVisible(false).setDepth(8).setScale(this.#entityScale)));
         }
         this.#towerSprites = [];
         for (let i = 0; i < TOWER_POOL; i++) {
@@ -265,6 +269,17 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#presentPause(ui, layout);
         this.#presentEntities(snapshot, transform, alpha);
         this.#presentEvents(events);
+        this.#setAnimsPaused(ui.paused);
+    }
+
+    /** Holds every walk cycle mid-stride while the game is paused. */
+    #setAnimsPaused(paused: boolean): void {
+        if (this.#animPaused === paused) return;
+        this.#animPaused = paused;
+        for (const sprite of this.#enemySprites) {
+            if (paused) sprite.anims.pause();
+            else sprite.anims.resume();
+        }
     }
 
     #presentHud(snapshot: RoundSnapshot): void {
@@ -384,17 +399,14 @@ export class PhaserCanvasRenderer implements GameViewPort {
             const sprite = this.#enemySprites[i];
             if (i >= enemyCount) {
                 sprite.setVisible(false);
+                if (sprite.anims.isPlaying) sprite.anims.stop();
                 continue;
             }
             const enemy = enemies[i];
-            const key = `enemy-${enemy.type}`;
-            if (sprite.texture.key !== key) sprite.setTexture(key);
+            this.#walk(sprite, enemy.type);
             const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
             const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
-            sprite
-                .setVisible(true)
-                .setPosition(transform.toScreenX(x), transform.toScreenY(y))
-                .setRotation(enemy.type === 'runner' ? (enemy.progress * Math.PI) / 2 : 0);
+            sprite.setVisible(true).setPosition(transform.toScreenX(x), transform.toScreenY(y));
         }
 
         // Towers stand still; their slot is fixed for the whole round.
@@ -425,11 +437,29 @@ export class PhaserCanvasRenderer implements GameViewPort {
             if (sprite.texture.key !== key) sprite.setTexture(key);
             const x = projectile.prevX + (projectile.x - projectile.prevX) * alpha;
             const y = projectile.prevY + (projectile.y - projectile.prevY) * alpha;
+            // Arrows fly point-first; balls and shards simply follow.
+            const dx = projectile.x - projectile.prevX;
+            const dy = projectile.y - projectile.prevY;
+            if (dx !== 0 || dy !== 0) sprite.setRotation(Math.atan2(dy, dx));
             sprite.setVisible(true).setPosition(transform.toScreenX(x), transform.toScreenY(y));
         }
 
         this.#presentSelection(snapshot, transform, tile);
         this.#presentHealthBars(snapshot, transform, tile);
+    }
+
+    /** Plays the enemy's walk cycle, or its static frame when the pack has no strip. */
+    #walk(sprite: Phaser.GameObjects.Sprite, type: EnemyType): void {
+        const animKey = `walk-${type}`;
+        if (this.#animPaused) return;
+        if (sprite.anims.currentAnim?.key === animKey && sprite.anims.isPlaying) return;
+        if (this.#scene.anims.exists(animKey)) {
+            sprite.play(animKey);
+            return;
+        }
+        sprite.anims.stop();
+        const frameKey = `enemy-${type}-0`;
+        if (sprite.texture.key !== frameKey) sprite.setTexture(frameKey);
     }
 
     /** Selection ring and the selected tower's range circle. */
@@ -535,6 +565,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#enemySprites = [];
         this.#towerSprites = [];
         this.#shotSprites = [];
+        this.#animPaused = false;
         this.#layout = null;
         this.#map = null;
         this.#transform = null;

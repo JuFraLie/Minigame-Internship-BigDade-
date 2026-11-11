@@ -41,6 +41,17 @@ The Play Screen carries a credit line ("Assets by skyel"); tapping it opens
 is the only file that navigates outside the game — `tests/layers.test.ts` keeps it that
 way, the same way it fences `window.MpPostMessage` inside `MpBridge.ts`.
 
+## Assets
+
+The sprite pack in `public/` (by skyel) draws the game world: skeleton/bat/demon/slime
+enemies with walk cycles, archer/cannon/ice-wizard towers with projectiles, the grass
+field, trees, rocks, mushrooms and a per-map gate castle. Loading and baking live in
+`src/adapters/phaser/assets.ts`; `src/adapters/phaser/assetManifest.ts` is the only file
+that names image files, and `tests/assets.test.ts` checks every path against the disk
+plus the frame geometry against the actual PNG dimensions. UI chrome is still drawn
+procedurally at boot, and any missing file falls back to the old procedural shape, so a
+lost asset never stops a round.
+
 ## Rules summary
 
 - Play Screen on launch; tap anywhere or Play starts a round.
