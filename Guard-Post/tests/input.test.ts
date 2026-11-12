@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { pickAction, type PlayContext } from '../src/adapters/phaser/inputAdapter.ts';
+import { pickAction, pickHalfSide, type PlayContext } from '../src/adapters/phaser/inputAdapter.ts';
 import { computePlayLayout } from '../src/adapters/phaser/layout.ts';
 import { createViewTransform } from '../src/adapters/phaser/viewTransform.ts';
 import { MAPS } from '../src/domain/maps.ts';
@@ -90,6 +90,25 @@ test('a tap on a spot selects it, in world coordinates the logic can own', () =>
         const action = pickAction(context(), transform.toScreenX(spot.x), transform.toScreenY(spot.y));
         assert.deepEqual(action, { kind: 'selectSpot', spotId }, `spot ${spotId}`);
     }
+});
+
+test('the tap target is the square pad: its corners count, just past its edge does not', () => {
+    const half = pickHalfSide(layout.board.tile);
+    const spot = SPOTS[0];
+
+    // Inside the box near a corner — outside the box by distance, inside by the rules.
+    const corner = { x: spot.x + half * 0.95, y: spot.y + half * 0.95 };
+    assert.deepEqual(
+        pickAction(context(), transform.toScreenX(corner.x), transform.toScreenY(corner.y)),
+        { kind: 'selectSpot', spotId: 0 },
+    );
+
+    // Just beyond the box: the board, but no pad under the finger.
+    const outside = { x: spot.x + half * 1.1, y: spot.y + half * 1.1 };
+    assert.deepEqual(
+        pickAction(context(), transform.toScreenX(outside.x), transform.toScreenY(outside.y)),
+        { kind: 'clearSelection' },
+    );
 });
 
 test('the three build buttons map to dart, cannon and frost, in order', () => {

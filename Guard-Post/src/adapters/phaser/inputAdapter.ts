@@ -49,31 +49,28 @@ export interface InputPort {
     pick(x: number, y: number): PlayAction | null;
 }
 
-/** Tap acceptance radius around a spot or tower, in world units. */
-function pickRadius(tile: number): number {
-    // At least a 44 px circle, but never so wide that neighbouring spots overlap.
+/**
+ * Tap acceptance half-side around a spot or tower, in world units: a box, matching the
+ * square pads. Exported so tests can reason about the tap target.
+ */
+export function pickHalfSide(tile: number): number {
+    // At least a 44 px box, but never so wide that neighbouring pads overlap.
     return Math.min(Math.max(MIN_TAP / (2 * tile), 0.45), 0.9);
 }
 
 function spotAt(context: PlayContext, worldX: number, worldY: number): number {
-    const radius = pickRadius(context.layout.board.tile);
-    const radiusSquared = radius * radius;
+    const half = pickHalfSide(context.layout.board.tile);
     for (let id = 0; id < context.spots.length; id++) {
         const spot = context.spots[id];
-        const dx = spot.x - worldX;
-        const dy = spot.y - worldY;
-        if (dx * dx + dy * dy <= radiusSquared) return id;
+        if (Math.abs(spot.x - worldX) <= half && Math.abs(spot.y - worldY) <= half) return id;
     }
     return -1;
 }
 
 function towerAt(context: PlayContext, worldX: number, worldY: number): TowerView | null {
-    const radius = pickRadius(context.layout.board.tile);
-    const radiusSquared = radius * radius;
+    const half = pickHalfSide(context.layout.board.tile);
     for (const tower of context.towers) {
-        const dx = tower.x - worldX;
-        const dy = tower.y - worldY;
-        if (dx * dx + dy * dy <= radiusSquared) return tower;
+        if (Math.abs(tower.x - worldX) <= half && Math.abs(tower.y - worldY) <= half) return tower;
     }
     return null;
 }

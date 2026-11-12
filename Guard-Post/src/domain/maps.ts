@@ -4,9 +4,9 @@ import type { Vec2 } from './types.ts';
  * The three map layouts, in world units (1 unit = 1 tile on a 9 x 12 grid).
  *
  * Every map is one road — a polyline of waypoints the enemies follow without any
- * pathfinding — plus a fixed set of build spots ("spots") sitting 1–2 tiles off the
- * road. Level `L` plays map `(L - 1) mod 3`, so a run never repeats a layout for three
- * levels in a row.
+ * pathfinding — plus a fixed set of build spots ("spots") at grid cell centres,
+ * 1–2 tiles off the road. Level `L` plays map `(L - 1) mod 3`, so a run never
+ * repeats a layout for three levels in a row.
  */
 
 /** Grid dimensions shared by every map; the renderer scales this to the screen. */
@@ -17,7 +17,10 @@ export interface GameMap {
     readonly name: string;
     /** Enemy path; the last point is the gate, the first is where enemies enter. */
     readonly waypoints: readonly Vec2[];
-    /** Fixed build spots; a tower may only stand on one of these. */
+    /**
+     * Fixed build spots; a tower may only stand on one of these. Every spot sits at a
+     * grid cell centre, so its square pad fills exactly one cell of the field.
+     */
     readonly spots: readonly Vec2[];
 }
 
@@ -34,12 +37,12 @@ const MAP_A: GameMap = {
         { x: 7.5, y: 11.5 },
     ],
     spots: [
-        { x: 3, y: 4 },
-        { x: 5.5, y: 4 },
-        { x: 3.5, y: 7 },
-        { x: 6.5, y: 7 },
-        { x: 3, y: 10 },
-        { x: 5.5, y: 10 },
+        { x: 3.5, y: 4.5 },
+        { x: 5.5, y: 4.5 },
+        { x: 3.5, y: 7.5 },
+        { x: 6.5, y: 7.5 },
+        { x: 3.5, y: 10.5 },
+        { x: 5.5, y: 10.5 },
     ],
 };
 
@@ -59,12 +62,12 @@ const MAP_B: GameMap = {
     spots: [
         { x: 2.5, y: 1.5 },
         { x: 6.5, y: 1.5 },
-        { x: 2.5, y: 5 },
-        { x: 4.5, y: 5 },
-        { x: 6.5, y: 5 },
-        { x: 3, y: 8 },
-        { x: 6.5, y: 8 },
-        { x: 5.5, y: 11 },
+        { x: 2.5, y: 5.5 },
+        { x: 4.5, y: 5.5 },
+        { x: 6.5, y: 5.5 },
+        { x: 3.5, y: 8.5 },
+        { x: 6.5, y: 8.5 },
+        { x: 5.5, y: 11.5 },
     ],
 };
 
@@ -81,12 +84,12 @@ const MAP_C: GameMap = {
     ],
     spots: [
         { x: 3.5, y: 2.5 },
-        { x: 6, y: 3 },
-        { x: 3, y: 6 },
-        { x: 6, y: 7 },
-        { x: 3, y: 9 },
-        { x: 6, y: 10 },
-        { x: 2.5, y: 4 },
+        { x: 6.5, y: 3.5 },
+        { x: 3.5, y: 6.5 },
+        { x: 6.5, y: 7.5 },
+        { x: 3.5, y: 9.5 },
+        { x: 6.5, y: 10.5 },
+        { x: 2.5, y: 4.5 },
     ],
 };
 

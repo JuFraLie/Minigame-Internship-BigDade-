@@ -79,12 +79,8 @@ export const CASTLES: readonly CastleSpec[] = [
     { file: 'Towers/Castle/spr_castle_red.png', frameWidth: 52, frameHeight: 38, frames: 4 },
 ];
 
-/** The grass tiles composited into the repeating field pattern. */
-export const FIELD_GRASS: readonly string[] = [
-    'Environment/Grass/spr_grass_01.png',
-    'Environment/Grass/spr_grass_02.png',
-    'Environment/Grass/spr_grass_03.png',
-];
+/** The grass tiles, drawn one per grid cell across the field in alternating order. */
+export const FIELD_GRASS: readonly string[] = ['Environment/Grass/spr_grass_01.png', 'Environment/Grass/spr_grass_02.png'];
 
 /** Trees, rocks and mushrooms scattered off the road by a deterministic hash. */
 export const SCENERY: readonly ScenerySpec[] = [

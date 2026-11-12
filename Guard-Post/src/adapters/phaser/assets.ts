@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import type { EnemyType, TowerType } from '../../domain/types.ts';
-import { ALL_FILES, ENEMY_STRIPS, FIELD_GRASS, SHOT_IMAGES, TOWER_IMAGES } from './assetManifest.ts';
+import { ALL_FILES, ENEMY_STRIPS, SHOT_IMAGES, TOWER_IMAGES } from './assetManifest.ts';
 
 /**
  * Loads the sprite pack and bakes it into the texture keys the renderer already uses.
@@ -58,20 +58,19 @@ function bakedProduct(file: string): string | null {
     for (const [type, spec] of Object.entries(SHOT_IMAGES)) {
         if (spec.file === file) return `shot-${type}`;
     }
-    if (FIELD_GRASS.includes(file)) return 'field-tiles';
     return null;
 }
 
 /**
  * Bakes every loaded file into its final texture: enemy frame textures plus their
- * `walk-<type>` animations, tower textures with level pips, shot textures and the
- * repeating grass field. Called once per round, after `preloadSprites`.
+ * `walk-<type>` animations, tower textures with level pips and shot textures. The
+ * field, scenery and gate are painted raw by the board painter instead. Called once
+ * per round, after `preloadSprites`.
  */
 export function bakeSprites(scene: Phaser.Scene): void {
     bakeEnemyStrips(scene);
     bakeTowers(scene);
     bakeShots(scene);
-    bakeField(scene);
 }
 
 // -- baking helpers ---------------------------------------------------------
@@ -185,29 +184,4 @@ function bakeShots(scene: Phaser.Scene): void {
         scene.textures.addCanvas(key, canvas);
         scene.textures.remove(rawAssetKey(spec.file));
     }
-}
-
-/** Composites the three grass tiles into one 96×96 tile the board can pattern-fill with. */
-function bakeField(scene: Phaser.Scene): void {
-    const key = 'field-tiles';
-    if (scene.textures.exists(key)) return;
-    const sources = FIELD_GRASS.map((file) => sourceOf(scene, file));
-    if (sources.some((source) => source === null)) return;
-
-    const size = sources[0]?.width ?? 32;
-    const canvas = document.createElement('canvas');
-    canvas.width = size * 3;
-    canvas.height = size * 3;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.imageSmoothingEnabled = false;
-    for (let row = 0; row < 3; row++) {
-        for (let column = 0; column < 3; column++) {
-            const source = sources[(column + row * 2) % sources.length];
-            if (source) ctx.drawImage(source, column * size, row * size);
-        }
-    }
-    scene.textures.addCanvas(key, canvas);
-    // The composite stands in for the raw tiles; the others stay for the board painter.
-    for (const file of FIELD_GRASS) scene.textures.remove(rawAssetKey(file));
 }

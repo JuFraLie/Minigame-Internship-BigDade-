@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import { GRID_HEIGHT, GRID_WIDTH, MAPS, distanceToRoad, measureRoad, type GameMap } from '../../domain/maps.ts';
 import { TOWER_TYPES, type EnemyType, type TowerType } from '../../domain/types.ts';
-import { CASTLES, SCENERY } from './assetManifest.ts';
+import { CASTLES, FIELD_GRASS, SCENERY } from './assetManifest.ts';
 import { assetImage, bakeSprites } from './assets.ts';
 
 /**
@@ -236,7 +236,6 @@ export function ensureEntityTextures(scene: Phaser.Scene): void {
 // ---------------------------------------------------------------------------
 
 export const BOARD_KEY = 'board';
-const FIELD_KEY = 'field-tiles';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -263,15 +262,43 @@ export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: numb
     texture.refresh();
 }
 
-/** The grass field: a repeating pattern of the pack's three grass tiles, rimmed dark. */
+/**
+ * The grass field: one pack tile per grid cell, alternating 01/02 in a checkerboard,
+ * with the grid itself drawn over it in a darker green — the field must read as cells,
+ * because that is where towers go.
+ */
 function paintField(ctx: Ctx, scene: Phaser.Scene, width: number, height: number, tile: number): void {
-    const source = scene.textures.exists(FIELD_KEY) ? scene.textures.get(FIELD_KEY).getSourceImage() : null;
-    const field = source instanceof HTMLImageElement || source instanceof HTMLCanvasElement ? source : null;
-    const pattern = field ? ctx.createPattern(field, 'repeat') : null;
-    ctx.fillStyle = pattern ?? hex(COLORS.grass);
-    ctx.fillRect(0, 0, width, height);
+    const grass = FIELD_GRASS.map((file) => assetImage(scene, file));
 
+    for (let gy = 0; gy < GRID_HEIGHT; gy++) {
+        for (let gx = 0; gx < GRID_WIDTH; gx++) {
+            const source = grass[(gx + gy) % grass.length];
+            if (source) {
+                ctx.drawImage(source, gx * tile, gy * tile, tile, tile);
+            } else {
+                ctx.fillStyle = hex(COLORS.grass);
+                ctx.fillRect(gx * tile, gy * tile, tile, tile);
+            }
+        }
+    }
+
+    // The grid: every cell boundary, subtle but unmistakable.
     ctx.strokeStyle = hex(COLORS.grassEdge);
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = Math.max(1, tile * 0.03);
+    ctx.beginPath();
+    for (let gx = 0; gx <= GRID_WIDTH; gx++) {
+        ctx.moveTo(gx * tile, 0);
+        ctx.lineTo(gx * tile, height);
+    }
+    for (let gy = 0; gy <= GRID_HEIGHT; gy++) {
+        ctx.moveTo(0, gy * tile);
+        ctx.lineTo(width, gy * tile);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // The rim that separates the field from the void.
     ctx.lineWidth = Math.max(2, tile * 0.08);
     ctx.strokeRect(0, 0, width, height);
 }
@@ -295,24 +322,27 @@ function paintRoad(ctx: Ctx, map: GameMap, tile: number): void {
     trace(hex(COLORS.road), roadWidth);
 }
 
-/** Build spots: pads with a ring, 1–2 tiles off the road. */
+/**
+ * Build spots: square pads centred on their grid cell, so the pad *is* the cell —
+ * a ring inside, a thin inner mark, and the grid showing all around it.
+ */
 function paintSpots(ctx: Ctx, map: GameMap, tile: number): void {
+    const half = tile * 0.42;
+    const inner = tile * 0.22;
     for (const spot of map.spots) {
         const cx = spot.x * tile;
         const cy = spot.y * tile;
+
         ctx.fillStyle = hex(COLORS.spot);
+        ctx.fillRect(cx - half, cy - half, half * 2, half * 2);
+
         ctx.strokeStyle = hex(COLORS.spotRing);
         ctx.lineWidth = Math.max(2, tile * 0.07);
-        ctx.beginPath();
-        ctx.arc(cx, cy, tile * 0.42, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        ctx.strokeRect(cx - half, cy - half, half * 2, half * 2);
 
         ctx.globalAlpha = 0.6;
         ctx.lineWidth = Math.max(1, tile * 0.04);
-        ctx.beginPath();
-        ctx.arc(cx, cy, tile * 0.22, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.strokeRect(cx - inner, cy - inner, inner * 2, inner * 2);
         ctx.globalAlpha = 1;
     }
 }

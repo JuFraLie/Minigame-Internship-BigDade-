@@ -13,7 +13,8 @@ import {
 
 /**
  * The three maps, against the design document's map rules: one road of 28–36 tiles,
- * 6–8 build spots each 1–2 tiles from the road, everything inside the 9 x 12 grid, and
+ * 6–8 build spots each 1–2 tiles from the road and each centred on a grid cell, so its
+ * square pad fills exactly one cell of the field; everything inside the 9 x 12 grid, and
  * a level rotation that never repeats a layout for three levels in a row.
  */
 
@@ -50,11 +51,14 @@ for (const map of MAPS) {
         const last = map.waypoints[map.waypoints.length - 1];
         assert.ok(Math.hypot(last.x - first.x, last.y - first.y) > 1, 'the gate is not the entrance');
 
-        // 6–8 build spots, inside the grid, all distinct.
+        // 6–8 build spots, inside the grid, on cell centres, all distinct.
         assert.ok(map.spots.length >= 6 && map.spots.length <= 8, `${map.spots.length} spots`);
         for (const [i, spot] of map.spots.entries()) {
             assert.ok(spot.x >= 0 && spot.x <= GRID_WIDTH, `spot ${i} x ${spot.x}`);
             assert.ok(spot.y >= 0 && spot.y <= GRID_HEIGHT, `spot ${i} y ${spot.y}`);
+            // Cell centre: the square pad sits inside exactly one grid cell.
+            assert.equal(spot.x - Math.floor(spot.x), 0.5, `spot ${i} x ${spot.x} is not a cell centre`);
+            assert.equal(spot.y - Math.floor(spot.y), 0.5, `spot ${i} y ${spot.y} is not a cell centre`);
             for (const other of map.spots.slice(i + 1)) {
                 assert.ok(Math.hypot(spot.x - other.x, spot.y - other.y) > 0.5, 'spots must not overlap');
             }

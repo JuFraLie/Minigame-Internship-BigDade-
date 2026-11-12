@@ -462,7 +462,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         if (sprite.texture.key !== frameKey) sprite.setTexture(frameKey);
     }
 
-    /** Selection ring and the selected tower's range circle. */
+    /** Selection outline and the selected tower's range circle. */
     #presentSelection(snapshot: RoundSnapshot, transform: ViewTransform, tile: number): void {
         const under = this.#under;
         if (!under) return;
@@ -476,18 +476,20 @@ export class PhaserCanvasRenderer implements GameViewPort {
             if (tower) {
                 under.lineStyle(2, COLORS.range, 0.55);
                 under.strokeCircle(transform.toScreenX(tower.x), transform.toScreenY(tower.y), tower.range * tile);
-                this.#ring(under, transform.toScreenX(tower.x), transform.toScreenY(tower.y), tile);
+                this.#padOutline(under, transform.toScreenX(tower.x), transform.toScreenY(tower.y), tile);
             }
             return;
         }
 
         const spot = this.#layout?.spots[selection.spotId];
-        if (spot) this.#ring(under, spot.x, spot.y, tile);
+        if (spot) this.#padOutline(under, spot.x, spot.y, tile);
     }
 
-    #ring(graphics: Phaser.GameObjects.Graphics, x: number, y: number, tile: number): void {
+    /** Selection outline: a square hugging the pad, matching the grid. */
+    #padOutline(graphics: Phaser.GameObjects.Graphics, x: number, y: number, tile: number): void {
         graphics.lineStyle(Math.max(2, tile * 0.06), COLORS.range, 0.9);
-        graphics.strokeCircle(x, y, tile * 0.5);
+        const half = tile * 0.47;
+        graphics.strokeRect(x - half, y - half, half * 2, half * 2);
     }
 
     /** One small bar per wounded enemy, drawn in a single Graphics. */

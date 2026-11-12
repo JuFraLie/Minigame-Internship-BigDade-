@@ -77,13 +77,13 @@ test('strip geometry in the manifest matches the actual PNG frames', () => {
     }
 });
 
-test('the grass tiles share one square size, so the field pattern tiles cleanly', () => {
+test('the grass tiles share one square size, so every grid cell fills the same way', () => {
     const sizes = FIELD_GRASS.map((file) => pngSize(file));
     for (const size of sizes) {
         assert.equal(size.width, size.height, 'grass tiles must be square');
-        assert.equal(size.width, sizes[0].width, 'grass tiles must share a size to composite');
+        assert.equal(size.width, sizes[0].width, 'grass tiles must share a size so cells match');
     }
-    assert.ok(sizes.length >= 2, 'the field needs more than one tile to break repetition');
+    assert.ok(sizes.length >= 2, 'the field needs more than one tile to alternate across cells');
 });
 
 test('scenery and single sprites are small pixel art, not upscaled photos', () => {
