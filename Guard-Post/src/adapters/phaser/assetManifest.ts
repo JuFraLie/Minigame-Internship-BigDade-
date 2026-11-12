@@ -79,8 +79,25 @@ export const CASTLES: readonly CastleSpec[] = [
     { file: 'Towers/Castle/spr_castle_red.png', frameWidth: 52, frameHeight: 38, frames: 4 },
 ];
 
-/** The grass tiles, drawn one per grid cell across the field in alternating order. */
-export const FIELD_GRASS: readonly string[] = ['Environment/Grass/spr_grass_01.png', 'Environment/Grass/spr_grass_02.png'];
+/** One grass tile per map, in map order (bright green / deep green / orange earth). */
+export const MAP_GRASS: readonly string[] = [
+    'Environment/Grass/spr_grass_01.png',
+    'Environment/Grass/spr_grass_02.png',
+    'Environment/Grass/spr_grass_03.png',
+];
+
+/**
+ * The ground tile set the road is built from: a 48×48 frame of 16 px tiles whose
+ * centre tile is transparent. The board paints the road fill with the frame's flat
+ * dirt colour and stamps its four 4 px rim strips — the dark bumps — wherever the
+ * road meets the grass.
+ */
+export const ROAD_TILESET = {
+    file: 'Environment/Tile Set/spr_tile_set_ground.png',
+    frameSize: 48,
+    tileSize: 16,
+    rim: 4,
+} as const;
 
 /** Trees, rocks and mushrooms scattered off the road by a deterministic hash. */
 export const SCENERY: readonly ScenerySpec[] = [
@@ -103,7 +120,8 @@ export const ALL_FILES: readonly string[] = [
         ...Object.values(TOWER_IMAGES).map((spec) => spec.file),
         ...Object.values(SHOT_IMAGES).map((spec) => spec.file),
         ...CASTLES.map((spec) => spec.file),
-        ...FIELD_GRASS,
+        ...MAP_GRASS,
+        ROAD_TILESET.file,
         ...SCENERY.map((spec) => spec.file),
     ]),
 ];

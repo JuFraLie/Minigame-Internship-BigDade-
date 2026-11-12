@@ -44,8 +44,9 @@ way, the same way it fences `window.MpPostMessage` inside `MpBridge.ts`.
 ## Assets
 
 The sprite pack in `public/` (by skyel) draws the game world: skeleton/bat/demon/slime
-enemies with walk cycles, archer/cannon/ice-wizard towers with projectiles, the grass
-field, trees, rocks, mushrooms and a per-map gate castle. Loading and baking live in
+enemies with walk cycles, archer/cannon/ice-wizard towers with projectiles, one grass
+tile per map, a road built from the ground tile set, trees, rocks, mushrooms and a
+per-map gate castle. Loading and baking live in
 `src/adapters/phaser/assets.ts`; `src/adapters/phaser/assetManifest.ts` is the only file
 that names image files, and `tests/assets.test.ts` checks every path against the disk
 plus the frame geometry against the actual PNG dimensions. UI chrome is still drawn

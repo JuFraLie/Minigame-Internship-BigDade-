@@ -8,11 +8,13 @@ import {
     ALL_FILES,
     CASTLES,
     ENEMY_STRIPS,
-    FIELD_GRASS,
+    MAP_GRASS,
+    ROAD_TILESET,
     SCENERY,
     SHOT_IMAGES,
     TOWER_IMAGES,
 } from '../src/adapters/phaser/assetManifest.ts';
+import { MAPS } from '../src/domain/maps.ts';
 import { ENEMY_TYPES, TOWER_TYPES } from '../src/domain/types.ts';
 
 /**
@@ -77,13 +79,21 @@ test('strip geometry in the manifest matches the actual PNG frames', () => {
     }
 });
 
-test('the grass tiles share one square size, so every grid cell fills the same way', () => {
-    const sizes = FIELD_GRASS.map((file) => pngSize(file));
+test('each map has its own grass tile, square and uniform across cells', () => {
+    assert.equal(MAP_GRASS.length, MAPS.length, 'one grass tile per map');
+    const sizes = MAP_GRASS.map((file) => pngSize(file));
     for (const size of sizes) {
         assert.equal(size.width, size.height, 'grass tiles must be square');
         assert.equal(size.width, sizes[0].width, 'grass tiles must share a size so cells match');
     }
-    assert.ok(sizes.length >= 2, 'the field needs more than one tile to alternate across cells');
+});
+
+test('the road tile set matches the manifest geometry', () => {
+    const { width, height } = pngSize(ROAD_TILESET.file);
+    assert.equal(width, ROAD_TILESET.frameSize, 'frame width');
+    assert.equal(height, ROAD_TILESET.frameSize, 'frame height');
+    assert.equal(ROAD_TILESET.frameSize, ROAD_TILESET.tileSize * 3, 'a 3x3 grid of tiles');
+    assert.ok(ROAD_TILESET.rim > 0 && ROAD_TILESET.rim < ROAD_TILESET.tileSize, 'rim strips fit inside one tile');
 });
 
 test('scenery and single sprites are small pixel art, not upscaled photos', () => {

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import { GRID_HEIGHT, GRID_WIDTH, MAPS, distanceToRoad, measureRoad, type GameMap } from '../../domain/maps.ts';
 import { TOWER_TYPES, type EnemyType, type TowerType } from '../../domain/types.ts';
-import { CASTLES, FIELD_GRASS, SCENERY } from './assetManifest.ts';
+import { CASTLES, MAP_GRASS, ROAD_TILESET, SCENERY } from './assetManifest.ts';
 import { assetImage, bakeSprites } from './assets.ts';
 
 /**
@@ -10,12 +10,12 @@ import { assetImage, bakeSprites } from './assets.ts';
  *
  * UI chrome (buttons, panels, capsules) is generated at boot with `Phaser.Graphics`
  * — no image file and no CDN (AGENTS.md §3.4). The sprite pack in `public/` supplies
- * the game world: enemies, towers, shots, the grass field, the gate castle and the
- * scenery, baked into the renderer's texture keys by `assets.ts`. Entity textures are
- * authored at a nominal tile of `NOMINAL_TILE` px and scaled by the renderer, so a
- * resize never regenerates anything but the board itself. Any entity texture the pack
- * did not provide falls back to the old procedural drawing, so a missing file never
- * stops a round.
+ * the game world: enemies, towers, shots, the grass field, the tile-set road, the gate
+ * castle and the scenery, baked into the renderer's texture keys by `assets.ts`. Entity
+ * textures are authored at a nominal tile of `NOMINAL_TILE` px and scaled by the
+ * renderer, so a resize never regenerates anything but the board itself. Any entity
+ * texture the pack did not provide falls back to the old procedural drawing, so a
+ * missing file never stops a round.
  */
 
 export const NOMINAL_TILE = 44;
@@ -24,8 +24,8 @@ export const COLORS = {
     void: 0x101a2e,
     grass: 0x27503b,
     grassEdge: 0x1f4131,
-    road: 0x6f5a3a,
-    roadEdge: 0x4a3b25,
+    /** Flat dirt sampled from the ground tile set (`spr_tile_set_ground.png`). */
+    road: 0xbf6f4a,
     spot: 0x3d4f6b,
     spotRing: 0x6380ab,
     gate: 0xd9b64a,
@@ -253,8 +253,8 @@ export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: numb
     const ctx = texture.context;
     ctx.imageSmoothingEnabled = false;
 
-    paintField(ctx, scene, width, height, tile);
-    paintRoad(ctx, map, tile);
+    paintField(ctx, scene, map, width, height, tile);
+    paintRoad(ctx, scene, map, tile);
     paintSpots(ctx, map, tile);
     paintScenery(ctx, scene, map, tile, width, height);
     paintGate(ctx, scene, map, tile);
@@ -263,16 +263,15 @@ export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: numb
 }
 
 /**
- * The grass field: one pack tile per grid cell, alternating 01/02 in a checkerboard,
- * with the grid itself drawn over it in a darker green — the field must read as cells,
- * because that is where towers go.
+ * The grass field: one pack tile per map, drawn identically in every grid cell, so
+ * the ground is as uniform as the design reference. The rim separates it from the void.
  */
-function paintField(ctx: Ctx, scene: Phaser.Scene, width: number, height: number, tile: number): void {
-    const grass = FIELD_GRASS.map((file) => assetImage(scene, file));
+function paintField(ctx: Ctx, scene: Phaser.Scene, map: GameMap, width: number, height: number, tile: number): void {
+    const index = Math.max(0, MAPS.indexOf(map)) % MAP_GRASS.length;
+    const source = assetImage(scene, MAP_GRASS[index]);
 
     for (let gy = 0; gy < GRID_HEIGHT; gy++) {
         for (let gx = 0; gx < GRID_WIDTH; gx++) {
-            const source = grass[(gx + gy) % grass.length];
             if (source) {
                 ctx.drawImage(source, gx * tile, gy * tile, tile, tile);
             } else {
@@ -282,44 +281,77 @@ function paintField(ctx: Ctx, scene: Phaser.Scene, width: number, height: number
         }
     }
 
-    // The grid: every cell boundary, subtle but unmistakable.
-    ctx.strokeStyle = hex(COLORS.grassEdge);
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = Math.max(1, tile * 0.03);
-    ctx.beginPath();
-    for (let gx = 0; gx <= GRID_WIDTH; gx++) {
-        ctx.moveTo(gx * tile, 0);
-        ctx.lineTo(gx * tile, height);
-    }
-    for (let gy = 0; gy <= GRID_HEIGHT; gy++) {
-        ctx.moveTo(0, gy * tile);
-        ctx.lineTo(width, gy * tile);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
     // The rim that separates the field from the void.
+    ctx.strokeStyle = hex(COLORS.grassEdge);
     ctx.lineWidth = Math.max(2, tile * 0.08);
     ctx.strokeRect(0, 0, width, height);
 }
 
-/** The road: a wide dark edge under a lighter dirt surface. */
-function paintRoad(ctx: Ctx, map: GameMap, tile: number): void {
-    const roadWidth = tile * 1.05;
-    const trace = (style: string, width: number): void => {
-        ctx.strokeStyle = style;
-        ctx.lineWidth = width;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(map.waypoints[0].x * tile, map.waypoints[0].y * tile);
-        for (let i = 1; i < map.waypoints.length; i++) {
-            ctx.lineTo(map.waypoints[i].x * tile, map.waypoints[i].y * tile);
+/**
+ * The road, built from the ground tile set the way the reference screenshot does it:
+ * every grid cell the centreline touches is filled with the set's flat dirt colour,
+ * then its rim strips — the dark bumps against the grass — are stamped on each
+ * grass-facing side. The strips are clipped to their cell and aligned to the frame's
+ * three-cell period, so the bump pattern flows across neighbouring cells instead of
+ * restarting at every one. Without the tile set the flat fill alone still reads as road.
+ */
+function paintRoad(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number): void {
+    const road = measureRoad(map);
+    const isRoad = (gx: number, gy: number): boolean =>
+        gx < 0 ||
+        gy < 0 ||
+        gx >= GRID_WIDTH ||
+        gy >= GRID_HEIGHT ||
+        distanceToRoad(map, road, { x: gx + 0.5, y: gy + 0.5 }) <= 0.5 + 1e-9;
+
+    ctx.fillStyle = hex(COLORS.road);
+    for (let gy = 0; gy < GRID_HEIGHT; gy++) {
+        for (let gx = 0; gx < GRID_WIDTH; gx++) {
+            if (isRoad(gx, gy)) ctx.fillRect(gx * tile, gy * tile, tile, tile);
         }
-        ctx.stroke();
+    }
+
+    const strip = assetImage(scene, ROAD_TILESET.file);
+    if (!strip) return;
+    const { frameSize, rim } = ROAD_TILESET;
+    const scale = tile / ROAD_TILESET.tileSize;
+    const rimPx = rim * scale;
+    const period = 3 * tile; // the 48 px frame spans exactly three cells
+
+    const stamp = (
+        gx: number,
+        gy: number,
+        sx: number,
+        sy: number,
+        sw: number,
+        sh: number,
+        dx: number,
+        dy: number,
+    ): void => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(gx * tile, gy * tile, tile, tile);
+        ctx.clip();
+        ctx.drawImage(strip, sx, sy, sw, sh, dx, dy, sw * scale, sh * scale);
+        ctx.restore();
     };
-    trace(hex(COLORS.roadEdge), roadWidth + tile * 0.18);
-    trace(hex(COLORS.road), roadWidth);
+
+    for (let gy = 0; gy < GRID_HEIGHT; gy++) {
+        for (let gx = 0; gx < GRID_WIDTH; gx++) {
+            if (!isRoad(gx, gy)) continue;
+            const spanX = Math.floor(gx / 3) * period;
+            const spanY = Math.floor(gy / 3) * period;
+
+            if (!isRoad(gx, gy - 1)) stamp(gx, gy, 0, 0, frameSize, rim, spanX, gy * tile);
+            if (!isRoad(gx, gy + 1)) {
+                stamp(gx, gy, 0, frameSize - rim, frameSize, rim, spanX, gy * tile + tile - rimPx);
+            }
+            if (!isRoad(gx - 1, gy)) stamp(gx, gy, 0, 0, rim, frameSize, gx * tile, spanY);
+            if (!isRoad(gx + 1, gy)) {
+                stamp(gx, gy, frameSize - rim, 0, rim, frameSize, gx * tile + tile - rimPx, spanY);
+            }
+        }
+    }
 }
 
 /**
