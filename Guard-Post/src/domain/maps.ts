@@ -88,7 +88,8 @@ const MAP_C: GameMap = {
         { x: 3.5, y: 6.5 },
         { x: 6.5, y: 7.5 },
         { x: 3.5, y: 9.5 },
-        { x: 6.5, y: 10.5 },
+        // Kept west of the gate: the castle spans three tiles around (7.5, 11.5).
+        { x: 5.5, y: 10.5 },
         { x: 2.5, y: 4.5 },
     ],
 };

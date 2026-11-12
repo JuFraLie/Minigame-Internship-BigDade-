@@ -157,12 +157,16 @@ function bakeTowers(scene: Phaser.Scene): void {
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(base, 0, 0);
             if (level > 1) {
+                // Pip size follows the canvas, so a bigger bake keeps the proportions.
                 ctx.fillStyle = '#f2d98c';
                 const pips = level - 1;
+                const radius = Math.max(2.5, canvas.width * 0.11);
+                const gap = canvas.width * 0.34;
+                const baseline = canvas.height - Math.max(4, canvas.width * 0.14);
                 for (let pip = 0; pip < pips; pip++) {
-                    const cx = canvas.width / 2 + (pip - (pips - 1) / 2) * 11;
+                    const cx = canvas.width / 2 + (pip - (pips - 1) / 2) * gap;
                     ctx.beginPath();
-                    ctx.arc(cx, canvas.height - 5, 3.5, 0, Math.PI * 2);
+                    ctx.arc(cx, baseline, radius, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }

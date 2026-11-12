@@ -60,9 +60,9 @@ export const ENEMY_STRIPS: Record<EnemyType, StripSpec> = {
 
 /** The three buildable towers: archer, cannon and ice wizard. */
 export const TOWER_IMAGES: Record<TowerType, ImageSpec> = {
-    dart: { file: 'Towers/Combat Towers/spr_tower_archer.png', scale: 2 },
-    cannon: { file: 'Towers/Combat Towers/spr_tower_cannon.png', scale: 2 },
-    frost: { file: 'Towers/Combat Towers/spr_tower_ice_wizard.png', scale: 2 },
+    dart: { file: 'Towers/Combat Towers/spr_tower_archer.png', scale: 3 },
+    cannon: { file: 'Towers/Combat Towers/spr_tower_cannon.png', scale: 3 },
+    frost: { file: 'Towers/Combat Towers/spr_tower_ice_wizard.png', scale: 3 },
 };
 
 /** Projectiles matching each tower: arrow, cannonball, ice shard. */
@@ -99,13 +99,14 @@ export const ROAD_TILESET = {
     rim: 4,
 } as const;
 
-/** Trees, rocks and mushrooms scattered off the road by a deterministic hash. */
+/** Trees, rocks and mushrooms scattered off the road by a deterministic hash. Trees are
+ * two tiles tall, the big scenery of the design reference. */
 export const SCENERY: readonly ScenerySpec[] = [
-    { file: 'Environment/Decoration/spr_tree_01_normal.png', heightTiles: 1.05 },
-    { file: 'Environment/Decoration/spr_tree_01_autumn.png', heightTiles: 1.05 },
-    { file: 'Environment/Decoration/spr_tree_01_cherry_blossom.png', heightTiles: 1.05 },
-    { file: 'Environment/Decoration/spr_tree_02_normal.png', heightTiles: 1.05 },
-    { file: 'Environment/Decoration/spr_tree_02_spruce.png', heightTiles: 1.05 },
+    { file: 'Environment/Decoration/spr_tree_01_normal.png', heightTiles: 2 },
+    { file: 'Environment/Decoration/spr_tree_01_autumn.png', heightTiles: 2 },
+    { file: 'Environment/Decoration/spr_tree_01_cherry_blossom.png', heightTiles: 2 },
+    { file: 'Environment/Decoration/spr_tree_02_normal.png', heightTiles: 2 },
+    { file: 'Environment/Decoration/spr_tree_02_spruce.png', heightTiles: 2 },
     { file: 'Environment/Decoration/spr_rock_01.png', heightTiles: 0.35 },
     { file: 'Environment/Decoration/spr_rock_02.png', heightTiles: 0.4 },
     { file: 'Environment/Decoration/spr_rock_03.png', heightTiles: 0.35 },

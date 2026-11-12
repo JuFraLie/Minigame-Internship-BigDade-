@@ -20,6 +20,9 @@ import { assetImage, bakeSprites } from './assets.ts';
 
 export const NOMINAL_TILE = 44;
 
+/** Pad half-side in tiles: the square build pad spans ±PAD_HALF around its centre. */
+export const PAD_HALF = 0.42;
+
 export const COLORS = {
     void: 0x101a2e,
     grass: 0x27503b,
@@ -359,7 +362,7 @@ function paintRoad(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number): v
  * a ring inside, a thin inner mark, and the grid showing all around it.
  */
 function paintSpots(ctx: Ctx, map: GameMap, tile: number): void {
-    const half = tile * 0.42;
+    const half = tile * PAD_HALF;
     const inner = tile * 0.22;
     for (const spot of map.spots) {
         const cx = spot.x * tile;
@@ -393,8 +396,9 @@ function paintScenery(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number,
         for (let cx = 0; cx < GRID_WIDTH; cx++) {
             const center = { x: cx + 0.5, y: cy + 0.5 };
             if (distanceToRoad(map, road, center) < 1.35) continue;
-            if (map.spots.some((spot) => Math.hypot(spot.x - center.x, spot.y - center.y) < 1.1)) continue;
-            if (Math.hypot(gate.x - center.x, gate.y - center.y) < 1.7) continue;
+            // Scenery must clear the square pads and the three-tile gate castle.
+            if (map.spots.some((spot) => Math.hypot(spot.x - center.x, spot.y - center.y) < 1.45)) continue;
+            if (Math.hypot(gate.x - center.x, gate.y - center.y) < 2.3) continue;
 
             const hash = ((cx * 73856093) ^ (cy * 19349663) ^ seed) >>> 0;
             const roll = hash % 100;
@@ -415,7 +419,8 @@ function paintScenery(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number,
             const w = source.width * scale;
             const h = source.height * scale;
             const x = Math.round(Math.min(Math.max(cx * tile + tile / 2 - w / 2, 0), width - w));
-            const y = Math.round(Math.min((cy + 1) * tile - h + tile * 0.12, height - h));
+            // Bottom-anchored in its cell, but never clipped off the top of the board.
+            const y = Math.round(Math.max(0, Math.min((cy + 1) * tile - h + tile * 0.12, height - h)));
             ctx.drawImage(source, x, y, w, h);
         }
     }
@@ -442,9 +447,10 @@ function paintGate(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number): v
     const spec = CASTLES[index];
     const source = spec ? assetImage(scene, spec.file) : null;
     if (spec && source) {
-        const scale = Math.max(1, Math.round((tile * 1.3) / spec.frameWidth));
-        const w = spec.frameWidth * scale;
-        const h = spec.frameHeight * scale;
+        // The gate castle spans three tiles, like the design reference; its height
+        // follows the art's aspect (pixel art must not stretch).
+        const w = tile * 3;
+        const h = Math.round((w * spec.frameHeight) / spec.frameWidth);
         const x = Math.round(gx - w / 2);
         const y = Math.round(gy + tile * 0.32 - h);
         ctx.drawImage(source, 0, 0, spec.frameWidth, spec.frameHeight, x, y, w, h);

@@ -15,7 +15,7 @@ import {
     TOWER_IMAGES,
 } from '../src/adapters/phaser/assetManifest.ts';
 import { MAPS } from '../src/domain/maps.ts';
-import { ENEMY_TYPES, TOWER_TYPES } from '../src/domain/types.ts';
+import { ENEMY_TYPES, TOWER_TYPES, type TowerType } from '../src/domain/types.ts';
 
 /**
  * The sprite pack, audited against the disk.
@@ -70,6 +70,13 @@ test('strip geometry in the manifest matches the actual PNG frames', () => {
         assert.ok(Number.isInteger(spec.scale) && spec.scale >= 1, `${type}: scale must upscale, not blur`);
         assert.ok(spec.frameWidth * spec.scale <= 128, `${type}: baked frame would be oversized`);
         assert.ok(spec.fps >= 4, `${type}: walk cycle would strobe at ${spec.fps}fps`);
+    }
+
+    for (const type of Object.keys(TOWER_IMAGES) as TowerType[]) {
+        const spec = TOWER_IMAGES[type];
+        const { width, height } = pngSize(spec.file);
+        assert.ok(Number.isInteger(spec.scale) && spec.scale >= 1, `${type}: scale must upscale, not blur`);
+        assert.ok(width * spec.scale <= 128 && height * spec.scale <= 128, `${type}: baked tower would be oversized`);
     }
 
     for (const spec of CASTLES) {

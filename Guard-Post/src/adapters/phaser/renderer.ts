@@ -13,7 +13,7 @@ import {
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
-import { BOARD_KEY, COLORS, NOMINAL_TILE, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
+import { BOARD_KEY, COLORS, NOMINAL_TILE, PAD_HALF, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
 import { createViewTransform, type ViewTransform } from './viewTransform.ts';
 
 /**
@@ -132,7 +132,10 @@ export class PhaserCanvasRenderer implements GameViewPort {
         }
         this.#towerSprites = [];
         for (let i = 0; i < TOWER_POOL; i++) {
-            this.#towerSprites.push(this.#add(scene.add.image(0, 0, 'tower-dart-1').setVisible(false).setDepth(6).setScale(this.#entityScale)));
+            this.#towerSprites.push(
+                // Bottom-anchored: a tall tower stands on its pad and grows upward.
+                this.#add(scene.add.image(0, 0, 'tower-dart-1').setVisible(false).setDepth(6).setOrigin(0.5, 1).setScale(this.#entityScale)),
+            );
         }
         this.#shotSprites = [];
         for (let i = 0; i < SHOT_POOL; i++) {
@@ -421,7 +424,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
             const tower = towers[i];
             const key = `tower-${tower.type}-${tower.level}`;
             if (sprite.texture.key !== key) sprite.setTexture(key);
-            sprite.setVisible(true).setPosition(transform.toScreenX(tower.x), transform.toScreenY(tower.y));
+            // The anchor is the sprite's bottom centre, planted on the pad's bottom edge.
+            sprite.setVisible(true).setPosition(transform.toScreenX(tower.x), transform.toScreenY(tower.y) + tile * PAD_HALF);
         }
 
         // Projectiles come from a pool; inactive slots are simply hidden.
