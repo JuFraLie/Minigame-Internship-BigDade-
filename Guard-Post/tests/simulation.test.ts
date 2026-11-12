@@ -188,7 +188,7 @@ test('upgrades are absolute from the base stats, and level 3 is the cap', () => 
 
 test('towers shoot the First enemy — the one furthest along the road', () => {
     const sim = new Simulation(1);
-    // Spot 0 sits beside the opening straight, where both opening grunts overlap its range.
+    // Spot 0 sits 1–2 tiles off the road, where the opening grunts walk past in file.
     assert.equal(sim.build(0, 'dart'), true);
 
     let firstBlood: { readonly woundedId: number; readonly leaderId: number } | null = null;

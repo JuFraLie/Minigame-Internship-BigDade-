@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { GRID_HEIGHT, GRID_WIDTH, MAPS, distanceToRoad, measureRoad, type GameMap } from '../../domain/maps.ts';
+import { GRID_HEIGHT, GRID_WIDTH, distanceToRoad, measureRoad, type GameMap } from '../../domain/maps.ts';
 import { TOWER_TYPES, type EnemyType, type TowerType } from '../../domain/types.ts';
 import { CASTLES, MAP_GRASS, ROAD_TILESET, SCENERY } from './assetManifest.ts';
 import { assetImage, bakeSprites } from './assets.ts';
@@ -19,9 +19,6 @@ import { assetImage, bakeSprites } from './assets.ts';
  */
 
 export const NOMINAL_TILE = 44;
-
-/** Pad half-side in tiles: the square build pad spans ±PAD_HALF around its centre. */
-export const PAD_HALF = 0.42;
 
 export const COLORS = {
     void: 0x101a2e,
@@ -243,8 +240,10 @@ export const BOARD_KEY = 'board';
 type Ctx = CanvasRenderingContext2D;
 
 /**
- * Paints grass, road, spots, scenery and the gate into a canvas texture sized for
- * `tile`. Regenerated when the layout changes; everything else is drawn once.
+ * Paints grass, road, scenery and the gate into a canvas texture sized for `tile`.
+ * Regenerated when the layout changes; everything else is drawn once. The build pads
+ * are not part of this: the renderer draws them per frame, so a pad can disappear the
+ * moment a tower stands on it.
  */
 export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: number): void {
     const width = Math.ceil(tile * GRID_WIDTH);
@@ -258,7 +257,6 @@ export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: numb
 
     paintField(ctx, scene, map, width, height, tile);
     paintRoad(ctx, scene, map, tile);
-    paintSpots(ctx, map, tile);
     paintScenery(ctx, scene, map, tile, width, height);
     paintGate(ctx, scene, map, tile);
 
@@ -270,7 +268,7 @@ export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: numb
  * the ground is as uniform as the design reference. The rim separates it from the void.
  */
 function paintField(ctx: Ctx, scene: Phaser.Scene, map: GameMap, width: number, height: number, tile: number): void {
-    const index = Math.max(0, MAPS.indexOf(map)) % MAP_GRASS.length;
+    const index = map.theme % MAP_GRASS.length;
     const source = assetImage(scene, MAP_GRASS[index]);
 
     for (let gy = 0; gy < GRID_HEIGHT; gy++) {
@@ -358,31 +356,6 @@ function paintRoad(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number): v
 }
 
 /**
- * Build spots: square pads centred on their grid cell, so the pad *is* the cell —
- * a ring inside, a thin inner mark, and the grid showing all around it.
- */
-function paintSpots(ctx: Ctx, map: GameMap, tile: number): void {
-    const half = tile * PAD_HALF;
-    const inner = tile * 0.22;
-    for (const spot of map.spots) {
-        const cx = spot.x * tile;
-        const cy = spot.y * tile;
-
-        ctx.fillStyle = hex(COLORS.spot);
-        ctx.fillRect(cx - half, cy - half, half * 2, half * 2);
-
-        ctx.strokeStyle = hex(COLORS.spotRing);
-        ctx.lineWidth = Math.max(2, tile * 0.07);
-        ctx.strokeRect(cx - half, cy - half, half * 2, half * 2);
-
-        ctx.globalAlpha = 0.6;
-        ctx.lineWidth = Math.max(1, tile * 0.04);
-        ctx.strokeRect(cx - inner, cy - inner, inner * 2, inner * 2);
-        ctx.globalAlpha = 1;
-    }
-}
-
-/**
  * Trees, rocks and mushrooms, stamped off the road by a hash of the cell and the map
  * name — the same scenery every round, a different set on every layout.
  */
@@ -427,23 +400,16 @@ function paintScenery(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number,
 }
 
 /**
- * The gate the player is defending: a gold threshold with the pack's castle standing
- * on it (blue / green / red in map order). Without the pack, the old door shows.
+ * The gate the player is defending: the pack's castle standing on the bottom row
+ * (blue / green / red by theme), three tiles wide. The old gold threshold with its
+ * dark doorway only shows when the pack's castle is missing.
  */
 function paintGate(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number): void {
     const gate = map.waypoints[map.waypoints.length - 1];
     const gx = gate.x * tile;
     const gy = gate.y * tile;
 
-    ctx.fillStyle = hex(COLORS.gate);
-    ctx.strokeStyle = '#8a7426';
-    ctx.lineWidth = Math.max(2, tile * 0.08);
-    ctx.beginPath();
-    ctx.arc(gx, gy, tile * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    const index = Math.max(0, MAPS.indexOf(map)) % CASTLES.length;
+    const index = map.theme % CASTLES.length;
     const spec = CASTLES[index];
     const source = spec ? assetImage(scene, spec.file) : null;
     if (spec && source) {
@@ -456,6 +422,14 @@ function paintGate(ctx: Ctx, scene: Phaser.Scene, map: GameMap, tile: number): v
         ctx.drawImage(source, 0, 0, spec.frameWidth, spec.frameHeight, x, y, w, h);
         return;
     }
+
+    ctx.fillStyle = hex(COLORS.gate);
+    ctx.strokeStyle = '#8a7426';
+    ctx.lineWidth = Math.max(2, tile * 0.08);
+    ctx.beginPath();
+    ctx.arc(gx, gy, tile * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
 
     ctx.fillStyle = hex(COLORS.void);
     ctx.fillRect(gx - tile * 0.26, gy - tile * 0.1, tile * 0.52, tile * 0.5);

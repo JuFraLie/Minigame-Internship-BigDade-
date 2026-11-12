@@ -32,13 +32,18 @@ export interface RunResult {
     readonly msPerStep: number;
 }
 
-/** One level played to its end by `bot`. */
-export function runLevel(level: number, bot: PlayerStrategyPort, options: RunOptions = {}): RunResult {
+/** One level played to its end by a bot built for that level's map. */
+export function runLevel(
+    level: number,
+    makeBot: (spotCount: number) => PlayerStrategyPort,
+    options: RunOptions = {},
+): RunResult {
     const maxSeconds = options.maxSeconds ?? 900;
     const thinkEvery = Math.max(1, Math.round((options.thinkSeconds ?? 0.5) * SIM_HZ));
     const maxSteps = Math.ceil(maxSeconds * SIM_HZ);
 
     const sim = new Simulation(level);
+    const bot = makeBot(sim.map.spots.length);
     const events: RoundEvent[] = [];
     let wavesCleared = 0;
     let steps = 0;
@@ -76,16 +81,10 @@ export function runLevel(level: number, bot: PlayerStrategyPort, options: RunOpt
 }
 
 /** Convenience: play levels `from`..`to` with the same bot factory. */
-export function runLevels(
-    from: number,
-    to: number,
-    makeBot: (spotCount: number) => PlayerStrategyPort,
-    spotCounts: readonly number[],
-): RunResult[] {
+export function runLevels(from: number, to: number, makeBot: (spotCount: number) => PlayerStrategyPort): RunResult[] {
     const results: RunResult[] = [];
     for (let level = from; level <= to; level++) {
-        const spotCount = spotCounts[(level - 1) % spotCounts.length] ?? 6;
-        results.push(runLevel(level, makeBot(spotCount)));
+        results.push(runLevel(level, makeBot));
     }
     return results;
 }

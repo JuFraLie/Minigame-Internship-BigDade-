@@ -1,20 +1,26 @@
 import type { Vec2 } from './types.ts';
 
 /**
- * The three map layouts, in world units (1 unit = 1 tile on a 9 x 12 grid).
+ * Map layouts, in world units (1 unit = 1 tile on a 9 x 12 grid).
  *
  * Every map is one road — a polyline of waypoints the enemies follow without any
  * pathfinding — plus a fixed set of build spots ("spots") at grid cell centres,
- * 1–2 tiles off the road. Level `L` plays map `(L - 1) mod 3`, so a run never
- * repeats a layout for three levels in a row.
+ * 1–2 tiles off the road. Levels play freshly generated layouts (see
+ * `mapGenerator.ts`); the three reference layouts below are the generator's
+ * fallback and the fixtures the tests measure the rules against.
  */
 
 /** Grid dimensions shared by every map; the renderer scales this to the screen. */
 export const GRID_WIDTH = 9;
 export const GRID_HEIGHT = 12;
 
+/** Pad half-side in tiles: the square build pad spans ±PAD_HALF around its centre. */
+export const PAD_HALF = 0.42;
+
 export interface GameMap {
     readonly name: string;
+    /** Visual variant: which grass tile and gate castle the renderer uses (0..2). */
+    readonly theme: number;
     /** Enemy path; the last point is the gate, the first is where enemies enter. */
     readonly waypoints: readonly Vec2[];
     /**
@@ -24,9 +30,28 @@ export interface GameMap {
     readonly spots: readonly Vec2[];
 }
 
+/**
+ * The gate castle's footprint in world tiles: three wide, about two tall, standing
+ * on the gate point with a small apron below it. A build pad must stay outside this
+ * box — the renderer draws the castle over it, and a pad under the castle is a pad
+ * the player cannot see.
+ */
+export function fitsBesideGateCastle(spot: Vec2, gate: Vec2): boolean {
+    const halfWidth = 1.5;
+    const height = 2.35;
+    const apron = 0.5;
+    return (
+        spot.x + PAD_HALF <= gate.x - halfWidth ||
+        spot.x - PAD_HALF >= gate.x + halfWidth ||
+        spot.y + PAD_HALF <= gate.y - height ||
+        spot.y - PAD_HALF >= gate.y + apron
+    );
+}
+
 /** Map A — "S-Bend": the reference layout from the design document. */
 const MAP_A: GameMap = {
     name: 'S-Bend',
+    theme: 0,
     waypoints: [
         { x: 0, y: 2.5 },
         { x: 7.5, y: 2.5 },
@@ -49,6 +74,7 @@ const MAP_A: GameMap = {
 /** Map B — "Staircase": enters at the top centre and steps down to a gate at the bottom. */
 const MAP_B: GameMap = {
     name: 'Staircase',
+    theme: 1,
     waypoints: [
         { x: 4.5, y: 0.5 },
         { x: 4.5, y: 3.5 },
@@ -74,6 +100,7 @@ const MAP_B: GameMap = {
 /** Map C — "Coil": a long dive down the left side, then a loop back to the gate. */
 const MAP_C: GameMap = {
     name: 'Coil',
+    theme: 2,
     waypoints: [
         { x: 1.5, y: 0.5 },
         { x: 1.5, y: 10.5 },
@@ -94,14 +121,8 @@ const MAP_C: GameMap = {
     ],
 };
 
-/** All maps, in rotation order. */
+/** The three reference layouts: the generator's fallback and the tests' fixtures. */
 export const MAPS: readonly GameMap[] = [MAP_A, MAP_B, MAP_C];
-
-/** Level 1 plays map 0, level 2 map 1, level 3 map 2, level 4 map 0, ... */
-export function mapForLevel(level: number): GameMap {
-    const index = ((level - 1) % MAPS.length + MAPS.length) % MAPS.length;
-    return MAPS[index];
-}
 
 // ---------------------------------------------------------------------------
 // Road measurement — computed once per round so the step loop never measures

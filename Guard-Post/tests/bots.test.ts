@@ -11,7 +11,7 @@ import { runLevel, runLevels } from '../src/testing/headlessRunner.ts';
  */
 
 test('the scripted bot clears level 1 with lives to spare', () => {
-    const result = runLevel(1, createScriptedBot(6));
+    const result = runLevel(1, createScriptedBot);
 
     assert.equal(result.outcome, 'victory', `bot reached wave state with ${result.score} score`);
     assert.equal(result.wavesCleared, 3, 'all three waves must be cleared');
@@ -21,14 +21,14 @@ test('the scripted bot clears level 1 with lives to spare', () => {
 });
 
 test('the scripted bot clears level 2 as well', () => {
-    const result = runLevel(2, createScriptedBot(8));
+    const result = runLevel(2, createScriptedBot);
     assert.equal(result.outcome, 'victory');
     assert.equal(result.wavesCleared, 3);
 });
 
 test('bot runs are deterministic — same level, same result', () => {
-    const first = runLevel(3, createScriptedBot(7));
-    const second = runLevel(3, createScriptedBot(7));
+    const first = runLevel(3, createScriptedBot);
+    const second = runLevel(3, createScriptedBot);
 
     assert.equal(first.outcome, second.outcome);
     assert.equal(first.score, second.score);
@@ -38,7 +38,7 @@ test('bot runs are deterministic — same level, same result', () => {
 });
 
 test('an unprepared defence loses a deep level', () => {
-    const result = runLevel(20, createWeakBot(), { maxSeconds: 600 });
+    const result = runLevel(20, createWeakBot, { maxSeconds: 600 });
 
     assert.equal(result.outcome, 'defeat', 'one dart tower cannot hold level 20');
     assert.ok(result.lives <= 0);
@@ -46,7 +46,7 @@ test('an unprepared defence loses a deep level', () => {
 });
 
 test('running a range of levels keeps every result inside the runner contract', () => {
-    const results = runLevels(1, 3, (spotCount) => createScriptedBot(spotCount), [6, 8, 7]);
+    const results = runLevels(1, 3, createScriptedBot);
 
     assert.equal(results.length, 3);
     for (const result of results) {

@@ -21,7 +21,7 @@ real host bridge.
 
 ```
 src/
-  domain/          pure game logic: maps, wave generation, damage, economy, score,
+  domain/          pure game logic: map and wave generation, damage, economy, score,
                    simulation. No Phaser, no DOM, no pixels.
   app/             ports (typed contracts) and the session flow state machine.
   adapters/
@@ -45,8 +45,8 @@ way, the same way it fences `window.MpPostMessage` inside `MpBridge.ts`.
 
 The sprite pack in `public/` (by skyel) draws the game world: skeleton/bat/demon/slime
 enemies with walk cycles, archer/cannon/ice-wizard towers with projectiles, one grass
-tile per map, a road built from the ground tile set, trees, rocks, mushrooms and a
-per-map gate castle. Loading and baking live in
+tile per theme (levels cycle three themes), a road built from the ground tile set, trees,
+rocks, mushrooms and a gate castle per theme. Loading and baking live in
 `src/adapters/phaser/assets.ts`; `src/adapters/phaser/assetManifest.ts` is the only file
 that names image files, and `tests/assets.test.ts` checks every path against the disk
 plus the frame geometry against the actual PNG dimensions. UI chrome is still drawn
@@ -57,6 +57,8 @@ lost asset never stops a round.
 
 - Play Screen on launch; tap anywhere or Play starts a round.
 - Result Panel is the only place with Retry / Next Level / Exit; Pause only resumes.
-- Endless levels: level `L` uses map `(L - 1) mod 3`, three waves per level, 10 lives.
+- Endless levels: every level generates a fresh layout (road, scenery and pads seeded
+  by the level number, so a level replays identically) with a randomized wave mix within
+  the same threat budget; three waves per level, 10 lives.
 - Per `AGENTS.md` §4.2 the game is endless, so `endRound` always carries `win: true`
   (confirmed 11 November 2026); the Result Panel still shows Victory/Defeat to the player.

@@ -1,7 +1,8 @@
 import { applySlow, effectiveDamage, noSlow, speedMultiplier, tickSlow, type SlowState } from './damage.ts';
 import { earlyCallBonus, killReward, sellRefund, startingGold, upgradeCost, waveClearBonus } from './economy.ts';
 import { generateLevelPlan, type SpawnEntry } from './levelGenerator.ts';
-import { MAPS, mapForLevel, measureRoad, pointOnRoad, type GameMap, type Road } from './maps.ts';
+import { generateMap } from './mapGenerator.ts';
+import { measureRoad, pointOnRoad, type GameMap, type Road } from './maps.ts';
 import { killScore, levelClearScore, waveClearScore } from './score.ts';
 import {
     ENEMY_SPECS,
@@ -154,8 +155,8 @@ export class Simulation {
 
     constructor(level: number) {
         this.level = level;
-        this.map = mapForLevel(level);
-        this.mapIndex = MAPS.indexOf(this.map);
+        this.map = generateMap(level);
+        this.mapIndex = this.map.theme;
         this.road = measureRoad(this.map);
         this.lives = STARTING_LIVES;
         this.gold = startingGold(level);

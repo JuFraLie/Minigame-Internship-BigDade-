@@ -1,20 +1,24 @@
 import { ENEMY_SPECS, ENEMY_TYPES, WAVES_PER_LEVEL, type EnemyType } from './types.ts';
+import { mulberry32, seedOf } from './rng.ts';
 
 /**
- * Deterministic wave generation from a threat budget.
+ * Seeded wave generation from a threat budget.
  *
- * No wave is hand-written and no random number is drawn: `generateWave(level, wave)`
- * always returns the same schedule, which is what makes the whole game testable by a
- * bot and reproducible in a unit test.
+ * No wave is hand-written: `generateWave(level, wave)` draws its composition from a
+ * seed derived from the level, so the same level always plays out the same way —
+ * which is what makes the whole game testable by a bot and reproducible in a unit
+ * test — while different levels field different mixes of enemies.
  *
  * Budget for wave `w` (1..3) at level `L`:
  *     (8 + 2.5 x (L - 1)) x (1 + 0.35 x (w - 1))
+ * Unlocks by level:
+ *     grunts always, runners from level 2, brutes from level 3.
  * Composition by wave:
- *     wave 1             grunts only
- *     wave 2             50% grunts, 50% runners, by budget
- *     wave 3, level >= 3 40% brutes, 30% runners, 30% grunts, by budget
- *     wave 3, level < 3  50% grunts, 50% runners, by budget
- * Every 5th level appends one boss to wave 3, on top of the budget.
+ *     wave 1  one unlocked type at random
+ *     wave 2  two unlocked types at random
+ *     wave 3  every unlocked type, in random shares of the budget
+ * Shares are random per level but always spend at least half the budget and never
+ * exceed it. Every 5th level appends one boss to wave 3, on top of the budget.
  */
 
 export interface SpawnEntry {
@@ -30,36 +34,75 @@ export function waveBudget(level: number, wave: number): number {
     return (8 + 2.5 * (level - 1)) * (1 + 0.35 * (wave - 1));
 }
 
-/** How many enemies of one type fit into a share of the budget. */
-function countFor(share: number, type: EnemyType): number {
-    return Math.floor(share / ENEMY_SPECS[type].threat);
+/** Enemy types unlocked at `level`: grunts always, runners from 2, brutes from 3. */
+function unlockedFor(level: number): readonly EnemyType[] {
+    const types: EnemyType[] = ['grunt'];
+    if (level >= 2) types.push('runner');
+    if (level >= 3) types.push('brute');
+    return types;
+}
+
+/** How many different types a wave fields: wave 1 singles, wave 2 pairs, wave 3 all. */
+function typesInWave(level: number, wave: number): number {
+    const available = unlockedFor(level);
+    if (wave === 1) return 1;
+    if (wave === 2) return Math.min(2, available.length);
+    return available.length;
 }
 
 /** The enemy groups of a wave, in spawn order, as [type, count] pairs. */
-function groupsFor(level: number, wave: number, budget: number): readonly Group[] {
-    if (wave === 1) return [['grunt', countFor(budget, 'grunt')]];
-    if (wave === 2 || level < 3) {
-        return [
-            ['grunt', countFor(budget * 0.5, 'grunt')],
-            ['runner', countFor(budget * 0.5, 'runner')],
-        ];
+function groupsFor(level: number, wave: number, budget: number, rng: () => number): readonly Group[] {
+    const available = [...unlockedFor(level)];
+    const chosen: EnemyType[] = [];
+    for (let i = 0; i < typesInWave(level, wave) && available.length > 0; i++) {
+        chosen.push(available.splice(Math.floor(rng() * available.length), 1)[0]);
     }
-    return [
-        ['brute', countFor(budget * 0.4, 'brute')],
-        ['runner', countFor(budget * 0.3, 'runner')],
-        ['grunt', countFor(budget * 0.3, 'grunt')],
-    ];
+
+    // Random shares: every chosen type weighs 0.4..1.4 of the budget, by threat.
+    const weights = chosen.map(() => 0.4 + rng());
+    const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
+    const counts = new Map<EnemyType, number>();
+    let spent = 0;
+    chosen.forEach((type, index) => {
+        const share = (weights[index] / weightTotal) * budget;
+        const count = Math.floor(share / ENEMY_SPECS[type].threat);
+        if (count > 0) {
+            counts.set(type, count);
+            spent += count * ENEMY_SPECS[type].threat;
+        }
+    });
+
+    // Never underspend half the budget: top up with the cheapest unlocked type,
+    // grunts first, until the floor is reached or the budget is full.
+    const topUpOrder: EnemyType[] = ['grunt', ...unlockedFor(level).filter((type) => type !== 'grunt')];
+    while (spent < budget * 0.5) {
+        const type = topUpOrder.find((candidate) => spent + ENEMY_SPECS[candidate].threat <= budget);
+        if (!type) break;
+        counts.set(type, (counts.get(type) ?? 0) + 1);
+        spent += ENEMY_SPECS[type].threat;
+    }
+
+    // Shuffle the blocks: sometimes the heavy group walks in first, sometimes last.
+    const groups: Group[] = [...counts].map(([type, count]) => [type, count]);
+    for (let i = groups.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const swap = groups[i];
+        groups[i] = groups[j];
+        groups[j] = swap;
+    }
+    return groups;
 }
 
 /** The spawn schedule of one wave, or `null` for a wave index outside 1..3. */
 export function generateWave(level: number, wave: number): readonly SpawnEntry[] | null {
     if (wave < 1 || wave > WAVES_PER_LEVEL || level < 1) return null;
 
+    const rng = mulberry32(seedOf(level, wave));
     const budget = waveBudget(level, wave);
     const entries: SpawnEntry[] = [];
     let time = 0;
 
-    for (const [type, count] of groupsFor(level, wave, budget)) {
+    for (const [type, count] of groupsFor(level, wave, budget, rng)) {
         const gap = ENEMY_SPECS[type].spawnGap;
         for (let i = 0; i < count; i++) {
             entries.push({ time, type });

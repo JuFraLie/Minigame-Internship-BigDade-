@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import { sellRefund, upgradeCost } from '../../domain/economy.ts';
-import type { GameMap } from '../../domain/maps.ts';
+import { PAD_HALF, type GameMap } from '../../domain/maps.ts';
 import {
     TOWER_SPECS,
     TOWER_TYPES,
@@ -13,7 +13,7 @@ import {
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
-import { BOARD_KEY, COLORS, NOMINAL_TILE, PAD_HALF, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
+import { BOARD_KEY, COLORS, NOMINAL_TILE, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
 import { createViewTransform, type ViewTransform } from './viewTransform.ts';
 
 /**
@@ -67,6 +67,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #board: Phaser.GameObjects.Image | null = null;
     #under: Phaser.GameObjects.Graphics | null = null;
     #over: Phaser.GameObjects.Graphics | null = null;
+    /** Per-spot flag: a tower stands there, so its pad is not drawn. Reused every frame. */
+    #padTaken: boolean[] = [];
 
     #enemySprites: Phaser.GameObjects.Sprite[] = [];
     #towerSprites: Phaser.GameObjects.Image[] = [];
@@ -466,11 +468,12 @@ export class PhaserCanvasRenderer implements GameViewPort {
         if (sprite.texture.key !== frameKey) sprite.setTexture(frameKey);
     }
 
-    /** Selection outline and the selected tower's range circle. */
+    /** Empty build pads, the selection outline and the selected tower's range circle. */
     #presentSelection(snapshot: RoundSnapshot, transform: ViewTransform, tile: number): void {
         const under = this.#under;
         if (!under) return;
         under.clear();
+        this.#presentPads(snapshot, under, tile);
 
         const selection = this.#selection;
         if (!selection) return;
@@ -487,6 +490,35 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
         const spot = this.#layout?.spots[selection.spotId];
         if (spot) this.#padOutline(under, spot.x, spot.y, tile);
+    }
+
+    /**
+     * The build pads, drawn fresh every frame: a spot keeps its box until a tower
+     * stands on it, and then the tower itself marks the slot. Selling brings the box
+     * back, with no texture to repaint.
+     */
+    #presentPads(snapshot: RoundSnapshot, under: Phaser.GameObjects.Graphics, tile: number): void {
+        const spots = this.#layout?.spots;
+        if (!spots) return;
+
+        if (this.#padTaken.length !== spots.length) this.#padTaken = new Array<boolean>(spots.length).fill(false);
+        else this.#padTaken.fill(false);
+        for (const tower of snapshot.towers) {
+            if (tower.spotId >= 0 && tower.spotId < this.#padTaken.length) this.#padTaken[tower.spotId] = true;
+        }
+
+        const half = tile * PAD_HALF;
+        const inner = tile * 0.22;
+        for (let id = 0; id < spots.length; id++) {
+            if (this.#padTaken[id]) continue;
+            const spot = spots[id];
+            under.fillStyle(COLORS.spot, 1);
+            under.fillRect(spot.x - half, spot.y - half, half * 2, half * 2);
+            under.lineStyle(Math.max(2, tile * 0.07), COLORS.spotRing, 1);
+            under.strokeRect(spot.x - half, spot.y - half, half * 2, half * 2);
+            under.lineStyle(Math.max(1, tile * 0.04), COLORS.spotRing, 0.6);
+            under.strokeRect(spot.x - inner, spot.y - inner, inner * 2, inner * 2);
+        }
     }
 
     /** Selection outline: a square hugging the pad, matching the grid. */

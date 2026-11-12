@@ -14,9 +14,9 @@ import { ENEMY_SPECS, WAVES_PER_LEVEL, type EnemyType } from '../src/domain/type
  * Threat-budget wave generation.
  *
  * The design document's wave rules, asserted directly: deterministic schedules, budgets
- * that are never overspent, the composition table by wave, and one boss every fifth
- * level. If any of these drift, the balance tests and the scripted bots stop meaning
- * anything — so they are checked first.
+ * that are never overspent, the unlock schedule by level, compositions that vary
+ * between levels, and one boss every fifth level. If any of these drift, the balance
+ * tests and the scripted bots stop meaning anything — so they are checked first.
  */
 
 test('the same level and wave always produce the same schedule', () => {
@@ -48,29 +48,47 @@ test('the budget grows with the level and with the wave', () => {
     assert.ok(waveBudget(1, 3) > waveBudget(1, 2));
 });
 
-test('wave 1 is grunts only; wave 2 mixes grunts and runners', () => {
-    for (let level = 1; level <= 12; level++) {
-        const first = generateWave(level, 1);
-        assert.ok(first);
-        assert.deepEqual(scheduleTypes(first), ['grunt'], `level ${level} wave 1`);
-
-        const second = generateWave(level, 2);
-        assert.ok(second);
-        assert.deepEqual(scheduleTypes(second), ['grunt', 'runner'], `level ${level} wave 2`);
+test('level 1 fields grunts only — the opening stays gentle', () => {
+    for (let wave = 1; wave <= WAVES_PER_LEVEL; wave++) {
+        const entries = generateWave(1, wave);
+        assert.ok(entries);
+        assert.deepEqual(scheduleTypes(entries), ['grunt'], `level 1 wave ${wave}`);
     }
 });
 
-test('brutes join wave 3 from level 3 on, and only then', () => {
+test('runners join from level 2, brutes from level 3, and never earlier', () => {
     for (const level of [1, 2]) {
-        const third = generateWave(level, 3);
-        assert.ok(third);
-        assert.ok(!scheduleTypes(third).includes('brute'), `level ${level} must not field brutes`);
+        for (let wave = 1; wave <= WAVES_PER_LEVEL; wave++) {
+            const entries = generateWave(level, wave);
+            assert.ok(entries);
+            const types = scheduleTypes(entries);
+            if (level === 1) {
+                assert.deepEqual(types, ['grunt'], `level ${level} wave ${wave}`);
+            } else {
+                assert.ok(!types.includes('brute'), `level ${level} wave ${wave} fields brutes too early`);
+            }
+        }
     }
     for (const level of [3, 4, 9]) {
         const third = generateWave(level, 3);
         assert.ok(third);
-        assert.ok(scheduleTypes(third).includes('brute'), `level ${level} must field brutes`);
+        const types = scheduleTypes(third);
+        for (const type of ['grunt', 'runner', 'brute'] as const) {
+            assert.ok(types.includes(type), `level ${level} wave 3 must field ${type}`);
+        }
     }
+});
+
+test('wave compositions vary from level to level', () => {
+    const seen = new Set<string>();
+    for (let level = 2; level <= 16; level++) {
+        for (let wave = 1; wave <= WAVES_PER_LEVEL; wave++) {
+            const entries = generateWave(level, wave);
+            assert.ok(entries);
+            seen.add(scheduleTypes(entries).join('+'));
+        }
+    }
+    assert.ok(seen.size >= 4, `expected varied compositions, saw ${seen.size}: ${[...seen].join(', ')}`);
 });
 
 test('every fifth level appends exactly one boss to wave 3, last in line', () => {

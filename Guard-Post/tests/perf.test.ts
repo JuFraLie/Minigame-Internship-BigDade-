@@ -17,7 +17,7 @@ import { runLevel } from '../src/testing/headlessRunner.ts';
  */
 
 test('a scripted level keeps every simulation step far below one frame', () => {
-    const result = runLevel(1, createScriptedBot(6));
+    const result = runLevel(1, createScriptedBot);
 
     assert.ok(result.steps > 0, 'the level never ran');
     assert.ok(
@@ -28,7 +28,7 @@ test('a scripted level keeps every simulation step far below one frame', () => {
 
 test('the heavy waves of a deep level do not blow the step budget', () => {
     // Level 13 fields brutes and scaled-up HP: the busiest spawn list in a normal run.
-    const result = runLevel(13, createScriptedBot(7), { maxSeconds: 120 });
+    const result = runLevel(13, createScriptedBot, { maxSeconds: 120 });
 
     assert.ok(result.steps > 0, 'the level never ran');
     assert.ok(
@@ -38,7 +38,7 @@ test('the heavy waves of a deep level do not blow the step budget', () => {
 });
 
 test('losing a level is no cheaper to simulate than winning one', () => {
-    const result = runLevel(20, createWeakBot(), { maxSeconds: 120 });
+    const result = runLevel(20, createWeakBot, { maxSeconds: 120 });
 
     assert.ok(result.steps > 0, 'the level never ran');
     assert.ok(result.msPerStep < 1.5, `a step averaged ${result.msPerStep.toFixed(4)} ms`);
