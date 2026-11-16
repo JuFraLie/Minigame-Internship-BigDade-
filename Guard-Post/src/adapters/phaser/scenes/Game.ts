@@ -62,7 +62,7 @@ export class Game extends Phaser.Scene {
         this.#ended = false;
         this.#selection = null;
 
-        const sim = new Simulation(this.#deps.flow.level);
+        const sim = new Simulation(this.#deps.flow.level, this.#deps.maps);
         this.#sim = sim;
         this.#layout = this.#buildLayout(sim);
         this.#transform = createViewTransform(this.#layout.board);

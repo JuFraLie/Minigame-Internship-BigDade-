@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 import type { InputPort, PlayContext } from '../adapters/phaser/inputAdapter.ts';
 import type { GameViewPort } from '../adapters/phaser/playView.ts';
-import type { CreditPort, ViewportPort } from './ports.ts';
+import type { CreditPort, MapSource, ViewportPort } from './ports.ts';
 import type { SessionFlow } from './sessionFlow.ts';
 
 /**
@@ -17,6 +17,8 @@ import type { SessionFlow } from './sessionFlow.ts';
 export interface AppDeps {
     /** The screen-flow state machine; the scenes tell it what happened. */
     readonly flow: SessionFlow;
+    /** Where a level's layout comes from; the composition root decides the source. */
+    readonly maps: MapSource;
     /** The live viewport, for layout math. */
     readonly viewport: ViewportPort;
     /** The Play Screen's credit line: a label, and what a tap on it does. */

@@ -1,5 +1,7 @@
 import type { GameCommand, RoundSnapshot, TowerType } from '../domain/types.ts';
 
+export type { MapSource } from '../domain/map/types.ts';
+
 /**
  * The contracts every component speaks through.
  *

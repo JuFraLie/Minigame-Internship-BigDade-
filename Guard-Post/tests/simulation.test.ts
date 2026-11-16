@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { earlyCallBonus, startingGold, waveClearBonus } from '../src/domain/economy.ts';
 import { Simulation } from '../src/domain/simulation.ts';
 import { waveClearScore } from '../src/domain/score.ts';
+import { ProceduralMapSource } from '../src/adapters/maps/ProceduralMapSource.ts';
 import { createScriptedBot } from '../src/testing/bots.ts';
 import {
     GRACE_SECONDS,
@@ -17,6 +18,9 @@ import {
  * The round itself: grace, waves, leaks, defeat, commands — driven through the public
  * surface (`step`, commands, snapshot, events) exactly as the scenes and bots do.
  */
+
+/** One map source for every test: the same layout each run, like the harness uses. */
+const MAP_SOURCE = new ProceduralMapSource();
 
 /** Runs `seconds` of simulation at the fixed step rate. */
 function run(sim: Simulation, seconds: number): void {
@@ -32,7 +36,7 @@ function drain(sim: Simulation): RoundEvent[] {
 }
 
 test('a fresh round starts in grace with the documented numbers', () => {
-    const sim = new Simulation(1);
+    const sim = new Simulation(1, MAP_SOURCE);
 
     assert.equal(sim.phase, 'playing');
     assert.equal(sim.waveState, 'grace');
@@ -44,7 +48,7 @@ test('a fresh round starts in grace with the documented numbers', () => {
 });
 
 test('the grace period expires into wave 1 on its own', () => {
-    const sim = new Simulation(1);
+    const sim = new Simulation(1, MAP_SOURCE);
     drain(sim);
 
     run(sim, 9);
@@ -60,7 +64,7 @@ test('the grace period expires into wave 1 on its own', () => {
 });
 
 test('the first interaction starts wave 1 immediately — the grace is for idlers', () => {
-    const sim = new Simulation(1);
+    const sim = new Simulation(1, MAP_SOURCE);
 
     assert.equal(sim.build(0, 'dart'), true);
     assert.equal(sim.waveState, 'active');
@@ -69,7 +73,7 @@ test('the first interaction starts wave 1 immediately — the grace is for idler
 });
 
 test('calling the wave during grace starts it for free; during a wave it is refused', () => {
-    const sim = new Simulation(1);
+    const sim = new Simulation(1, MAP_SOURCE);
     drain(sim);
 
     assert.equal(sim.callWave(), true);
@@ -85,7 +89,7 @@ test('calling the wave during grace starts it for free; during a wave it is refu
 });
 
 test('a wave with no defence walks through: each leak costs a life, an empty pool loses', () => {
-    const sim = new Simulation(1);
+    const sim = new Simulation(1, MAP_SOURCE);
     const events: RoundEvent[] = [];
 
     for (let i = 0; i < 30 * 400 && sim.phase === 'playing'; i++) {
@@ -110,7 +114,7 @@ test('a wave with no defence walks through: each leak costs a life, an empty poo
 });
 
 test('clearing a wave pays the bonus, opens the gap, and calling early pays for the skip', () => {
-    const sim = new Simulation(1);
+    const sim = new Simulation(1, MAP_SOURCE);
     const bot = createScriptedBot(sim.map.spots.length);
     let cleared: (RoundEvent & { type: 'waveCleared' }) | null = null;
 
@@ -139,7 +143,7 @@ test('clearing a wave pays the bonus, opens the gap, and calling early pays for 
 });
 
 test('gold, occupancy and spot checks refuse bad commands with a reason', () => {
-    const sim = new Simulation(1); // 100 gold
+    const sim = new Simulation(1, MAP_SOURCE); // 100 gold
     drain(sim);
 
     assert.equal(sim.build(0, 'dart'), true); // 60 left
@@ -155,7 +159,7 @@ test('gold, occupancy and spot checks refuse bad commands with a reason', () => 
 });
 
 test('upgrades are absolute from the base stats, and level 3 is the cap', () => {
-    const sim = new Simulation(5); // 180 gold
+    const sim = new Simulation(5, MAP_SOURCE); // 180 gold
     drain(sim);
 
     assert.equal(sim.build(0, 'dart'), true); // 140 left
@@ -187,7 +191,7 @@ test('upgrades are absolute from the base stats, and level 3 is the cap', () => 
 });
 
 test('towers shoot the First enemy — the one furthest along the road', () => {
-    const sim = new Simulation(1);
+    const sim = new Simulation(1, MAP_SOURCE);
     // Spot 0 sits 1–2 tiles off the road, where the opening grunts walk past in file.
     assert.equal(sim.build(0, 'dart'), true);
 
@@ -214,7 +218,7 @@ test('towers shoot the First enemy — the one furthest along the road', () => {
 
 test('two simulations of the same level play out identically', () => {
     const play = (): { score: number; gold: number; lives: number; steps: number } => {
-        const sim = new Simulation(3);
+        const sim = new Simulation(3, MAP_SOURCE);
         const bot = createScriptedBot(sim.map.spots.length);
         let steps = 0;
         for (; steps < 30 * 600 && sim.phase === 'playing'; steps++) {

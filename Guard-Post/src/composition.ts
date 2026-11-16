@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { createHostBridge } from './adapters/hostBridge.ts';
 import { createCreditLink } from './adapters/creditLink.ts';
+import { ProceduralMapSource } from './adapters/maps/ProceduralMapSource.ts';
 import { InputAdapter } from './adapters/phaser/inputAdapter.ts';
 import { PhaserCanvasRenderer } from './adapters/phaser/renderer.ts';
 import { Game } from './adapters/phaser/scenes/Game.ts';
@@ -33,6 +34,9 @@ export function createGame(parent: string): Phaser.Game {
 
     const deps: AppDeps = {
         flow: createSessionFlow(createHostBridge()),
+        // One salt per launch: every session starts on a fresh level 1, while a level
+        // keeps its layout for the whole session (and for any test that passes 0).
+        maps: new ProceduralMapSource(Math.floor(Math.random() * 0xffffffff)),
         viewport,
         credit: createCreditLink(),
         createView: (scene) => new PhaserCanvasRenderer(scene),

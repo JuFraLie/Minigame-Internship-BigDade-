@@ -1,7 +1,7 @@
 import { applySlow, effectiveDamage, noSlow, speedMultiplier, tickSlow, type SlowState } from './damage.ts';
 import { earlyCallBonus, killReward, sellRefund, startingGold, upgradeCost, waveClearBonus } from './economy.ts';
 import { generateLevelPlan, type SpawnEntry } from './levelGenerator.ts';
-import { generateMap } from './mapGenerator.ts';
+import type { MapSource } from './map/types.ts';
 import { measureRoad, pointOnRoad, type GameMap, type Road } from './maps.ts';
 import { killScore, levelClearScore, waveClearScore } from './score.ts';
 import {
@@ -153,9 +153,17 @@ export class Simulation {
     #enemiesDirty = false;
     #projectileCursor = 0;
 
-    constructor(level: number) {
+    constructor(level: number, maps: MapSource) {
         this.level = level;
-        this.map = generateMap(level);
+        // The round asks the port for a layout and adapts it to the renderer's shape:
+        // the name seeds the scenery, the theme picks the grass and castle.
+        const definition = maps.getMap(level);
+        this.map = {
+            name: `Level ${level}`,
+            theme: (level - 1) % 3,
+            waypoints: definition.waypoints,
+            spots: definition.spots.map((spot) => ({ x: spot.x, y: spot.y })),
+        };
         this.mapIndex = this.map.theme;
         this.road = measureRoad(this.map);
         this.lives = STARTING_LIVES;

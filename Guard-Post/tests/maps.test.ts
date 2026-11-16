@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { generateMap } from '../src/domain/mapGenerator.ts';
+import { ProceduralMapSource } from '../src/adapters/maps/ProceduralMapSource.ts';
+import { Simulation } from '../src/domain/simulation.ts';
 import {
     GRID_HEIGHT,
     GRID_WIDTH,
@@ -12,20 +13,26 @@ import {
     pointOnRoad,
     type GameMap,
 } from '../src/domain/maps.ts';
+import { DEFAULT_MAP_PARAMS, type MapDefinition } from '../src/domain/map/types.ts';
+import { validateMap } from '../src/domain/map/validate.ts';
 
 /**
  * Map layouts — reference and generated — against the design document's map rules:
- * one road of 28–36 tiles that enters on an edge and ends at a gate in the bottom
- * row, 6–8 build spots each 1–2 tiles from the road and each centred on a grid cell,
- * so its square pad fills exactly one cell of the field, none hiding under the gate
- * castle; everything inside the 9 x 12 grid, and every level a fresh layout.
+ * one road of 28–36 tiles that enters at the left edge and ends at a gate in the
+ * bottom row, 6–8 build spots each 1–2 tiles from the road and each centred on a
+ * grid cell, so its square pad fills exactly one cell of the field, none hiding under
+ * the gate castle; everything inside the 9 x 12 grid, and every level a fresh layout.
+ *
+ * Generated maps are checked through `validateMap`, which encodes every rule the
+ * reference maps are measured against here (plus coverage: every road tile inside a
+ * spot's tower range).
  */
 
 /** Every spot must sit 1–2 tiles off the road; small epsilon for authored decimals. */
 const MIN_SPOT_DISTANCE = 1 - 1e-6;
 const MAX_SPOT_DISTANCE = 2 + 1e-6;
 
-/** The road and spot rules, for any layout — reference or generated. */
+/** The road and spot rules, for an authored layout. */
 function assertMapRules(map: GameMap, label: string): void {
     const road = measureRoad(map);
 
@@ -106,27 +113,69 @@ function assertRoadSampling(map: GameMap, label: string): void {
     }
 }
 
+/** A definition in the shape the road-sampling helpers expect. */
+function asGameMap(definition: MapDefinition): GameMap {
+    return {
+        name: `Level ${definition.seed}`,
+        theme: 0,
+        waypoints: definition.waypoints,
+        spots: definition.spots.map((spot) => ({ x: spot.x, y: spot.y })),
+    };
+}
+
 test('every level is a freshly generated layout', () => {
-    const roads = new Set<string>();
+    const source = new ProceduralMapSource(0);
+    const layouts = new Set<string>();
     for (let level = 1; level <= 40; level++) {
-        const map = generateMap(level);
-        assert.equal(map.name, `Level ${level}`, `level ${level} fell back to a reference map`);
+        const definition = source.getMap(level);
+        // Empty violations also prove the round never fell back to the fixed map.
+        assert.deepEqual(validateMap(definition, DEFAULT_MAP_PARAMS), [], `level ${level} broke a map rule`);
+        // The full layout must be fresh. Road shapes alone may legitimately repeat —
+        // the walk's shape space is finite and each level is generated statelessly —
+        // but the pads are drawn per level, so no two levels play identically.
+        const signature = JSON.stringify({ waypoints: definition.waypoints, spots: definition.spots });
+        assert.ok(!layouts.has(signature), `level ${level} repeats an earlier layout`);
+        layouts.add(signature);
+        assert.deepEqual(source.getMap(level), definition, `level ${level} must be reproducible`);
+
+        // The round adapts the definition for the renderer: name seeds scenery,
+        // theme picks the grass and castle.
+        const map = new Simulation(level, source).map;
+        assert.equal(map.name, `Level ${level}`, `level ${level} name`);
         assert.equal(map.theme, (level - 1) % 3, `level ${level} theme`);
-        const signature = JSON.stringify(map.waypoints);
-        assert.ok(!roads.has(signature), `level ${level} repeats an earlier road`);
-        roads.add(signature);
-        assert.deepEqual(generateMap(level), map, `level ${level} must be reproducible`);
+    }
+});
+
+test('a fresh session salt reshuffles the layouts', () => {
+    // Every launch passes a new salt, so returning players start on new roads even
+    // at the same level number — the fix for "the first level is fixed".
+    const first = new ProceduralMapSource(0);
+    const second = new ProceduralMapSource(1);
+    const third = new ProceduralMapSource(0xdeadbeef);
+    for (const level of [1, 12, 27, 40]) {
+        const base = JSON.stringify(first.getMap(level).waypoints);
+        assert.notEqual(JSON.stringify(second.getMap(level).waypoints), base, `level ${level} with salt 1`);
+        assert.notEqual(JSON.stringify(third.getMap(level).waypoints), base, `level ${level} with salt 0xdeadbeef`);
     }
 });
 
 test('generated layouts obey the road and spot rules', () => {
+    const source = new ProceduralMapSource(0);
     for (let level = 1; level <= 24; level++) {
-        assertMapRules(generateMap(level), `level ${level}`);
+        const definition = source.getMap(level);
+        assert.deepEqual(
+            validateMap(definition, DEFAULT_MAP_PARAMS),
+            [],
+            `level ${level}: ${validateMap(definition, DEFAULT_MAP_PARAMS).join('; ')}`,
+        );
     }
 });
 
 test('a generated map measures its road consistently', () => {
-    assertRoadSampling(generateMap(7), 'level 7');
+    const source = new ProceduralMapSource(0);
+    for (const level of [1, 7, 13]) {
+        assertRoadSampling(asGameMap(source.getMap(level)), `level ${level}`);
+    }
 });
 
 for (const map of MAPS) {

@@ -66,11 +66,15 @@ const ALLOWED_TARGETS: Record<Layer, (target: string, dependency: Dependency) =>
         target.startsWith('domain/') ||
         target.startsWith('app/') ||
         (dependency.typeOnly && target.startsWith('adapters/phaser/')),
-    testing: (target) => target.startsWith('domain/') || target.startsWith('app/'),
+    testing: (target) =>
+        target.startsWith('domain/') ||
+        target.startsWith('app/') ||
+        target.startsWith('adapters/maps/'),
     // The bridge module is preserved verbatim: it imports nothing at all.
     'bridge-module': () => false,
-    // Output adapters over the app's ports: the host bridge and the credit link.
-    adapter: (target) => target === 'adapters/MpBridge.ts' || target === 'app/ports.ts',
+    // Output adapters over the app's ports: the host bridge, the credit link, and the
+    // map sources — which also reach into the domain for the generator they wrap.
+    adapter: (target) => target === 'adapters/MpBridge.ts' || target === 'app/ports.ts' || target.startsWith('domain/'),
     // The Phaser world may speak to the domain, to the app's ports and to its siblings;
     // it may not reach the testing layer or the composition root.
     render: (target) =>

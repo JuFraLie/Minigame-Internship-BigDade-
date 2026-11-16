@@ -1,4 +1,5 @@
 import type { PlayerStrategyPort } from '../app/ports.ts';
+import { ProceduralMapSource } from '../adapters/maps/ProceduralMapSource.ts';
 import { Simulation } from '../domain/simulation.ts';
 import { SIM_HZ, type RoundEvent } from '../domain/types.ts';
 
@@ -9,6 +10,9 @@ import { SIM_HZ, type RoundEvent } from '../domain/types.ts';
  * bot smoke tests and step-time benchmarks all come out of the same loop, which is why
  * the game's rules had to live in pure TypeScript in the first place.
  */
+
+/** One source for the whole harness: bot runs stay reproducible across runs. */
+const MAP_SOURCE = new ProceduralMapSource();
 
 export interface RunOptions {
     /** Safety valve: simulated seconds before the run is abandoned. */
@@ -42,7 +46,7 @@ export function runLevel(
     const thinkEvery = Math.max(1, Math.round((options.thinkSeconds ?? 0.5) * SIM_HZ));
     const maxSteps = Math.ceil(maxSeconds * SIM_HZ);
 
-    const sim = new Simulation(level);
+    const sim = new Simulation(level, MAP_SOURCE);
     const bot = makeBot(sim.map.spots.length);
     const events: RoundEvent[] = [];
     let wavesCleared = 0;
