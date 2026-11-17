@@ -63,11 +63,16 @@ export interface MapParams {
     readonly maxTurns: number;
     /** Build spots every map must place (6–8). */
     readonly spotCount: number;
-    /** Tower range in tiles; every road tile must sit within it of a spot. */
+    /**
+     * Coverage radius in tiles: every road tile must sit within it of a spot, so a
+     * freshly built tower can always hit the enemies passing the tile it covers. The
+     * value is the shortest level-1 tower range (frost, 2.0) — dart reaches 2.2 and
+     * cannon 2.6, so 2.0 guarantees every level-1 tower type is in reach.
+     */
     readonly towerRange: number;
 }
 
-/** The default parameters: a 9 x 12 board, 28–36 tiles, 4–8 turns, 8 spots, range 2.2. */
+/** The default parameters: a 9 x 12 board, 28–36 tiles, 4–8 turns, 8 spots, range 2.0. */
 export const DEFAULT_MAP_PARAMS: Readonly<MapParams> = {
     seed: 0,
     width: 9,
@@ -77,7 +82,7 @@ export const DEFAULT_MAP_PARAMS: Readonly<MapParams> = {
     minTurns: 4,
     maxTurns: 8,
     spotCount: 8,
-    towerRange: 2.2,
+    towerRange: 2.0,
 };
 
 /**

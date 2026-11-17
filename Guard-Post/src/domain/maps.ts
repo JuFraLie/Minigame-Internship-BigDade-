@@ -6,8 +6,8 @@ import type { Vec2 } from './types.ts';
  * Every map is one road — a polyline of waypoints the enemies follow without any
  * pathfinding — plus a fixed set of build spots ("spots") at grid cell centres,
  * 1–2 tiles off the road. Levels play freshly generated layouts (see
- * `map/generateMap.ts`); the three reference layouts below are the generator's
- * fallback and the fixtures the tests measure the rules against.
+ * `map/generateMap.ts`); the three reference layouts below are the fixtures
+ * the tests measure the rules against.
  */
 
 /** Grid dimensions shared by every map; the renderer scales this to the screen. */

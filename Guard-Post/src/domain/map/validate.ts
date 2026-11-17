@@ -13,10 +13,12 @@ import type { Cell, MapDefinition, MapParams, Point } from './types.ts';
  *   - it starts in column 0 (the left edge) and ends on an inset tile of the last row,
  *     with `pathLength` tiles and a turn count inside the given range;
  *   - every segment is axis-aligned, so enemies never cut a corner;
- *   - spots sit at grid cell centres, off the road, 1–2 tiles from the nearest road
- *     tile, at least 1.5 tiles apart, clear of the gate castle, with ids `s0..sn-1`;
- *   - every road tile lies within `towerRange` of at least one spot, so a tower built
- *     anywhere covers real road.
+ *   - spots sit at grid cell centres, off the road, within 1.5 tiles of the nearest
+ *     road tile (2.0 for the last two tiles the gate castle shadows), at least 1.5
+ *     tiles apart, clear of the gate castle, with ids `s0..sn-1`;
+ *   - every road tile lies within `towerRange` of at least one spot — the shortest
+ *     level-1 tower range — so a freshly built tower always reaches the enemies
+ *     passing the tiles it covers.
  */
 
 /** Epsilon for authored decimals; the grid arithmetic itself is exact. */
@@ -106,9 +108,17 @@ export function validateMap(map: MapDefinition, params: MapParams): string[] {
         const cellY = Math.floor(spot.y);
         if (onRoad.has(cellY * map.width + cellX)) problems.push(`spot ${i} sits on the road`);
 
-        const nearest = nearestRoadTile(spot, cells);
-        if (nearest < 1 - EPSILON || nearest > 2 + EPSILON) {
-            problems.push(`spot ${i} is ${nearest.toFixed(3)} tiles from the road, outside 1–2`);
+        if (cells.length > 0) {
+            const nearest = nearestRoadTile(spot, cells);
+            // Level-1 reach: a pad hugs the road at 1.5 tiles, except beside the gate
+            // castle, whose footprint occupies the pads next to the last two tiles.
+            const castleShadow = nearest.index >= cells.length - 2;
+            const furthest = (castleShadow ? 2 : 1.5) + EPSILON;
+            if (nearest.distance < 1 - EPSILON || nearest.distance > furthest) {
+                problems.push(
+                    `spot ${i} is ${nearest.distance.toFixed(3)} tiles from the road, outside 1–${castleShadow ? '2 (gate castle shadow)' : '1.5'}`,
+                );
+            }
         }
 
         if (!fitsBesideGateCastle(spot, gate)) problems.push(`spot ${i} hides under the gate castle`);
@@ -231,14 +241,18 @@ function cellsOfSegment(a: Point, b: Point, width: number, height: number): Cell
     return cells;
 }
 
-/** Distance in tiles from a point to the nearest road tile centre. */
-function nearestRoadTile(point: Point, cells: readonly Cell[]): number {
+/** Distance in tiles from a point to the nearest road tile centre, and that tile's index. */
+function nearestRoadTile(point: Point, cells: readonly Cell[]): { distance: number; index: number } {
     let best = Number.POSITIVE_INFINITY;
-    for (const cell of cells) {
-        const dx = point.x - (cell.x + 0.5);
-        const dy = point.y - (cell.y + 0.5);
+    let index = -1;
+    for (let i = 0; i < cells.length; i++) {
+        const dx = point.x - (cells[i].x + 0.5);
+        const dy = point.y - (cells[i].y + 0.5);
         const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared < best) best = distanceSquared;
+        if (distanceSquared < best) {
+            best = distanceSquared;
+            index = i;
+        }
     }
-    return Math.sqrt(best);
+    return { distance: Math.sqrt(best), index };
 }

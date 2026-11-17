@@ -23,9 +23,9 @@ import { validateMap } from '../src/domain/map/validate.ts';
  * grid cell, so its square pad fills exactly one cell of the field, none hiding under
  * the gate castle; everything inside the 9 x 12 grid, and every level a fresh layout.
  *
- * Generated maps are checked through `validateMap`, which encodes every rule the
- * reference maps are measured against here (plus coverage: every road tile inside a
- * spot's tower range).
+ * Generated maps are checked through `validateMap`, which encodes these rules in
+ * their stricter generated form — pads hugging the road at 1.5 tiles (the gate
+ * castle's push-out aside) and coverage by the shortest level-1 tower range.
  */
 
 /** Every spot must sit 1–2 tiles off the road; small epsilon for authored decimals. */
