@@ -9,11 +9,12 @@ import {
     type EnemyType,
     type RoundEvent,
     type RoundSnapshot,
+    type TowerType,
 } from '../../domain/types.ts';
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
-import { BOARD_KEY, COLORS, NOMINAL_TILE, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
+import { BOARD_KEY, COLORS, NOMINAL_TILE, PAD_KEY, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
 import { createViewTransform, type ViewTransform } from './viewTransform.ts';
 
 /**
@@ -69,6 +70,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #over: Phaser.GameObjects.Graphics | null = null;
     /** Per-spot flag: a tower stands there, so its pad is not drawn. Reused every frame. */
     #padTaken: boolean[] = [];
+    /** One silver-pavement image per build spot; visibility flips per frame. */
+    #padImages: Phaser.GameObjects.Image[] = [];
 
     #enemySprites: Phaser.GameObjects.Sprite[] = [];
     #towerSprites: Phaser.GameObjects.Image[] = [];
@@ -128,6 +131,13 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#under = this.#add(scene.add.graphics().setDepth(4));
         this.#over = this.#add(scene.add.graphics().setDepth(13));
 
+        // Pads live under the selection Graphics (depth 3 vs 4), so the gold outline
+        // and the range circle always draw over the slab, and towers (6) stand on it.
+        this.#padImages = [];
+        for (let i = 0; i < layout.spots.length; i++) {
+            this.#padImages.push(this.#add(scene.add.image(0, 0, PAD_KEY).setVisible(false).setDepth(3)));
+        }
+
         this.#enemySprites = [];
         for (let i = 0; i < ENEMY_POOL; i++) {
             this.#enemySprites.push(this.#add(scene.add.sprite(0, 0, 'enemy-grunt-0').setVisible(false).setDepth(8).setScale(this.#entityScale)));
@@ -158,19 +168,22 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#menuPanel = this.#add(
             scene.add.image(layout.menu.panel.x, layout.menu.panel.y, 'ui-panel').setOrigin(0, 0).setDepth(20).setVisible(false),
         );
-        this.#menuTitle = this.#text(layout.menu.panel.x + layout.menu.panel.width / 2, layout.menu.panel.y + 20, 17, COLORS.text).setVisible(false);
+        this.#menuTitle = this.#text(layout.menu.panel.x + layout.menu.panel.width / 2, layout.menu.panel.y + 20, 17, COLORS.goldBright).setVisible(false);
 
         this.#buildImages = [];
         this.#buildLabels = [];
         this.#buildCosts = [];
         this.#buildCached = [];
-        for (const rect of layout.menu.buildButtons) {
+        this.#buildCostCached = [];
+        const buildColor: Record<TowerType, number> = { dart: COLORS.dart, cannon: COLORS.cannon, frost: COLORS.frost };
+        layout.menu.buildButtons.forEach((rect, index) => {
             this.#buildImages.push(this.#button(rect, 'ui-button').setVisible(false));
-            this.#buildLabels.push(this.#label({ ...rect, y: rect.y + 16 }, '', 16).setVisible(false));
+            const type = TOWER_TYPES[index];
+            this.#buildLabels.push(this.#label({ ...rect, y: rect.y + 16 }, '', 16, type ? buildColor[type] : COLORS.text).setVisible(false));
             this.#buildCosts.push(this.#label({ ...rect, y: rect.y + rect.height - 22 }, '', 14, COLORS.textDim).setVisible(false));
             this.#buildCached.push('');
             this.#buildCostCached.push('');
-        }
+        });
 
         this.#towerImages = [];
         this.#towerLabels = [];
@@ -187,7 +200,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#resumeImage = this.#button(layout.resume, 'ui-button-primary', 41).setVisible(false);
         this.#resumeLabel = this.#label(layout.resume, 'Resume', 20, COLORS.text, 42).setVisible(false);
 
-        this.#banner = this.#text(layout.width / 2, layout.height * 0.4, 26, COLORS.text).setVisible(false).setDepth(50);
+        this.#banner = this.#text(layout.width / 2, layout.height * 0.4, 26, COLORS.goldBright).setVisible(false).setDepth(50);
         this.#flash = this.#add(
             scene.add.image(0, 0, 'ui-white').setOrigin(0, 0).setDepth(60).setAlpha(0).setVisible(false).setDisplaySize(layout.width, layout.height),
         );
@@ -255,6 +268,14 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#dim.setDisplaySize(layout.width, layout.height);
         this.#resumeImage.setPosition(layout.resume.x, layout.resume.y).setDisplaySize(layout.resume.width, layout.resume.height);
         this.#resumeLabel.setPosition(layout.resume.x + layout.resume.width / 2, layout.resume.y + layout.resume.height / 2);
+
+        // Pads sit at their spot centres, sized to the pad footprint; visibility is
+        // the only thing `present` changes per frame.
+        const padSize = layout.board.tile * PAD_HALF * 2;
+        layout.spots.forEach((spot, id) => {
+            const image = this.#padImages[id];
+            if (image) image.setPosition(spot.x, spot.y).setDisplaySize(padSize, padSize);
+        });
 
         this.#banner.setPosition(layout.width / 2, layout.height * 0.4);
         this.#flash.setDisplaySize(layout.width, layout.height);
@@ -341,7 +362,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
                 const spec = TOWER_SPECS[type];
                 const affordable = snapshot.gold >= spec.cost;
                 const name = type.charAt(0).toUpperCase() + type.slice(1);
-                this.#setButton(this.#buildImages[index], this.#buildLabels[index], this.#buildCached, index, `${name}`, !affordable);
+                this.#setButton(this.#buildImages[index], this.#buildLabels[index], this.#buildCached, index, `${name}`, !affordable, `ui-button-${type}`);
                 const costValue = `${spec.cost}g`;
                 const cost = this.#buildCosts[index];
                 const costKey = `${costValue}:${affordable ? 1 : 0}`;
@@ -365,10 +386,15 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const canUpgrade = !maxed && snapshot.gold >= upgradeCost(tower.type, tower.level + 1);
         const refund = sellRefund(tower.spent);
 
-        this.#setButton(this.#towerImages[0], this.#towerLabels[0], this.#towerCached, 0, `Upgrade  ${upgradeCostValue}`, !canUpgrade);
-        this.#setButton(this.#towerImages[1], this.#towerLabels[1], this.#towerCached, 1, `Sell  +${refund}g`, false);
+        this.#setButton(this.#towerImages[0], this.#towerLabels[0], this.#towerCached, 0, `Upgrade  ${upgradeCostValue}`, !canUpgrade, 'ui-button-primary');
+        this.#setButton(this.#towerImages[1], this.#towerLabels[1], this.#towerCached, 1, `Sell  +${refund}g`, false, 'ui-button-danger');
     }
 
+    /**
+     * Swaps a button between its variant and the disabled slab. `enabledKey` carries
+     * the variant — gold for the action that moves the round forward, the tower's
+     * colour for a build, red for selling — and disabled always wins.
+     */
     #setButton(
         image: Phaser.GameObjects.Image,
         label: Phaser.GameObjects.Text,
@@ -376,8 +402,9 @@ export class PhaserCanvasRenderer implements GameViewPort {
         index: number,
         value: string,
         disabled: boolean,
+        enabledKey = 'ui-button',
     ): void {
-        const key = disabled ? 'ui-button-disabled' : 'ui-button';
+        const key = disabled ? 'ui-button-disabled' : enabledKey;
         if (image.texture.key !== key) image.setTexture(key);
         label.setAlpha(disabled ? 0.55 : 1);
         if (cache[index] === value) return;
@@ -473,7 +500,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const under = this.#under;
         if (!under) return;
         under.clear();
-        this.#presentPads(snapshot, under, tile);
+        this.#presentPads(snapshot);
 
         const selection = this.#selection;
         if (!selection) return;
@@ -493,11 +520,11 @@ export class PhaserCanvasRenderer implements GameViewPort {
     }
 
     /**
-     * The build pads, drawn fresh every frame: a spot keeps its box until a tower
-     * stands on it, and then the tower itself marks the slot. Selling brings the box
-     * back, with no texture to repaint.
+     * The build pads: pooled silver-pavement images, one per spot. A spot keeps its
+     * slab until a tower stands on it, and then the tower itself marks the slot;
+     * selling brings the slab back with nothing to repaint.
      */
-    #presentPads(snapshot: RoundSnapshot, under: Phaser.GameObjects.Graphics, tile: number): void {
+    #presentPads(snapshot: RoundSnapshot): void {
         const spots = this.#layout?.spots;
         if (!spots) return;
 
@@ -507,23 +534,14 @@ export class PhaserCanvasRenderer implements GameViewPort {
             if (tower.spotId >= 0 && tower.spotId < this.#padTaken.length) this.#padTaken[tower.spotId] = true;
         }
 
-        const half = tile * PAD_HALF;
-        const inner = tile * 0.22;
-        for (let id = 0; id < spots.length; id++) {
-            if (this.#padTaken[id]) continue;
-            const spot = spots[id];
-            under.fillStyle(COLORS.spot, 1);
-            under.fillRect(spot.x - half, spot.y - half, half * 2, half * 2);
-            under.lineStyle(Math.max(2, tile * 0.07), COLORS.spotRing, 1);
-            under.strokeRect(spot.x - half, spot.y - half, half * 2, half * 2);
-            under.lineStyle(Math.max(1, tile * 0.04), COLORS.spotRing, 0.6);
-            under.strokeRect(spot.x - inner, spot.y - inner, inner * 2, inner * 2);
+        for (let id = 0; id < this.#padImages.length; id++) {
+            this.#padImages[id].setVisible(id < spots.length && !this.#padTaken[id]);
         }
     }
 
     /** Selection outline: a square hugging the pad, matching the grid. */
     #padOutline(graphics: Phaser.GameObjects.Graphics, x: number, y: number, tile: number): void {
-        graphics.lineStyle(Math.max(2, tile * 0.06), COLORS.range, 0.9);
+        graphics.lineStyle(Math.max(2, tile * 0.06), COLORS.select, 0.9);
         const half = tile * 0.47;
         graphics.strokeRect(x - half, y - half, half * 2, half * 2);
     }
@@ -603,6 +621,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#enemySprites = [];
         this.#towerSprites = [];
         this.#shotSprites = [];
+        this.#padImages = [];
         this.#animPaused = false;
         this.#layout = null;
         this.#map = null;
@@ -620,8 +639,16 @@ export class PhaserCanvasRenderer implements GameViewPort {
     }
 
     #text(x: number, y: number, size: number, color: number): Phaser.GameObjects.Text {
+        // Every label carries an ink stroke: the HUD sits on grass, the menu on stone,
+        // and the banner on the field — one treatment keeps all three readable.
         const text = this.#scene.add
-            .text(x, y, '', { fontFamily: FONT, fontSize: `${size}px`, color: hex(color) })
+            .text(x, y, '', {
+                fontFamily: FONT,
+                fontSize: `${size}px`,
+                color: hex(color),
+                stroke: hex(COLORS.ink),
+                strokeThickness: Math.max(2, Math.round(size * 0.14)),
+            })
             .setOrigin(0.5)
             .setDepth(20);
         return this.#add(text);

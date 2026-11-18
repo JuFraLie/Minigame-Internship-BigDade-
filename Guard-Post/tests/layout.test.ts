@@ -154,6 +154,14 @@ test('the Play Screen stacks title, icon, Play button and how-to in order', () =
         assert.ok(menu.play.y > menu.icon.y + menu.icon.radius, 'Play sits under the icon');
         assert.ok(menu.howToY > menu.play.y + menu.play.height, 'how-to sits under Play');
         assert.ok(menu.howToY < height, 'how-to text must be visible');
+
+        // The title plaque is a backdrop only: it holds the title, never leaves the
+        // screen, and never reaches down to the icon.
+        const plate = menu.titlePlate;
+        assert.ok(plate.x >= 0 && plate.x + plate.width <= width + 1e-9, 'the plaque leaves the screen');
+        assert.ok(plate.y >= 0, 'the plaque leaves the screen');
+        assert.ok(menu.titleY >= plate.y && menu.titleY <= plate.y + plate.height, 'the title is not on its plaque');
+        assert.ok(plate.y + plate.height < menu.icon.y, 'the plaque overlaps the icon');
     }
 });
 

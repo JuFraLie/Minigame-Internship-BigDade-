@@ -197,6 +197,8 @@ export const HOW_TO_HEIGHT = 46;
 export interface MenuLayout {
     readonly width: number;
     readonly titleY: number;
+    /** The stone plaque the title sits on, sized from the screen. */
+    readonly titlePlate: Rect;
     readonly howToY: number;
     readonly play: Rect;
     /** The small tap icon above the Play button. */
@@ -211,6 +213,18 @@ export function computeMenuLayout(input: Omit<LayoutInput, 'spots'>): MenuLayout
     const topPad = Math.max(input.safeTop, 32, height * 0.06);
 
     const titleY = Math.max(topPad + 40, height * 0.2);
+
+    // The plaque is a backdrop for the title only — it never becomes a touch target
+    // and never changes the vertical order the Play Screen test asserts.
+    const plateWidth = Math.min(width * 0.86, 340);
+    const plateHeight = 64;
+    const titlePlate: Rect = {
+        x: (width - plateWidth) / 2,
+        y: titleY - plateHeight / 2,
+        width: plateWidth,
+        height: plateHeight,
+    };
+
     const icon = { x: width / 2, y: titleY + height * 0.14, radius: 36 };
     const playWidth = Math.min(width * 0.62, 280);
     const play: Rect = { x: (width - playWidth) / 2, y: icon.y + icon.radius + 48, width: playWidth, height: 60 };
@@ -227,7 +241,7 @@ export function computeMenuLayout(input: Omit<LayoutInput, 'spots'>): MenuLayout
     };
     const howToY = Math.min(play.y + play.height + 44, credit.y - 8 - HOW_TO_HEIGHT);
 
-    return { width, titleY, howToY, play, icon, credit };
+    return { width, titleY, titlePlate, howToY, play, icon, credit };
 }
 
 export interface ResultLayout {

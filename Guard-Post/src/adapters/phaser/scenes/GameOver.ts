@@ -8,6 +8,8 @@ import { applyRenderScale } from '../scale.ts';
 import { SCENE_GAME, SCENE_RESULT } from './keys.ts';
 
 const FONT = 'Segoe UI, Arial, sans-serif';
+/** The same serif as the Play Screen's title — one voice across both screens. */
+const TITLE_FONT = 'Georgia, "Times New Roman", serif';
 
 /**
  * The Result Panel — the only screen with Restart, Next Level and Exit.
@@ -47,10 +49,12 @@ export class GameOver extends Phaser.Scene {
 
         this.add
             .text(layout.width / 2, layout.titleY, victory ? 'Victory!' : 'Defeat', {
-                fontFamily: FONT,
+                fontFamily: TITLE_FONT,
                 fontSize: '38px',
-                color: victory ? hex(COLORS.hp) : hex(COLORS.danger),
+                color: victory ? hex(COLORS.goldBright) : hex(COLORS.danger),
                 fontStyle: 'bold',
+                stroke: hex(COLORS.ink),
+                strokeThickness: 4,
             })
             .setOrigin(0.5);
 
@@ -61,6 +65,8 @@ export class GameOver extends Phaser.Scene {
                 color: hex(COLORS.text),
                 align: 'center',
                 lineSpacing: 14,
+                stroke: hex(COLORS.ink),
+                strokeThickness: 3,
             })
             .setOrigin(0.5, 0);
 
@@ -71,7 +77,14 @@ export class GameOver extends Phaser.Scene {
                 layout.primary.x + layout.primary.width / 2,
                 layout.primary.y + layout.primary.height / 2,
                 victory ? 'Next Level' : 'Retry',
-                { fontFamily: FONT, fontSize: '24px', color: hex(COLORS.text), fontStyle: 'bold' },
+                {
+                    fontFamily: FONT,
+                    fontSize: '24px',
+                    color: hex(COLORS.goldBright),
+                    fontStyle: 'bold',
+                    stroke: hex(COLORS.ink),
+                    strokeThickness: 3,
+                },
             )
             .setOrigin(0.5);
 
@@ -83,6 +96,8 @@ export class GameOver extends Phaser.Scene {
                 fontSize: '24px',
                 color: hex(COLORS.text),
                 fontStyle: 'bold',
+                stroke: hex(COLORS.ink),
+                strokeThickness: 3,
             })
             .setOrigin(0.5);
 

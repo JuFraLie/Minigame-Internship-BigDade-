@@ -2,20 +2,26 @@ import Phaser from 'phaser';
 
 import { GRID_HEIGHT, GRID_WIDTH, distanceToRoad, measureRoad, type GameMap } from '../../domain/maps.ts';
 import { TOWER_TYPES, type EnemyType, type TowerType } from '../../domain/types.ts';
-import { CASTLES, MAP_GRASS, ROAD_TILESET, SCENERY } from './assetManifest.ts';
+import { CASTLES, MAP_GRASS, ROAD_TILESET, SCENERY, STONE_TILESET } from './assetManifest.ts';
 import { assetImage, bakeSprites } from './assets.ts';
 
 /**
  * Textures: everything the game draws with.
  *
  * UI chrome (buttons, panels, capsules) is generated at boot with `Phaser.Graphics`
- * — no image file and no CDN (AGENTS.md §3.4). The sprite pack in `public/` supplies
- * the game world: enemies, towers, shots, the grass field, the tile-set road, the gate
- * castle and the scenery, baked into the renderer's texture keys by `assets.ts`. Entity
- * textures are authored at a nominal tile of `NOMINAL_TILE` px and scaled by the
- * renderer, so a resize never regenerates anything but the board itself. Any entity
- * texture the pack did not provide falls back to the old procedural drawing, so a
- * missing file never stops a round.
+ * — no image file and no CDN (AGENTS.md §3.4). The chrome is carved-stone by design:
+ * chamfered slabs with a light slate bevel over a dark slate fill, so the HUD reads as
+ * part of the pack's pixel-art world rather than a modern overlay. The sprite pack in
+ * `public/` supplies the game world: enemies, towers, shots, the grass field, the
+ * tile-set road, the gate castle and the scenery, baked into the renderer's texture
+ * keys by `assets.ts`. Entity textures are authored at a nominal tile of
+ * `NOMINAL_TILE` px and scaled by the renderer, so a resize never regenerates
+ * anything but the board itself. Any entity texture the pack did not provide falls
+ * back to the old procedural drawing, so a missing file never stops a round.
+ *
+ * Two surfaces are cut from the pack itself rather than drawn: the build pads (a
+ * silvered slab of the stone tile set, so a pad reads as pavement) and the Play
+ * Screen's title plaque (the same stone, behind the gold title).
  */
 
 export const NOMINAL_TILE = 44;
@@ -26,19 +32,29 @@ export const COLORS = {
     grassEdge: 0x1f4131,
     /** Flat dirt sampled from the ground tile set (`spr_tile_set_ground.png`). */
     road: 0xbf6f4a,
-    spot: 0x3d4f6b,
-    spotRing: 0x6380ab,
+    /** Silvered build pad: the stone tile set lifted toward silver. */
+    padSilver: 0xa7b0c0,
+    padEdge: 0xf2f5fa,
+    padShade: 0x6d7688,
+    /** Gate gold — the accent colour for primary actions and the title. */
     gate: 0xd9b64a,
-    capsule: 0x22355c,
-    capsuleEdge: 0x47618f,
-    button: 0x2b4066,
-    buttonEdge: 0x5c7bb0,
-    buttonPrimary: 0x2e6f9e,
-    buttonDanger: 0x94404a,
-    buttonDisabled: 0x2c3140,
+    gold: 0xd9b64a,
+    goldBright: 0xf2d98c,
+    goldDark: 0x8a7426,
+    /** Slate sampled from the stone tile set, darkened for chrome fills. */
+    stone: 0x27314e,
+    stoneEdge: 0x9db0cf,
+    stoneShadow: 0x151b2e,
+    capsule: 0x27314e,
+    capsuleEdge: 0x9db0cf,
+    button: 0x2c3854,
+    buttonEdge: 0x9db0cf,
+    buttonPrimary: 0x7d6a24,
+    buttonDanger: 0x5c2f36,
+    buttonDisabled: 0x242a3a,
     buttonDisabledEdge: 0x4a5163,
-    panel: 0x16233f,
-    panelEdge: 0x3b5178,
+    panel: 0x1a2340,
+    panelEdge: 0x8fa2c4,
     white: 0xffffff,
     text: 0xe8eefc,
     textDim: 0x9db1d4,
@@ -51,8 +67,12 @@ export const COLORS = {
     brute: 0x8e6bbf,
     boss: 0xa02c3f,
     range: 0x8fd0ff,
+    /** Selection outline: gold on the silver pad. */
+    select: 0xf2d98c,
     hp: 0x68d391,
     hpLost: 0x3a2029,
+    /** Ink behind every label stroke, so text survives on grass or stone alike. */
+    ink: 0x0d1524,
 } as const;
 
 export function hex(color: number): string {
@@ -73,6 +93,51 @@ function polygon(g: Phaser.GameObjects.Graphics, cx: number, cy: number, radius:
     g.strokePoints(points, true);
 }
 
+/**
+ * A chamfered rectangle: the blocky, carved-stone outline the pixel art asks for,
+ * instead of a modern rounded pill. `cut` is the corner notch in pixels.
+ */
+function chamfer(x: number, y: number, width: number, height: number, cut: number): Phaser.Geom.Point[] {
+    const c = Math.min(cut, width / 2, height / 2);
+    return [
+        new Phaser.Geom.Point(x + c, y),
+        new Phaser.Geom.Point(x + width - c, y),
+        new Phaser.Geom.Point(x + width, y + c),
+        new Phaser.Geom.Point(x + width, y + height - c),
+        new Phaser.Geom.Point(x + width - c, y + height),
+        new Phaser.Geom.Point(x + c, y + height),
+        new Phaser.Geom.Point(x, y + height - c),
+        new Phaser.Geom.Point(x, y + c),
+    ];
+}
+
+/**
+ * Fills a chamfered slab, strokes a light bevel around it and drops a dark inner
+ * line just inside — the double border that makes flat colour read as carved stone.
+ */
+function slab(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    cut: number,
+    fill: number,
+    edge: number,
+    inner: number,
+    alpha = 1,
+): void {
+    const outer = chamfer(x, y, width, height, cut);
+    g.fillStyle(fill, alpha);
+    g.fillPoints(outer, true);
+    g.lineStyle(3, edge, 1);
+    g.strokePoints(outer, true);
+    const inset = 4;
+    const line = chamfer(x + inset, y + inset, width - inset * 2, height - inset * 2, Math.max(1, cut - 2));
+    g.lineStyle(1, inner, 1);
+    g.strokePoints(line, true);
+}
+
 function ensure(scene: Phaser.Scene, key: string, width: number, height: number, draw: (g: Phaser.GameObjects.Graphics) => void): void {
     if (scene.textures.exists(key)) return;
     const g = scene.add.graphics();
@@ -91,30 +156,129 @@ function ensureWhite(scene: Phaser.Scene): void {
 
 function ensureChrome(scene: Phaser.Scene): void {
     ensure(scene, 'ui-capsule', 120, 40, (g) => {
-        g.fillStyle(COLORS.capsule, 1);
-        g.lineStyle(2, COLORS.capsuleEdge, 1);
-        g.fillRoundedRect(1, 1, 118, 38, 12);
-        g.strokeRoundedRect(1, 1, 118, 38, 12);
+        slab(g, 2, 2, 116, 36, 5, COLORS.capsule, COLORS.capsuleEdge, COLORS.stoneShadow);
     });
-    const button = (key: string, fill: number, edge: number): void => {
+    const button = (key: string, fill: number, edge: number, inner: number): void => {
         ensure(scene, key, 240, 56, (g) => {
-            g.fillStyle(fill, 1);
-            g.lineStyle(3, edge, 1);
-            g.fillRoundedRect(2, 2, 236, 52, 14);
-            g.strokeRoundedRect(2, 2, 236, 52, 14);
+            slab(g, 2, 2, 236, 52, 7, fill, edge, inner);
         });
     };
-    button('ui-button', COLORS.button, COLORS.buttonEdge);
-    button('ui-button-primary', COLORS.buttonPrimary, COLORS.buttonEdge);
-    button('ui-button-danger', COLORS.buttonDanger, 0xc46a72);
-    button('ui-button-disabled', COLORS.buttonDisabled, COLORS.buttonDisabledEdge);
+    button('ui-button', COLORS.button, COLORS.buttonEdge, COLORS.stoneShadow);
+    // Primary is gate gold: the one button that carries the round forward.
+    button('ui-button-primary', COLORS.buttonPrimary, COLORS.gold, COLORS.goldDark);
+    button('ui-button-danger', COLORS.buttonDanger, 0xc46a72, 0x3a1e23);
+    button('ui-button-disabled', COLORS.buttonDisabled, COLORS.buttonDisabledEdge, 0x1a1f2c);
+
+    // Build buttons carry their tower's colour, so the bar reads at a glance.
+    button('ui-button-dart', COLORS.button, COLORS.dart, COLORS.stoneShadow);
+    button('ui-button-cannon', COLORS.button, COLORS.cannon, COLORS.stoneShadow);
+    button('ui-button-frost', COLORS.button, COLORS.frost, COLORS.stoneShadow);
 
     ensure(scene, 'ui-panel', 360, 320, (g) => {
-        g.fillStyle(COLORS.panel, 0.97);
-        g.lineStyle(3, COLORS.panelEdge, 1);
-        g.fillRoundedRect(2, 2, 356, 316, 18);
-        g.strokeRoundedRect(2, 2, 356, 316, 18);
+        slab(g, 2, 2, 356, 316, 9, COLORS.panel, COLORS.panelEdge, COLORS.stoneShadow, 0.97);
     });
+}
+
+// -- surfaces cut from the pack ---------------------------------------------
+
+/** Texture key for a build pad: a silvered slab of the pack's stone tile set. */
+export const PAD_KEY = 'ui-pad';
+
+/** Nominal pad edge in texture pixels — native stone bricks, never scaled on bake. */
+const PAD_TEXTURE = 40;
+
+/**
+ * Bakes the build pad from the stone tile set: a 40 px window of the 48 px frame,
+ * lifted toward silver so it reads as pavement laid on the grass, then cut with a
+ * bright rim and a dark inner line. Without the pack the pad is still a silver slab,
+ * so a missing file never hides a build spot. Runs after the pack is preloaded.
+ */
+export function ensurePadTexture(scene: Phaser.Scene): void {
+    if (scene.textures.exists(PAD_KEY)) return;
+    const size = PAD_TEXTURE;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const stone = assetImage(scene, STONE_TILESET.file);
+    if (stone) {
+        // Crop, don't scale: the brick pattern keeps its native pixels.
+        const offset = Math.floor((STONE_TILESET.frameSize - size) / 2);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(stone, offset, offset, size, size, 0, 0, size, size);
+        ctx.fillStyle = 'rgba(224, 229, 238, 0.45)';
+        ctx.fillRect(0, 0, size, size);
+    } else {
+        ctx.fillStyle = hex(COLORS.padSilver);
+        ctx.fillRect(0, 0, size, size);
+    }
+
+    // Carved edge: ink outline, silver rim, shade line inside.
+    ctx.strokeStyle = hex(COLORS.ink);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+    ctx.strokeStyle = hex(COLORS.padEdge);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1.5, 1.5, size - 3, size - 3);
+    ctx.strokeStyle = hex(COLORS.padShade);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(4.5, 4.5, size - 9, size - 9);
+
+    scene.textures.addCanvas(PAD_KEY, canvas);
+}
+
+/** Chamfered path on a 2D context — the same carved corner as the chrome slabs. */
+function chamferPath(ctx: Ctx, x: number, y: number, width: number, height: number, cut: number): void {
+    ctx.beginPath();
+    ctx.moveTo(x + cut, y);
+    ctx.lineTo(x + width - cut, y);
+    ctx.lineTo(x + width, y + cut);
+    ctx.lineTo(x + width, y + height - cut);
+    ctx.lineTo(x + width - cut, y + height);
+    ctx.lineTo(x + cut, y + height);
+    ctx.lineTo(x, y + height - cut);
+    ctx.lineTo(x, y + cut);
+    ctx.closePath();
+}
+
+/**
+ * The Play Screen's title plaque: the stone tile set repeated at native size (a
+ * pattern never stretches, so the bricks stay crisp at any width), pushed back
+ * behind a dark wash and cut with a gold bevel. Rebaked on every call — a viewport
+ * change resizes it.
+ */
+export function renderTitlePlaque(scene: Phaser.Scene, width: number, height: number): void {
+    const key = 'ui-plaque';
+    if (scene.textures.exists(key)) scene.textures.remove(key);
+
+    const w = Math.max(1, Math.round(width));
+    const h = Math.max(1, Math.round(height));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const stone = assetImage(scene, STONE_TILESET.file);
+    const pattern = stone ? ctx.createPattern(stone, 'repeat') : null;
+    ctx.fillStyle = pattern ?? hex(COLORS.stone);
+    ctx.fillRect(0, 0, w, h);
+    // The wash keeps the gold title readable on the masonry.
+    ctx.fillStyle = 'rgba(13, 21, 36, 0.55)';
+    ctx.fillRect(0, 0, w, h);
+
+    chamferPath(ctx, 1.5, 1.5, w - 3, h - 3, 7);
+    ctx.strokeStyle = hex(COLORS.gold);
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    chamferPath(ctx, 6.5, 6.5, w - 13, h - 13, 4);
+    ctx.strokeStyle = 'rgba(13, 21, 36, 0.8)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    scene.textures.addCanvas(key, canvas);
 }
 
 // -- procedural fallbacks ---------------------------------------------------
@@ -229,6 +393,7 @@ export function ensureEntityTextures(scene: Phaser.Scene): void {
     ensureEnemies(scene);
     ensureTowers(scene);
     ensureShots(scene);
+    ensurePadTexture(scene);
 }
 
 // ---------------------------------------------------------------------------

@@ -64,8 +64,8 @@ function bakedProduct(file: string): string | null {
 /**
  * Bakes every loaded file into its final texture: enemy frame textures plus their
  * `walk-<type>` animations, tower textures with level pips and shot textures. The
- * field, scenery and gate are painted raw by the board painter instead. Called once
- * per round, after `preloadSprites`.
+ * field, scenery, gate and the stone the UI cuts its pads and plaque from are read
+ * raw instead. Called once per round, after `preloadSprites`.
  */
 export function bakeSprites(scene: Phaser.Scene): void {
     bakeEnemyStrips(scene);

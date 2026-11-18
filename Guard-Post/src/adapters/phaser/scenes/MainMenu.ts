@@ -2,12 +2,15 @@ import Phaser from 'phaser';
 
 import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
-import { COLORS, ensureTextures, hex } from '../textures.ts';
+import { preloadSprites } from '../assets.ts';
+import { COLORS, ensureTextures, hex, renderTitlePlaque } from '../textures.ts';
 import { computeMenuLayout, hitRect, type MenuLayout } from '../layout.ts';
 import { applyRenderScale } from '../scale.ts';
 import { SCENE_GAME, SCENE_MENU } from './keys.ts';
 
 const FONT = 'Segoe UI, Arial, sans-serif';
+/** A serif for the title only — the one flourish that reads as "fantasy" on any device. */
+const TITLE_FONT = 'Georgia, "Times New Roman", serif';
 
 /** The two how-to sentences (AGENTS.md §2): the controls are not self-evident. */
 const HOW_TO = 'Tap a spot to build a tower.\nStop the enemies before they reach the gate.';
@@ -33,6 +36,11 @@ export class MainMenu extends Phaser.Scene {
         this.#deps = deps;
     }
 
+    /** The plaque is cut from the pack's stone, so the pack must be local first. */
+    preload(): void {
+        preloadSprites(this);
+    }
+
     create(): void {
         applyRenderScale(this);
         ensureTextures(this);
@@ -42,19 +50,25 @@ export class MainMenu extends Phaser.Scene {
         const layout = computeMenuLayout(viewport);
         this.#layout = layout;
 
-        // The tap icon: a ring with a dot, drawn once.
+        // The title plaque: the pack's masonry, gold-bevelled, behind the gold title.
+        renderTitlePlaque(this, layout.titlePlate.width, layout.titlePlate.height);
+        this.add.image(layout.titlePlate.x, layout.titlePlate.y, 'ui-plaque').setOrigin(0, 0).setDepth(4);
+
+        // The tap icon: a ring with a dot, drawn once — gate gold, like the castle.
         const icon = this.add.graphics().setDepth(5);
-        icon.lineStyle(4, COLORS.range, 1);
+        icon.lineStyle(4, COLORS.gold, 1);
         icon.strokeCircle(layout.icon.x, layout.icon.y, layout.icon.radius);
-        icon.fillStyle(COLORS.range, 1);
+        icon.fillStyle(COLORS.gold, 1);
         icon.fillCircle(layout.icon.x, layout.icon.y, layout.icon.radius * 0.32);
 
         this.add
             .text(layout.width / 2, layout.titleY, 'Guard Post', {
-                fontFamily: FONT,
+                fontFamily: TITLE_FONT,
                 fontSize: '46px',
-                color: hex(COLORS.text),
+                color: hex(COLORS.goldBright),
                 fontStyle: 'bold',
+                stroke: hex(COLORS.ink),
+                strokeThickness: 5,
             })
             .setOrigin(0.5)
             .setDepth(5);
@@ -65,8 +79,10 @@ export class MainMenu extends Phaser.Scene {
             .text(layout.play.x + layout.play.width / 2, layout.play.y + layout.play.height / 2, 'Play', {
                 fontFamily: FONT,
                 fontSize: '26px',
-                color: hex(COLORS.text),
+                color: hex(COLORS.goldBright),
                 fontStyle: 'bold',
+                stroke: hex(COLORS.ink),
+                strokeThickness: 3,
             })
             .setOrigin(0.5)
             .setDepth(6);
@@ -77,6 +93,8 @@ export class MainMenu extends Phaser.Scene {
                 fontSize: '17px',
                 color: hex(COLORS.textDim),
                 align: 'center',
+                stroke: hex(COLORS.ink),
+                strokeThickness: 2,
             })
             .setOrigin(0.5, 0)
             .setDepth(5);

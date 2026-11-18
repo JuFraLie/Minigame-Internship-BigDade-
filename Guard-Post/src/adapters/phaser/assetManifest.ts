@@ -99,6 +99,17 @@ export const ROAD_TILESET = {
     rim: 4,
 } as const;
 
+/**
+ * The stone tile set — the same 48×48 geometry as the ground set, in slate. The UI
+ * cuts its build pads from this frame (a silvered slab of the pack's own stone), so
+ * the pads read as pavement laid on the grass rather than a foreign shape.
+ */
+export const STONE_TILESET = {
+    file: 'Environment/Tile Set/spr_tile_set_stone.png',
+    frameSize: 48,
+    tileSize: 16,
+} as const;
+
 /** Trees, rocks and mushrooms scattered off the road by a deterministic hash. Trees are
  * two tiles tall, the big scenery of the design reference. */
 export const SCENERY: readonly ScenerySpec[] = [
@@ -123,6 +134,7 @@ export const ALL_FILES: readonly string[] = [
         ...CASTLES.map((spec) => spec.file),
         ...MAP_GRASS,
         ROAD_TILESET.file,
+        STONE_TILESET.file,
         ...SCENERY.map((spec) => spec.file),
     ]),
 ];
