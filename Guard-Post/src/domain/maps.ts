@@ -31,14 +31,16 @@ export interface GameMap {
 }
 
 /**
- * The gate castle's footprint in world tiles: three wide, about two tall, standing
- * on the gate point with a small apron below it. A build pad must stay outside this
- * box — the renderer draws the castle over it, and a pad under the castle is a pad
- * the player cannot see.
+ * The gate castle's footprint in world tiles, mirroring what `paintGate` draws: three
+ * tiles wide, its frame (52 x 38) scaled to about 1.9 tiles tall with the base 0.32
+ * tiles below the gate point. A build pad must stay outside this box — the renderer
+ * draws the castle over it, and a pad under the castle is a pad the player cannot see.
+ * The box hugs the art exactly, so the row of pads just above the battlements stays
+ * buildable: those are the pads that defend the final approach beside the castle.
  */
 export function fitsBesideGateCastle(spot: Vec2, gate: Vec2): boolean {
     const halfWidth = 1.5;
-    const height = 2.35;
+    const height = 1.9;
     const apron = 0.5;
     return (
         spot.x + PAD_HALF <= gate.x - halfWidth ||

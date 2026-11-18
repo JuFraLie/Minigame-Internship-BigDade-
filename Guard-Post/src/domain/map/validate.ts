@@ -14,15 +14,27 @@ import type { Cell, MapDefinition, MapParams, Point } from './types.ts';
  *     with `pathLength` tiles and a turn count inside the given range;
  *   - every segment is axis-aligned, so enemies never cut a corner;
  *   - spots sit at grid cell centres, off the road, within 1.5 tiles of the nearest
- *     road tile (2.0 for the last two tiles the gate castle shadows), at least 1.5
- *     tiles apart, clear of the gate castle, with ids `s0..sn-1`;
- *   - every road tile lies within `towerRange` of at least one spot — the shortest
- *     level-1 tower range — so a freshly built tower always reaches the enemies
- *     passing the tiles it covers.
+ *     road tile, at least 1.5 tiles apart, clear of the gate castle, with ids
+ *     `s0..sn-1` — every pad hugs the road, so a level-1 tower on it is always in
+ *     reach of the enemy passing its tile;
+ *   - every road tile but the gate lies within `towerRange` of at least one spot —
+ *     the shortest level-1 tower range — so a freshly built tower always reaches the
+ *     enemies passing the tiles it covers. The gate tile alone is exempt from that
+ *     radius: it stands inside the castle footprint where no pad may be built, and
+ *     every cell within 1.5 tiles of it is either road or under the castle — but it
+ *     must still lie within `GATE_REACH` of a spot, so at least one level-1 tower
+ *     type (the cannon, 2.6) can always defend the last tile.
  */
 
 /** Epsilon for authored decimals; the grid arithmetic itself is exact. */
 const EPSILON = 1e-6;
+
+/**
+ * The gate tile's reach promise: the level-1 cannon's range. Frost (2.0) cannot be
+ * promised there — no legal pad stands within it — but the pads above the approach
+ * sit within 2.6, so at least one level-1 tower type always defends the last tile.
+ */
+const GATE_REACH = 2.6;
 
 /** All violations of the map rules for `map`, empty when the map is legal. */
 export function validateMap(map: MapDefinition, params: MapParams): string[] {
@@ -109,14 +121,13 @@ export function validateMap(map: MapDefinition, params: MapParams): string[] {
         if (onRoad.has(cellY * map.width + cellX)) problems.push(`spot ${i} sits on the road`);
 
         if (cells.length > 0) {
-            const nearest = nearestRoadTile(spot, cells);
-            // Level-1 reach: a pad hugs the road at 1.5 tiles, except beside the gate
-            // castle, whose footprint occupies the pads next to the last two tiles.
-            const castleShadow = nearest.index >= cells.length - 2;
-            const furthest = (castleShadow ? 2 : 1.5) + EPSILON;
-            if (nearest.distance < 1 - EPSILON || nearest.distance > furthest) {
+            const distance = distanceToNearestRoadTile(spot, cells);
+            // Level-1 reach: every pad hugs the road at 1.5 tiles — no exceptions,
+            // not even beside the gate castle, whose footprint pushes the pads for
+            // the final approach into the row above its battlements instead.
+            if (distance < 1 - EPSILON || distance > 1.5 + EPSILON) {
                 problems.push(
-                    `spot ${i} is ${nearest.distance.toFixed(3)} tiles from the road, outside 1–${castleShadow ? '2 (gate castle shadow)' : '1.5'}`,
+                    `spot ${i} is ${distance.toFixed(3)} tiles from the road, outside 1–1.5`,
                 );
             }
         }
@@ -132,10 +143,15 @@ export function validateMap(map: MapDefinition, params: MapParams): string[] {
         }
     }
 
-    // Coverage: every road tile within towerRange of at least one spot.
+    // Coverage: every road tile but the gate within towerRange of at least one spot.
+    // The gate tile sits inside the castle footprint where no pad may stand — every
+    // cell within 1.5 tiles of it is road or under the art — so it carries no
+    // coverage promise; the pads above the approach still cover the whole crossing
+    // up to it (and a level-1 cannon, range 2.6, reaches it from there anyway).
     const towerRangeSquared = params.towerRange * params.towerRange;
     let uncovered = 0;
-    for (const cell of cells) {
+    for (let i = 0; i + 1 < cells.length; i++) {
+        const cell = cells[i];
         let reached = false;
         for (const spot of map.spots) {
             const dx = spot.x - (cell.x + 0.5);
@@ -149,6 +165,20 @@ export function validateMap(map: MapDefinition, params: MapParams): string[] {
     }
     if (uncovered > 0) {
         problems.push(`${uncovered} road tiles are out of every spot's ${params.towerRange}-tile range`);
+    }
+
+    // The gate tile: exempt from the frost promise, but never free — some spot must
+    // sit within the level-1 cannon's range of it, or the last tile would let a
+    // survivor through with every tower type out of reach.
+    if (cells.length > 0) {
+        const gate = cells[cells.length - 1];
+        const gateReachSquared = GATE_REACH * GATE_REACH;
+        const reached = map.spots.some((spot) => {
+            const dx = spot.x - (gate.x + 0.5);
+            const dy = spot.y - (gate.y + 0.5);
+            return dx * dx + dy * dy <= gateReachSquared + EPSILON;
+        });
+        if (!reached) problems.push(`no spot reaches the gate tile within ${GATE_REACH} (level-1 cannon)`);
     }
 
     return problems;
@@ -241,18 +271,14 @@ function cellsOfSegment(a: Point, b: Point, width: number, height: number): Cell
     return cells;
 }
 
-/** Distance in tiles from a point to the nearest road tile centre, and that tile's index. */
-function nearestRoadTile(point: Point, cells: readonly Cell[]): { distance: number; index: number } {
+/** Distance in tiles from a point to the nearest road tile centre. */
+function distanceToNearestRoadTile(point: Point, cells: readonly Cell[]): number {
     let best = Number.POSITIVE_INFINITY;
-    let index = -1;
     for (let i = 0; i < cells.length; i++) {
         const dx = point.x - (cells[i].x + 0.5);
         const dy = point.y - (cells[i].y + 0.5);
         const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared < best) {
-            best = distanceSquared;
-            index = i;
-        }
+        if (distanceSquared < best) best = distanceSquared;
     }
-    return { distance: Math.sqrt(best), index };
+    return Math.sqrt(best);
 }

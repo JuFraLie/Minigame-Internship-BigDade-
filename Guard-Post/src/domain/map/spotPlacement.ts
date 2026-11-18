@@ -6,10 +6,11 @@ import type { Cell, MapParams, Point, Spot } from './types.ts';
  *
  * A spot is a pad at a grid cell centre that hugs the road — within 1.5 tiles of the
  * nearest road tile, so a level-1 tower (the shortest range is frost at 2.0) covers
- * the enemy for the whole crossing of that tile. The gate castle is the exception: it
- * occupies the pads beside the last two road tiles, so those may sit out at 2.0 tiles,
- * the castle's own push-out. Pads are at least 1.5 tiles from any earlier spot and
- * clear of the gate castle's footprint (the renderer draws the castle over anything
+ * the enemy for the whole crossing of that tile. Grid distances are 1, sqrt(2), 2 …
+ * so 1.5 means "touching the road", and no pad sits further out — not even beside the
+ * gate castle, whose footprint simply pushes the pads for the final approach up into
+ * the row above its battlements. Pads are at least 1.5 tiles from any earlier spot
+ * and clear of the gate castle's box (the renderer draws the castle over anything
  * inside it). Candidates are then picked greedily — each round takes the candidate
  * whose tower range covers the most road tiles not yet covered — so eight pads
  * blanket the road instead of clustering.
@@ -41,8 +42,7 @@ export function placeSpots(
     }
 
     // Candidates: off-road cell centres that hug the road — within 1.5 tiles of the
-    // nearest road tile, or out at 2.0 when that tile is one of the last two the gate
-    // castle shadows — and outside the gate castle's box.
+    // nearest road tile — and outside the gate castle's box.
     const candidates: { x: number; y: number }[] = [];
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -50,21 +50,13 @@ export function placeSpots(
             const cx = x + 0.5;
             const cy = y + 0.5;
             let nearestSquared = Number.POSITIVE_INFINITY;
-            let nearestIndex = -1;
             for (let i = 0; i < cells.length; i++) {
                 const dx = cx - tileX[i];
                 const dy = cy - tileY[i];
                 const distanceSquared = dx * dx + dy * dy;
-                if (distanceSquared < nearestSquared) {
-                    nearestSquared = distanceSquared;
-                    nearestIndex = i;
-                }
+                if (distanceSquared < nearestSquared) nearestSquared = distanceSquared;
             }
-            // Grid distances are 1, sqrt(2), 2 … so 1.5 means "touching the road";
-            // the only pad further out is the castle's push-out beside the gate.
-            const castleShadow = nearestIndex >= cells.length - 2;
-            const furthestSquared = castleShadow ? 4 + 1e-6 : 2.25 + 1e-6;
-            if (nearestSquared < 1 - 1e-6 || nearestSquared > furthestSquared) continue;
+            if (nearestSquared < 1 - 1e-6 || nearestSquared > 2.25 + 1e-6) continue;
             if (!fitsBesideGateCastle({ x: cx, y: cy }, gate)) continue;
             candidates.push({ x: cx, y: cy });
         }

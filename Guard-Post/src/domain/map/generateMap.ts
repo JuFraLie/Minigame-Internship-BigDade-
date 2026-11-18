@@ -56,10 +56,10 @@ export function generateMap(params: MapParams): MapDefinition {
 /**
  * The escape hatch when no attempt validates: a frozen layout that itself obeys
  * every rule in `validate.ts` under its own spot count, so the round stays playable
- * and every road tile stays within the shortest level-1 tower range even when the
- * parameters make a generated road impossible. Six pads hugging the road (the pad at
- * (4.5, 11.5) sits in the gate castle's push-out), gate two tiles inset, entrance one
- * grid wide.
+ * and every road tile but the gate stays within the shortest level-1 tower range
+ * even when the parameters make a generated road impossible. Six pads hugging the
+ * road within 1.5 tiles (the pad at (4.5, 11.5) tucks beside the gate castle),
+ * gate two tiles inset, entrance one grid wide.
  */
 export const FALLBACK_MAP: MapDefinition = {
     seed: 5,
@@ -83,7 +83,7 @@ export const FALLBACK_MAP: MapDefinition = {
         { id: 's2', x: 1.5, y: 5.5 },
         { id: 's3', x: 5.5, y: 8.5 },
         { id: 's4', x: 4.5, y: 11.5 },
-        { id: 's5', x: 8.5, y: 10.5 },
+        { id: 's5', x: 7.5, y: 9.5 },
     ],
 };
 

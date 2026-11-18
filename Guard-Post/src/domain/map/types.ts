@@ -64,10 +64,12 @@ export interface MapParams {
     /** Build spots every map must place (6–8). */
     readonly spotCount: number;
     /**
-     * Coverage radius in tiles: every road tile must sit within it of a spot, so a
-     * freshly built tower can always hit the enemies passing the tile it covers. The
-     * value is the shortest level-1 tower range (frost, 2.0) — dart reaches 2.2 and
-     * cannon 2.6, so 2.0 guarantees every level-1 tower type is in reach.
+     * Coverage radius in tiles: every road tile but the gate must sit within it of a
+     * spot, so a freshly built tower can always hit the enemies passing the tile it
+     * covers. The value is the shortest level-1 tower range (frost, 2.0) — dart
+     * reaches 2.2 and cannon 2.6, so 2.0 guarantees every level-1 tower type is in
+     * reach. The gate tile is exempt: it stands inside the castle footprint where no
+     * pad may be built (see `validate.ts`).
      */
     readonly towerRange: number;
 }

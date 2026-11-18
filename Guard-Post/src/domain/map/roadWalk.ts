@@ -124,8 +124,8 @@ export function walkRoad(params: MapParams, rng: () => number): Cell[] | null {
 function legalFinish(head: Frame, depth: number, params: MapParams, visited: Uint8Array): Move | null {
     const { width, height, minLength, maxLength, minTurns, maxTurns } = params;
     if (head.y !== height - 2) return null;
-    // The gate sits two tiles inset so the three-tile castle fits on the board and the
-    // tiles beside it stay buildable (see `fitsBesideGateCastle`).
+    // The gate sits two tiles inset so the three-tile castle fits fully on the board
+    // (see `fitsBesideGateCastle`).
     if (head.x < 2 || head.x > width - 3) return null;
 
     const tiles = depth + 1;

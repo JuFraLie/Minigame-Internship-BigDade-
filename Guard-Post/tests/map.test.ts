@@ -5,7 +5,7 @@ import { FixedMapSource } from '../src/adapters/maps/FixedMapSource.ts';
 import { ProceduralMapSource } from '../src/adapters/maps/ProceduralMapSource.ts';
 import { FALLBACK_MAP, generateMap } from '../src/domain/map/generateMap.ts';
 import { DEFAULT_MAP_PARAMS, type MapDefinition, type MapParams, type MapSource } from '../src/domain/map/types.ts';
-import { validateMap } from '../src/domain/map/validate.ts';
+import { roadCells, validateMap } from '../src/domain/map/validate.ts';
 import { asciiMap } from '../src/testing/asciiMap.ts';
 
 /**
@@ -37,6 +37,28 @@ test('every seed from 0 to 999 produces a fully validated map', () => {
         const map = generateMap(params({ seed }));
         const problems = validateMap(map, params({ seed }));
         assert.deepEqual(problems, [], `seed ${seed}: ${problems.join('; ')}`);
+    }
+});
+
+test('every pad hugs the road within 1.5 tiles — even beside the gate castle', () => {
+    // The player's rule: a level-1 tower on any pad must reach the enemy standing
+    // next to it. Grid distances are 1, sqrt(2), 2 … so 1.5 tiles means "touching
+    // the road", and the gate castle gets no push-out exception — its footprint only
+    // pushes the pads for the final approach up into the row above its battlements.
+    for (let seed = 0; seed < 100; seed++) {
+        const map = generateMap(params({ seed }));
+        const cells = roadCells(map.waypoints, map.width, map.height);
+        for (const spot of map.spots) {
+            let nearest = Number.POSITIVE_INFINITY;
+            for (const cell of cells) {
+                const distance = Math.hypot(spot.x - (cell.x + 0.5), spot.y - (cell.y + 0.5));
+                if (distance < nearest) nearest = distance;
+            }
+            assert.ok(
+                nearest <= 1.5 + 1e-6,
+                `seed ${seed}: pad (${spot.x}, ${spot.y}) sits ${nearest.toFixed(3)} tiles from the road`,
+            );
+        }
     }
 });
 
