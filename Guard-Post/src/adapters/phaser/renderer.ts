@@ -14,7 +14,7 @@ import {
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
-import { BOARD_KEY, COLORS, NOMINAL_TILE, PAD_KEY, ensureEntityTextures, ensureTextures, hex, renderBoardTexture } from './textures.ts';
+import { BOARD_KEY, COLORS, NOMINAL_TILE, PAD_KEY, ensureEntityTextures, ensureTextures, hex, renderBackdrop, renderBoardTexture } from './textures.ts';
 import { createViewTransform, type ViewTransform } from './viewTransform.ts';
 
 /**
@@ -66,6 +66,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
     readonly #objects: Phaser.GameObjects.GameObject[] = [];
 
     #board: Phaser.GameObjects.Image | null = null;
+    #backdrop: Phaser.GameObjects.Image | null = null;
     #under: Phaser.GameObjects.Graphics | null = null;
     #over: Phaser.GameObjects.Graphics | null = null;
     /** Per-spot flag: a tower stands there, so its pad is not drawn. Reused every frame. */
@@ -91,6 +92,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #callWaveCached = '';
 
     #menuPanel!: Phaser.GameObjects.Image;
+    #menuOrnament!: Phaser.GameObjects.Graphics;
     #menuTitle!: Phaser.GameObjects.Text;
     #buildImages: Phaser.GameObjects.Image[] = [];
     #buildLabels: Phaser.GameObjects.Text[] = [];
@@ -104,6 +106,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #dim!: Phaser.GameObjects.Image;
     #resumeImage!: Phaser.GameObjects.Image;
     #resumeLabel!: Phaser.GameObjects.Text;
+    #pauseTitle!: Phaser.GameObjects.Text;
 
     #banner!: Phaser.GameObjects.Text;
     #bannerUntil = 0;
@@ -125,8 +128,10 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const scene = this.#scene;
         ensureTextures(scene);
         ensureEntityTextures(scene);
+        renderBackdrop(scene, layout.width, layout.height, layout.topPad);
         renderBoardTexture(scene, map, layout.board.tile);
 
+        this.#backdrop = this.#add(scene.add.image(0, 0, 'ui-backdrop').setOrigin(0, 0).setDepth(0));
         this.#board = this.#add(scene.add.image(layout.board.x, layout.board.y, BOARD_KEY).setOrigin(0, 0).setDepth(1));
         this.#under = this.#add(scene.add.graphics().setDepth(4));
         this.#over = this.#add(scene.add.graphics().setDepth(13));
@@ -168,6 +173,9 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#menuPanel = this.#add(
             scene.add.image(layout.menu.panel.x, layout.menu.panel.y, 'ui-panel').setOrigin(0, 0).setDepth(20).setVisible(false),
         );
+        // Ornaments sit above the panel (20.5) and below the buttons (21), so the
+        // brackets frame the menu without ever covering a label.
+        this.#menuOrnament = this.#add(scene.add.graphics().setDepth(20.5).setVisible(false));
         this.#menuTitle = this.#text(layout.menu.panel.x + layout.menu.panel.width / 2, layout.menu.panel.y + 20, 17, COLORS.goldBright).setVisible(false);
 
         this.#buildImages = [];
@@ -199,6 +207,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
         );
         this.#resumeImage = this.#button(layout.resume, 'ui-button-primary', 41).setVisible(false);
         this.#resumeLabel = this.#label(layout.resume, 'Resume', 20, COLORS.text, 42).setVisible(false);
+        // Above the dim (depth 40) and gold, so the pause screen reads as a state.
+        this.#pauseTitle = this.#text(layout.width / 2, layout.resume.y - 36, 26, COLORS.goldBright).setText('Paused').setVisible(false).setDepth(42);
 
         this.#banner = this.#text(layout.width / 2, layout.height * 0.4, 26, COLORS.goldBright).setVisible(false).setDepth(50);
         this.#flash = this.#add(
@@ -216,7 +226,9 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#transform = createViewTransform(layout.board);
         this.#entityScale = layout.board.tile / NOMINAL_TILE;
 
+        renderBackdrop(this.#scene, layout.width, layout.height, layout.topPad);
         renderBoardTexture(this.#scene, map, layout.board.tile);
+        this.#backdrop?.setPosition(0, 0).setDisplaySize(layout.width, layout.height);
         this.#board?.setPosition(layout.board.x, layout.board.y);
 
         for (const sprite of [...this.#enemySprites, ...this.#towerSprites, ...this.#shotSprites]) {
@@ -268,6 +280,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#dim.setDisplaySize(layout.width, layout.height);
         this.#resumeImage.setPosition(layout.resume.x, layout.resume.y).setDisplaySize(layout.resume.width, layout.resume.height);
         this.#resumeLabel.setPosition(layout.resume.x + layout.resume.width / 2, layout.resume.y + layout.resume.height / 2);
+        this.#pauseTitle.setPosition(layout.width / 2, layout.resume.y - 36);
 
         // Pads sit at their spot centres, sized to the pad footprint; visibility is
         // the only thing `present` changes per frame.
@@ -279,6 +292,59 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
         this.#banner.setPosition(layout.width / 2, layout.height * 0.4);
         this.#flash.setDisplaySize(layout.width, layout.height);
+        this.#layoutMenuOrnament(layout);
+    }
+
+    /**
+     * Gold L-brackets on the build menu's four corners, drawn at the panel's real
+     * rect once per layout — never stretched with a texture, never in the frame path.
+     */
+    #layoutMenuOrnament(layout: PlayLayout): void {
+        const g = this.#menuOrnament;
+        if (!g) return;
+        g.clear();
+
+        const panel = layout.menu.panel;
+        const inset = 5;
+        const length = 13;
+        const x0 = panel.x + inset;
+        const y0 = panel.y + inset;
+        const x1 = panel.x + panel.width - inset;
+        const y1 = panel.y + panel.height - inset;
+
+        g.lineStyle(3, COLORS.gold, 0.95);
+        g.beginPath();
+        g.moveTo(x0, y0 + length);
+        g.lineTo(x0, y0);
+        g.lineTo(x0 + length, y0);
+        g.moveTo(x1, y0 + length);
+        g.lineTo(x1, y0);
+        g.lineTo(x1 - length, y0);
+        g.moveTo(x0, y1 - length);
+        g.lineTo(x0, y1);
+        g.lineTo(x0 + length, y1);
+        g.moveTo(x1, y1 - length);
+        g.lineTo(x1, y1);
+        g.lineTo(x1 - length, y1);
+        g.strokePath();
+
+        g.fillStyle(COLORS.goldBright, 1);
+        for (const [cx, cy] of [
+            [x0, y0],
+            [x1, y0],
+            [x0, y1],
+            [x1, y1],
+        ]) {
+            g.fillPoints(
+                [
+                    new Phaser.Geom.Point(cx, cy - 4),
+                    new Phaser.Geom.Point(cx + 4, cy),
+                    new Phaser.Geom.Point(cx, cy + 4),
+                    new Phaser.Geom.Point(cx - 4, cy),
+                ],
+                true,
+            );
+        }
     }
 
     // -- drawing ----------------------------------------------------------
@@ -341,6 +407,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const showAny = showBuild || showTower;
 
         this.#menuPanel.setVisible(showAny);
+        this.#menuOrnament.setVisible(showAny);
         this.#menuTitle.setVisible(showAny);
 
         for (let i = 0; i < this.#buildImages.length; i++) {
@@ -416,6 +483,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#dim.setVisible(ui.paused);
         this.#resumeImage.setVisible(ui.paused);
         this.#resumeLabel.setVisible(ui.paused);
+        this.#pauseTitle.setVisible(ui.paused);
         if (ui.paused) {
             this.#dim.setDisplaySize(layout.width, layout.height);
         }
@@ -616,6 +684,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#objects.length = 0;
 
         this.#board = null;
+        this.#backdrop = null;
         this.#under = null;
         this.#over = null;
         this.#enemySprites = [];
