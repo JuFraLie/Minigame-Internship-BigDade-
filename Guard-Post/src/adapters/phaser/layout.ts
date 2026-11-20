@@ -75,6 +75,8 @@ export interface PlayLayout {
         readonly height: number;
     };
     readonly callWave: Rect;
+    /** Speed-boost button beside Call wave: toggles 1x / 2x. */
+    readonly speed: Rect;
     readonly menu: {
         readonly panel: Rect;
         /** Three tower buttons, left to right. */
@@ -132,11 +134,25 @@ export function computePlayLayout(input: LayoutInput): PlayLayout {
     const capsuleY = hudY + (HUD_HEIGHT - CAPSULE_HEIGHT) / 2;
     const [lives, gold, score] = row(rowX, capsuleY, [0.34, 0.33, 0.33], capsuleArea, CAPSULE_HEIGHT);
 
-    const callWaveWidth = Math.min(width * 0.6, 300);
+    // Call wave and the speed boost share one centred row. The boost keeps a 44 px
+    // target even on narrow screens; the call button takes whatever room is left, up
+    // to its old 300 px cap.
+    const bottomGap = 8;
+    const bottomRowWidth = width - 2 * MARGIN;
+    const speedWidth = Math.max(MIN_TAP, Math.min(96, bottomRowWidth * 0.28));
+    const callWaveWidth = Math.max(MIN_TAP, Math.min(bottomRowWidth - speedWidth - bottomGap, width * 0.6, 300));
+    const bottomRowX = (width - (callWaveWidth + bottomGap + speedWidth)) / 2;
+    const bottomRowY = bottomY + (BOTTOM_CONTENT - CALL_WAVE_HEIGHT) / 2;
     const callWave: Rect = {
-        x: (width - callWaveWidth) / 2,
-        y: bottomY + (BOTTOM_CONTENT - CALL_WAVE_HEIGHT) / 2,
+        x: bottomRowX,
+        y: bottomRowY,
         width: callWaveWidth,
+        height: CALL_WAVE_HEIGHT,
+    };
+    const speed: Rect = {
+        x: bottomRowX + callWaveWidth + bottomGap,
+        y: bottomRowY,
+        width: speedWidth,
         height: CALL_WAVE_HEIGHT,
     };
 
@@ -179,6 +195,7 @@ export function computePlayLayout(input: LayoutInput): PlayLayout {
         board: { x: boardX, y: boardY, tile, width: boardWidth, height: boardHeight },
         bottom: { y: bottomY, height: BOTTOM_CONTENT },
         callWave,
+        speed,
         menu: { panel, buildButtons, towerButtons },
         resume,
         spots,

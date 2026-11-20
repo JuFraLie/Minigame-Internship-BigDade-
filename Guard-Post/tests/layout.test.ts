@@ -85,6 +85,7 @@ test('every touch target is at least 44 px both ways', () => {
         const targets: readonly Rect[] = [
             layout.hud.pause,
             layout.callWave,
+            layout.speed,
             layout.resume,
             ...layout.menu.buildButtons,
             ...layout.menu.towerButtons,
@@ -122,6 +123,8 @@ test('the HUD, menus and overlays stay inside the screen', () => {
         assert.ok(panel.y >= 0 && panel.y + panel.height <= height + 1e-9, 'the menu panel leaves the screen');
 
         assert.ok(layout.callWave.x >= 0 && layout.callWave.x + layout.callWave.width <= width + 1e-9);
+        assert.ok(layout.speed.x >= 0 && layout.speed.x + layout.speed.width <= width + 1e-9);
+        assert.ok(layout.speed.x >= layout.callWave.x + layout.callWave.width, 'speed must sit beside Call wave, not on it');
         assert.ok(layout.resume.x >= 0 && layout.resume.x + layout.resume.width <= width + 1e-9);
 
         // Build spots project onto the board, never off it.

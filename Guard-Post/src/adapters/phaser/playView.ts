@@ -2,6 +2,7 @@ import type { GameMap } from '../../domain/maps.ts';
 import type { RoundEvent, RoundSnapshot } from '../../domain/types.ts';
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
+import type { GameSpeed } from './speed.ts';
 
 /**
  * The renderer contract of the play screen — the `GameViewPort` of the design document,
@@ -16,6 +17,8 @@ import type { PlayLayout } from './layout.ts';
 export interface PlayUiState {
     readonly selection: Selection | null;
     readonly paused: boolean;
+    /** Current presentation speed: 1x or the 2x boost. */
+    readonly speed: GameSpeed;
 }
 
 export interface GameViewPort {

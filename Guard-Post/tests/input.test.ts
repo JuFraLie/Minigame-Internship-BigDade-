@@ -85,6 +85,13 @@ test('the Call wave button only answers while a wave can be called', () => {
     assert.equal(pickAction(context({ canCallWave: false }), point.x, point.y), null);
 });
 
+test('the speed boost answers during play, but never behind the pause overlay', () => {
+    const point = centerOf(layout.speed);
+    assert.deepEqual(pickAction(context(), point.x, point.y), { kind: 'toggleSpeed' });
+    assert.deepEqual(pickAction(context({ canCallWave: true }), point.x, point.y), { kind: 'toggleSpeed' });
+    assert.equal(pickAction(context({ paused: true }), point.x, point.y), null);
+});
+
 test('a tap on a spot selects it, in world coordinates the logic can own', () => {
     for (const [spotId, spot] of SPOTS.entries()) {
         const action = pickAction(context(), transform.toScreenX(spot.x), transform.toScreenY(spot.y));

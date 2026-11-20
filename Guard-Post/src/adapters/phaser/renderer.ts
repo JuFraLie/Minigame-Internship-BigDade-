@@ -23,6 +23,7 @@ import {
     NOMINAL_TILE,
     PAD_KEY,
     ensureEntityTextures,
+    hex,
     ensureTextures,
     pixelBox,
     renderBackdrop,
@@ -30,6 +31,7 @@ import {
     renderBoardTexture,
     type PixelVariant,
 } from './textures.ts';
+import { scaledDelta, type GameSpeed } from './speed.ts';
 import { fitFontSize, setUiFontSize, uiText } from './uiStyle.ts';
 import { createViewTransform, type ViewTransform } from './viewTransform.ts';
 
@@ -110,6 +112,9 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #callWaveImage!: Phaser.GameObjects.Image;
     #callWaveLabel!: Phaser.GameObjects.Text;
     #callWaveCached = '';
+    #speedImage!: Phaser.GameObjects.Image;
+    #speedLabel!: Phaser.GameObjects.Text;
+    #speedCached: GameSpeed | null = null;
 
     #menuPanel!: Phaser.GameObjects.Image;
     #menuTitle!: Phaser.GameObjects.Text;
@@ -201,6 +206,15 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#callWaveImage = this.#button(layout.callWave, 'primary');
         this.#callWaveLabel = this.#label(layout.callWave, 'CALL WAVE', 12, COLORS.ink);
         this.#callWaveCached = '';
+
+        this.#speedImage = this.#button(layout.speed, 'button');
+        this.#speedLabel = this.#label(
+            layout.speed,
+            'SPEED\nx1',
+            fitFontSize(layout.speed.width - 8, 6, 11, 7),
+            COLORS.text,
+        ).setLineSpacing(1);
+        this.#speedCached = null;
 
         this.#menuPanel = this.#add(
             scene.add
@@ -311,6 +325,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
         // Cached strings stay valid, but their positions moved.
         this.#callWaveCached = '';
+        this.#speedCached = null;
         for (let i = 0; i < this.#buildCached.length; i++) this.#buildCached[i] = '';
         for (let i = 0; i < this.#buildCostCached.length; i++) this.#buildCostCached[i] = '';
         for (let i = 0; i < this.#towerCached.length; i++) this.#towerCached[i] = '';
@@ -332,6 +347,16 @@ export class PhaserCanvasRenderer implements GameViewPort {
             layout.callWave.y + layout.callWave.height / 2,
         );
         setUiFontSize(this.#callWaveLabel, fitFontSize(layout.callWave.width - 24, 14, 14, 8));
+
+        const speed = this.#speedCached ?? 1;
+        this.#speedImage
+            .setTexture(pixelBox(this.#scene, layout.speed.width, layout.speed.height, speed === 2 ? 'primary' : 'button'))
+            .setPosition(Math.round(layout.speed.x), Math.round(layout.speed.y));
+        this.#speedLabel
+            .setPosition(layout.speed.x + layout.speed.width / 2, layout.speed.y + layout.speed.height / 2)
+            .setColor(hex(speed === 2 ? COLORS.ink : COLORS.text))
+            .setText(speed === 2 ? 'SPEED\nx2' : 'SPEED\nx1');
+        setUiFontSize(this.#speedLabel, fitFontSize(layout.speed.width - 8, 6, 11, 7));
 
         this.#menuPanel
             .setTexture(pixelBox(this.#scene, layout.menu.panel.width, layout.menu.panel.height, 'panel'))
@@ -394,24 +419,27 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const transform = this.#transform;
         if (!layout || !transform) return;
 
-        this.#advanceAnimClock(ui.paused);
+        this.#advanceAnimClock(ui.paused, ui.speed);
         this.#selection = ui.selection;
         this.#presentHud(snapshot);
         this.#presentCallWave(snapshot);
+        this.#presentSpeed(ui.speed);
         this.#presentMenu(snapshot, ui, layout);
         this.#presentPause(ui, layout);
         this.#presentEntities(snapshot, transform, alpha);
         this.#presentEvents(events);
     }
 
-    /** Keeps the strip-frame clock running only while the round is playing. */
-    #advanceAnimClock(paused: boolean): void {
+    /** Keeps the strip-frame clock running only while the round is playing, at game speed. */
+    #advanceAnimClock(paused: boolean, speed: GameSpeed): void {
         const now = this.#scene.time.now;
         if (paused) {
             this.#animLastAt = 0;
             return;
         }
-        if (this.#animLastAt !== 0) this.#animTime += Math.max(0, now - this.#animLastAt);
+        if (this.#animLastAt !== 0) {
+            this.#animTime += scaledDelta(Math.max(0, now - this.#animLastAt), speed);
+        }
         this.#animLastAt = now;
     }
 
@@ -437,6 +465,19 @@ export class PhaserCanvasRenderer implements GameViewPort {
         if (this.#callWaveCached === value) return;
         this.#callWaveCached = value;
         this.#callWaveLabel.setText(value);
+    }
+
+    /** The boost lights up sandy while 2x is active; normal speed stays green. */
+    #presentSpeed(speed: GameSpeed): void {
+        if (this.#speedCached === speed) return;
+        this.#speedCached = speed;
+
+        const boosted = speed === 2;
+        const rect = this.#layout?.speed;
+        if (rect) {
+            this.#speedImage.setTexture(pixelBox(this.#scene, rect.width, rect.height, boosted ? 'primary' : 'button'));
+        }
+        this.#speedLabel.setText(`SPEED\nx${speed}`).setColor(hex(boosted ? COLORS.ink : COLORS.text));
     }
 
     #presentMenu(snapshot: RoundSnapshot, ui: PlayUiState, layout: PlayLayout): void {

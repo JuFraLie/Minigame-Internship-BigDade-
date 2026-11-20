@@ -8,6 +8,7 @@ import type { InputPort, PlayAction, PlayContext, Selection } from '../inputAdap
 import { computePlayLayout, type PlayLayout } from '../layout.ts';
 import type { GameViewPort } from '../playView.ts';
 import { applyRenderScale } from '../scale.ts';
+import { nextSpeed, scaledDelta, type GameSpeed } from '../speed.ts';
 import { createViewTransform, type ViewTransform } from '../viewTransform.ts';
 import { SCENE_GAME, SCENE_RESULT } from './keys.ts';
 
@@ -40,6 +41,8 @@ export class Game extends Phaser.Scene {
     #pending: RoundEvent[] = [];
     #accumulator = 0;
     #ended = false;
+    /** Presentation-only speed; each round starts at normal speed. */
+    #speed: GameSpeed = 1;
 
     readonly #onViewportChanged = (): void => this.#relayout();
 
@@ -55,6 +58,7 @@ export class Game extends Phaser.Scene {
         this.#accumulator = 0;
         this.#ended = false;
         this.#selection = null;
+        this.#speed = 1;
 
         const sim = new Simulation(this.#deps.flow.level, this.#deps.maps);
         this.#sim = sim;
@@ -82,7 +86,7 @@ export class Game extends Phaser.Scene {
         let alpha = 1;
 
         if (!paused && !this.#ended) {
-            this.#accumulator = Math.min(this.#accumulator + deltaMs, MAX_CATCHUP_MS);
+            this.#accumulator = Math.min(this.#accumulator + scaledDelta(deltaMs, this.#speed), MAX_CATCHUP_MS);
             while (this.#accumulator >= STEP_MS) {
                 sim.step();
                 this.#accumulator -= STEP_MS;
@@ -91,7 +95,7 @@ export class Game extends Phaser.Scene {
         }
 
         sim.drainEvents(this.#pending);
-        view.present(sim.snapshot(), this.#pending, { selection: this.#selection, paused }, alpha);
+        view.present(sim.snapshot(), this.#pending, { selection: this.#selection, paused, speed: this.#speed }, alpha);
         this.#pending.length = 0;
 
         if (!this.#ended && sim.phase !== 'playing') this.#endRound(sim);
@@ -120,6 +124,9 @@ export class Game extends Phaser.Scene {
                 break;
             case 'callWave':
                 sim.handle({ kind: 'callWave' });
+                break;
+            case 'toggleSpeed':
+                this.#speed = nextSpeed(this.#speed);
                 break;
             case 'selectSpot':
                 this.#selection = { kind: 'spot', spotId: action.spotId };
@@ -221,5 +228,6 @@ export class Game extends Phaser.Scene {
         this.#sim = null;
         this.#selection = null;
         this.#pending = [];
+        this.#speed = 1;
     }
 }

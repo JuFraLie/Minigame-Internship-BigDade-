@@ -22,6 +22,7 @@ export type PlayAction =
     | { readonly kind: 'pause' }
     | { readonly kind: 'resume' }
     | { readonly kind: 'callWave' }
+    | { readonly kind: 'toggleSpeed' }
     | { readonly kind: 'selectSpot'; readonly spotId: number }
     | { readonly kind: 'selectTower'; readonly towerId: number }
     | { readonly kind: 'clearSelection' }
@@ -100,6 +101,9 @@ export function pickAction(context: PlayContext, x: number, y: number): PlayActi
 
     // …and a tap on the menu's own background closes nothing: it is dead space.
     if (context.selection && hitRect(layout.menu.panel, x, y)) return null;
+
+    // The speed boost is always available during play, even between waves.
+    if (hitRect(layout.speed, x, y)) return { kind: 'toggleSpeed' };
 
     if (context.canCallWave && hitRect(layout.callWave, x, y)) return { kind: 'callWave' };
 
