@@ -16,14 +16,28 @@ export interface Vec2 {
 export const SIM_HZ = 30;
 export const SIM_DT = 1 / SIM_HZ;
 
-/** Waves per level; the level is cleared when the last one is empty. */
-export const WAVES_PER_LEVEL = 3;
+/** Waves a level opens with; the level is cleared when the last one is empty. */
+export const MIN_WAVES_PER_LEVEL = 3;
+/** Late levels top out here: the ramp is long, but never endless inside one level. */
+export const MAX_WAVES_PER_LEVEL = 10;
+
+/**
+ * Waves in `level`: 3 at the start, +1 every two levels, capped at 10. A level is
+ * cleared when its last wave is empty.
+ */
+export function wavesForLevel(level: number): number {
+    const safeLevel = Math.max(1, Math.floor(level));
+    return Math.min(MAX_WAVES_PER_LEVEL, MIN_WAVES_PER_LEVEL + Math.floor((safeLevel - 1) / 2));
+}
+
 /** Lives at the start of every level. */
 export const STARTING_LIVES = 10;
 /** Seconds between waves when the player does not call the next one early. */
 export const WAVE_GAP_SECONDS = 8;
 /** Seconds wave 1 waits before starting on its own if the player never acts. */
 export const GRACE_SECONDS = 10;
+/** How long before a wave starts its "INCOMING" banner is announced. */
+export const WAVE_ANNOUNCE_SECONDS = 3;
 
 // ---------------------------------------------------------------------------
 // Towers
@@ -134,6 +148,7 @@ export type RoundEvent =
           readonly score: number;
       }
     | { readonly type: 'leak'; readonly enemyId: number; readonly enemy: EnemyType; readonly lives: number }
+    | { readonly type: 'waveIncoming'; readonly wave: number }
     | { readonly type: 'waveStarted'; readonly wave: number }
     | { readonly type: 'waveCleared'; readonly wave: number; readonly bonus: number; readonly score: number }
     | { readonly type: 'levelCleared'; readonly score: number; readonly lives: number }

@@ -64,6 +64,23 @@ test('the grace period expires into wave 1 on its own', () => {
     assert.equal(started.length, 1);
 });
 
+test('the next wave is announced shortly before it starts', () => {
+    const sim = new Simulation(1, MAP_SOURCE);
+    const events: RoundEvent[] = [];
+
+    for (let i = 0; i < 30 * 12 && sim.waveState !== 'active'; i++) {
+        sim.step();
+        sim.drainEvents(events);
+    }
+
+    const incoming = events.filter((event): event is RoundEvent & { type: 'waveIncoming' } => event.type === 'waveIncoming');
+    const started = events.filter((event): event is RoundEvent & { type: 'waveStarted' } => event.type === 'waveStarted');
+    assert.equal(incoming.length, 1, 'the incoming banner fires once');
+    assert.equal(incoming[0].wave, 1);
+    assert.equal(started.length, 1);
+    assert.ok(events.indexOf(incoming[0]) < events.indexOf(started[0]), 'the announcement comes before the wave');
+});
+
 test('the first interaction starts wave 1 immediately — the grace is for idlers', () => {
     const sim = new Simulation(1, MAP_SOURCE);
 

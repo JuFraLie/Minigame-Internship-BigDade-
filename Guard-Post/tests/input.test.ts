@@ -59,7 +59,7 @@ test('a tap on the pause button pauses, and nothing else does', () => {
     assert.deepEqual(pickAction(context(), pause.x, pause.y), { kind: 'pause' });
 
     // Off-target taps mean nothing.
-    assert.equal(pickAction(context(), layout.hud.round.x + 4, layout.hud.round.y + 4), null);
+    assert.equal(pickAction(context(), layout.hud.lives.x + 4, layout.hud.lives.y + 4), null);
 });
 
 test('while paused, the only answer is Resume — no pause, no commands, no exit', () => {

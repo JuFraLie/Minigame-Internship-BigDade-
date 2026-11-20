@@ -15,8 +15,9 @@ import {
     TOWER_SPECS,
     UPGRADE_DAMAGE_FACTOR,
     UPGRADE_RANGE_BONUS,
-    WAVES_PER_LEVEL,
+    WAVE_ANNOUNCE_SECONDS,
     WAVE_GAP_SECONDS,
+    wavesForLevel,
     type BlockReason,
     type EnemyType,
     type EnemyView,
@@ -152,6 +153,8 @@ export class Simulation {
     #nextTowerId = 1;
     #enemiesDirty = false;
     #projectileCursor = 0;
+    /** Wave already given its INCOMING banner, so the announcement fires once. */
+    #announcedWave = 0;
 
     constructor(level: number, maps: MapSource) {
         this.level = level;
@@ -363,9 +366,14 @@ export class Simulation {
 
         if (this.waveState === 'grace' || this.waveState === 'gap') {
             this.#pending -= dt;
+            const upcoming = this.waveState === 'grace' ? 1 : this.wave;
+            if (this.#pending <= WAVE_ANNOUNCE_SECONDS && this.#announcedWave !== upcoming) {
+                this.#announcedWave = upcoming;
+                this.#emit({ type: 'waveIncoming', wave: upcoming });
+            }
             if (this.#pending <= 0) {
                 this.#pending = 0;
-                this.#startWave(this.waveState === 'grace' ? 1 : this.wave);
+                this.#startWave(upcoming);
             }
         }
 
@@ -396,6 +404,7 @@ export class Simulation {
 
     #startWave(wave: number): void {
         this.wave = wave;
+        this.#announcedWave = wave;
         this.waveState = 'active';
         this.#waveTime = 0;
         this.#spawnIndex = 0;
@@ -606,7 +615,7 @@ export class Simulation {
         this.score += points;
         this.#emit({ type: 'waveCleared', wave: this.wave, bonus, score: points });
 
-        if (this.wave >= WAVES_PER_LEVEL) {
+        if (this.wave >= wavesForLevel(this.level)) {
             this.waveState = 'done';
             this.phase = 'won';
             this.score += levelClearScore(this.lives, this.level);

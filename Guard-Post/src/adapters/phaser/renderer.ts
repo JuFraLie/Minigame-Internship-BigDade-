@@ -102,9 +102,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #animTime = 0;
     #animLastAt = 0;
 
-    /** Last reported level, so a mid-round banner can show LEVEL x-y. */
-    #levelNumber = 1;
-    #round!: Capsule;
     #lives!: Capsule;
     #gold!: Capsule;
     #score!: Capsule;
@@ -196,8 +193,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
             this.#shotSprites.push(this.#add(scene.add.image(0, 0, 'shot-dart').setVisible(false).setDepth(10).setScale(this.#entityScale)));
         }
 
-        this.#levelNumber = 1;
-        this.#round = this.#capsule(layout.hud.round, 'LEVEL 1-1', 9);
         this.#lives = this.#capsule(layout.hud.lives, 'HP 10');
         this.#gold = this.#capsule(layout.hud.gold, 'G 100');
         this.#score = this.#capsule(layout.hud.score, '0');
@@ -319,12 +314,11 @@ export class PhaserCanvasRenderer implements GameViewPort {
         for (let i = 0; i < this.#buildCached.length; i++) this.#buildCached[i] = '';
         for (let i = 0; i < this.#buildCostCached.length; i++) this.#buildCostCached[i] = '';
         for (let i = 0; i < this.#towerCached.length; i++) this.#towerCached[i] = '';
-        for (const capsule of [this.#round, this.#lives, this.#gold, this.#score, this.#pause]) capsule.cached = '';
+        for (const capsule of [this.#lives, this.#gold, this.#score, this.#pause]) capsule.cached = '';
     }
 
     /** Repositions every piece of chrome; text content is handled by `present`. */
     #layoutChrome(layout: PlayLayout): void {
-        this.#place(this.#round, layout.hud.round);
         this.#place(this.#lives, layout.hud.lives);
         this.#place(this.#gold, layout.hud.gold);
         this.#place(this.#score, layout.hud.score);
@@ -427,8 +421,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
             capsule.cached = value;
             capsule.label.setText(value);
         };
-        this.#levelNumber = snapshot.level;
-        set(this.#round, `LEVEL ${snapshot.level}-${snapshot.wave}`);
         set(this.#lives, `HP ${Math.max(0, snapshot.lives)}`);
         set(this.#gold, `G ${formatGold(snapshot.gold)}`);
         set(this.#score, formatScore(snapshot.score));
@@ -714,8 +706,11 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
         for (const event of events) {
             switch (event.type) {
+                case 'waveIncoming':
+                    this.#showBanner(`WAVE ${event.wave} INCOMING`, now + BANNER_MS);
+                    break;
                 case 'waveStarted':
-                    this.#showBanner(`LEVEL ${this.#levelNumber}-${event.wave}`, now + 1000);
+                    this.#showBanner(`WAVE ${event.wave}`, now + 1000);
                     break;
                 case 'waveCleared':
                     this.#showBanner(`CLEAR   +${event.bonus}G`, now + BANNER_MS);

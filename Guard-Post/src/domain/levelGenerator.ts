@@ -1,4 +1,4 @@
-import { ENEMY_SPECS, ENEMY_TYPES, WAVES_PER_LEVEL, type EnemyType } from './types.ts';
+import { ENEMY_SPECS, ENEMY_TYPES, wavesForLevel, type EnemyType } from './types.ts';
 import { mulberry32, seedOf } from './rng.ts';
 
 /**
@@ -9,16 +9,18 @@ import { mulberry32, seedOf } from './rng.ts';
  * which is what makes the whole game testable by a bot and reproducible in a unit
  * test — while different levels field different mixes of enemies.
  *
- * Budget for wave `w` (1..3) at level `L`:
- *     (8 + 2.5 x (L - 1)) x (1 + 0.35 x (w - 1))
+ * Budget for wave `w` of a level with `N` waves (3..10):
+ *     (8 + 2.5 x (L - 1)) x (1 + 0.7 x (w - 1) / (N - 1))
+ * so each level ramps from its opening wave to a fixed 1.7x finish, however many
+ * waves it has. The early 3-wave levels keep exactly their old budgets.
  * Unlocks by level:
  *     grunts always, runners from level 2, brutes from level 3.
  * Composition by wave:
  *     wave 1  one unlocked type at random
  *     wave 2  two unlocked types at random
- *     wave 3  every unlocked type, in random shares of the budget
+ *     wave 3+ every unlocked type, in random shares of the budget
  * Shares are random per level but always spend at least half the budget and never
- * exceed it. Every 5th level appends one boss to wave 3, on top of the budget.
+ * exceed it. Every 5th level appends one boss to its last wave, on top of the budget.
  */
 
 export interface SpawnEntry {
@@ -29,9 +31,11 @@ export interface SpawnEntry {
 
 type Group = readonly [EnemyType, number];
 
-/** Threat budget for one wave of one level. */
+/** Threat budget for one wave of one level, scaled across that level's wave count. */
 export function waveBudget(level: number, wave: number): number {
-    return (8 + 2.5 * (level - 1)) * (1 + 0.35 * (wave - 1));
+    const count = wavesForLevel(level);
+    const progress = (wave - 1) / Math.max(1, count - 1);
+    return (8 + 2.5 * (level - 1)) * (1 + 0.7 * progress);
 }
 
 /** Enemy types unlocked at `level`: grunts always, runners from 2, brutes from 3. */
@@ -42,7 +46,7 @@ function unlockedFor(level: number): readonly EnemyType[] {
     return types;
 }
 
-/** How many different types a wave fields: wave 1 singles, wave 2 pairs, wave 3 all. */
+/** How many different types a wave fields: wave 1 singles, wave 2 pairs, wave 3+ all. */
 function typesInWave(level: number, wave: number): number {
     const available = unlockedFor(level);
     if (wave === 1) return 1;
@@ -93,9 +97,9 @@ function groupsFor(level: number, wave: number, budget: number, rng: () => numbe
     return groups;
 }
 
-/** The spawn schedule of one wave, or `null` for a wave index outside 1..3. */
+/** The spawn schedule of one wave, or `null` for a wave index outside this level's ramp. */
 export function generateWave(level: number, wave: number): readonly SpawnEntry[] | null {
-    if (wave < 1 || wave > WAVES_PER_LEVEL || level < 1) return null;
+    if (wave < 1 || wave > wavesForLevel(level) || level < 1) return null;
 
     const rng = mulberry32(seedOf(level, wave));
     const budget = waveBudget(level, wave);
@@ -110,18 +114,19 @@ export function generateWave(level: number, wave: number): readonly SpawnEntry[]
         }
     }
 
-    // Every 5th level: one boss appended to wave 3, alone, on top of the budget.
-    if (wave === WAVES_PER_LEVEL && level % 5 === 0) {
+    // Every 5th level: one boss appended to its last wave, alone, on top of the budget.
+    if (wave === wavesForLevel(level) && level % 5 === 0) {
         entries.push({ time: time + ENEMY_SPECS.boss.spawnGap, type: 'boss' });
     }
 
     return entries;
 }
 
-/** All three waves of a level, indexed `wave - 1`. */
+/** Every wave of a level, indexed `wave - 1`. */
 export function generateLevelPlan(level: number): readonly (readonly SpawnEntry[])[] {
     const plan: (readonly SpawnEntry[])[] = [];
-    for (let wave = 1; wave <= WAVES_PER_LEVEL; wave++) {
+    const count = wavesForLevel(level);
+    for (let wave = 1; wave <= count; wave++) {
         plan.push(generateWave(level, wave) ?? []);
     }
     return plan;
