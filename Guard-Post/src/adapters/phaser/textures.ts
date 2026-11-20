@@ -301,35 +301,108 @@ export function ensurePadTexture(scene: Phaser.Scene): void {
     markNearest(scene, PAD_KEY);
 }
 
+/** Logical canvas the gate is authored on, so the icon and board share one drawing. */
+const GATE_ART_WIDTH = 48;
+const GATE_ART_HEIGHT = 36;
+
 /**
- * The gate the player defends, drawn in code for the Play Screen. A small pixel
- * castle with battlements and a dark doorway; the same shape appears on the board.
+ * The gate the player defends: two flanking towers, a crenellated keep, a gold pennant
+ * and an arched doorway. Every coordinate is in the 48 x 36 art space above and mapped
+ * to integer device pixels, so the shape stays crisp at any board tile size.
+ */
+function drawGateShape(
+    ctx: Ctx,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    gate: number,
+    shade: number,
+    light: number,
+): void {
+    const sx = w / GATE_ART_WIDTH;
+    const sy = h / GATE_ART_HEIGHT;
+    const px = (gx: number, gy: number, gw: number, gh: number, color: number): void => {
+        ctx.fillStyle = hex(color);
+        ctx.fillRect(
+            x + Math.round(gx * sx),
+            y + Math.round(gy * sy),
+            Math.max(1, Math.round(gw * sx)),
+            Math.max(1, Math.round(gh * sy)),
+        );
+    };
+
+    // Stone plinth the castle stands on.
+    px(0, 32, 48, 4, COLORS.ink);
+    px(2, 30, 44, 3, shade);
+
+    // Left tower: dark outline, themed face, light cap and two merlons.
+    px(2, 8, 11, 24, COLORS.ink);
+    px(4, 10, 7, 22, gate);
+    px(4, 10, 7, 2, light);
+    px(1, 4, 4, 5, COLORS.ink);
+    px(3, 5, 2, 3, gate);
+    px(7, 4, 4, 5, COLORS.ink);
+    px(8, 5, 2, 3, gate);
+
+    // Right tower, mirrored.
+    px(35, 8, 11, 24, COLORS.ink);
+    px(37, 10, 7, 22, gate);
+    px(37, 10, 7, 2, light);
+    px(36, 4, 4, 5, COLORS.ink);
+    px(38, 5, 2, 3, gate);
+    px(43, 4, 4, 5, COLORS.ink);
+    px(43, 5, 2, 3, gate);
+
+    // Central keep between the towers, with three merlons.
+    px(11, 12, 26, 20, COLORS.ink);
+    px(13, 14, 22, 18, gate);
+    px(13, 14, 22, 2, light);
+    for (const mx of [13, 22, 31]) {
+        px(mx, 10, 4, 4, COLORS.ink);
+        px(mx + 1, 11, 2, 3, gate);
+    }
+
+    // Brick seams, kept clear of the doorway.
+    px(4, 16, 7, 1, shade);
+    px(4, 22, 6, 1, shade);
+    px(13, 19, 6, 1, shade);
+    px(29, 19, 6, 1, shade);
+    px(13, 25, 5, 1, shade);
+    px(30, 25, 5, 1, shade);
+    px(37, 16, 7, 1, shade);
+    px(37, 22, 7, 1, shade);
+
+    // Pennant on the keep.
+    px(23, 2, 1, 9, COLORS.ink);
+    px(24, 3, 6, 3, COLORS.gold);
+    px(24, 6, 4, 1, COLORS.goldBright);
+
+    // Stepped arch and its dark opening.
+    px(19, 22, 10, 10, COLORS.ink);
+    px(20, 20, 8, 2, COLORS.ink);
+    px(21, 18, 6, 2, COLORS.ink);
+    px(22, 17, 4, 1, COLORS.ink);
+    px(21, 24, 6, 8, COLORS.void);
+    px(22, 22, 4, 2, COLORS.void);
+    px(23, 20, 2, 2, COLORS.void);
+}
+
+/**
+ * Play Screen castle: the same gate as the board, baked once at an integer scale.
  */
 export function ensureCastleIcon(scene: Phaser.Scene, scale: 2 | 3): string | null {
     const key = `ui-castle-${scale}`;
     if (scene.textures.exists(key)) return key;
     const canvas = document.createElement('canvas');
-    canvas.width = 16 * scale;
-    canvas.height = 12 * scale;
+    canvas.width = GATE_ART_WIDTH * scale;
+    canvas.height = GATE_ART_HEIGHT * scale;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.imageSmoothingEnabled = false;
-    const px = (x: number, y: number, w: number, h: number, color: number): void => {
-        ctx.fillStyle = hex(color);
-        ctx.fillRect(x * scale, y * scale, w * scale, h * scale);
-    };
 
-    px(1, 4, 14, 7, COLORS.ink);
-    px(2, 5, 12, 5, COLORS.gold);
-    px(1, 2, 3, 3, COLORS.ink);
-    px(12, 2, 3, 3, COLORS.ink);
-    px(2, 3, 1, 1, COLORS.goldBright);
-    px(13, 3, 1, 1, COLORS.goldBright);
-    px(5, 3, 2, 2, COLORS.gold);
-    px(9, 3, 2, 2, COLORS.gold);
-    px(6, 7, 4, 4, COLORS.ink);
-    px(7, 8, 2, 3, COLORS.void);
-    px(0, 11, 16, 1, COLORS.ink);
+    const theme = BOARD_THEMES[0];
+    drawGateShape(ctx, 0, 0, canvas.width, canvas.height, theme.gate, theme.gateShade, theme.gateLight);
 
     scene.textures.addCanvas(key, canvas);
     markNearest(scene, key);
@@ -523,11 +596,20 @@ export const BOARD_KEY = 'board';
 
 type Ctx = CanvasRenderingContext2D;
 
-/** One flat palette per map theme: grass, its lighter patch, road and gate. */
+/** One flat palette per map theme: grass, its patch, road and three gate stone tones. */
 const BOARD_THEMES = [
-    { grass: 0x2f7a4f, patch: 0x37875a, edge: 0x1d4d33, road: 0xc07a4f, gate: 0x6f8fd6 },
-    { grass: 0x1e6e50, patch: 0x27835d, edge: 0x154a35, road: 0xb96f47, gate: 0x5ba36a },
-    { grass: 0x6b6a3a, patch: 0x797742, edge: 0x454427, road: 0xcf7b4a, gate: 0xc06545 },
+    {
+        grass: 0x2f7a4f, patch: 0x37875a, edge: 0x1d4d33, road: 0xc07a4f,
+        gate: 0x6f8fd6, gateShade: 0x3f5f9e, gateLight: 0xa8c2f0,
+    },
+    {
+        grass: 0x1e6e50, patch: 0x27835d, edge: 0x154a35, road: 0xb96f47,
+        gate: 0x5ba36a, gateShade: 0x2f6f42, gateLight: 0x8fd0a0,
+    },
+    {
+        grass: 0x6b6a3a, patch: 0x797742, edge: 0x454427, road: 0xcf7b4a,
+        gate: 0xc06545, gateShade: 0x8a3d29, gateLight: 0xe99576,
+    },
 ] as const;
 
 function themeOf(map: GameMap): (typeof BOARD_THEMES)[number] {
@@ -680,35 +762,15 @@ function paintScenery(ctx: Ctx, map: GameMap, tile: number, width: number, heigh
 }
 
 /**
- * The gate the player defends: a code-drawn castle, three tiles wide and themed
- * blue / green / red, with battlements and a dark doorway. No castle art is loaded.
+ * The gate the player defends: the remade pixel castle, three tiles wide and themed
+ * blue / green / red. The same drawing is used for the Play Screen icon.
  */
 function paintGate(ctx: Ctx, map: GameMap, tile: number): void {
     const gate = map.waypoints[map.waypoints.length - 1];
-    const gx = gate.x * tile;
-    const gy = gate.y * tile;
     const theme = themeOf(map);
-
     const w = tile * 3;
     const h = Math.round(tile * 2);
-    const x = Math.round(gx - w / 2);
-    const y = Math.round(gy + tile * 0.32 - h);
-
-    ctx.fillStyle = hex(COLORS.ink);
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = hex(theme.gate);
-    ctx.fillRect(x + Math.round(tile * 0.2), y + Math.round(tile * 0.42), w - Math.round(tile * 0.4), h - Math.round(tile * 0.42));
-
-    const merlon = Math.max(3, Math.round(tile * 0.35));
-    for (let i = 0; i < 5; i++) {
-        ctx.fillStyle = hex(theme.gate);
-        ctx.fillRect(x + Math.round((i * w) / 5), y + Math.round(tile * 0.12), merlon, Math.round(tile * 0.42));
-        ctx.fillStyle = hex(COLORS.goldBright);
-        ctx.fillRect(x + Math.round((i * w) / 5), y + Math.round(tile * 0.12), merlon, Math.max(2, Math.round(tile * 0.1)));
-    }
-
-    ctx.fillStyle = hex(COLORS.ink);
-    ctx.fillRect(x + Math.round(w * 0.38), y + Math.round(h * 0.55), Math.round(w * 0.24), Math.round(h * 0.45));
-    ctx.fillStyle = hex(COLORS.void);
-    ctx.fillRect(x + Math.round(w * 0.43), y + Math.round(h * 0.62), Math.round(w * 0.14), Math.round(h * 0.38));
+    const x = Math.round(gate.x * tile - w / 2);
+    const y = Math.round(gate.y * tile + tile * 0.32 - h);
+    drawGateShape(ctx, x, y, w, h, theme.gate, theme.gateShade, theme.gateLight);
 }
