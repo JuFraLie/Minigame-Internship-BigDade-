@@ -44,10 +44,18 @@ way, the same way it fences `window.MpPostMessage` inside `MpBridge.ts`.
 ## Assets
 
 There are no image or audio files: every visual is generated in code by
-`src/adapters/phaser/textures.ts` (entities, tiles, scenery, UI chrome). The only
-bundled files are the `Press Start 2P` font in `public/fonts/` (SIL Open Font License,
-see `OFL.txt`), the favicon and the page CSS. `tests/noAssets.test.ts` guards that
-asset-free state.
+`src/adapters/phaser/textures.ts` (entities, tiles, scenery, UI chrome), and every sound
+is synthesized by `src/adapters/audio/ProceduralAudio.ts` through the Web Audio API.
+The only bundled files are the `Press Start 2P` font in `public/fonts/` (SIL Open Font
+License, see `OFL.txt`), the favicon and the page CSS. `tests/noAssets.test.ts` guards
+that asset-free state.
+
+## Audio
+
+Music starts on the Play tap (the gesture mobile WebViews require) and again on Retry or
+Next Level; it stops when the Result Panel opens, so Exit still only signals the host.
+Game events become short synthesized SFX through `AudioPort`; the mapping lives in the
+headless `src/app/sfx.ts` and `tests/sfx.test.ts` checks it without a browser.
 
 ## Rules summary
 

@@ -5,10 +5,10 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * This build is asset-free: every visual is generated in code. The suite guards that
- * decision so a stray sprite pack cannot creep back in and become a new source of
- * animation bugs. Only the font licence, the font file, the favicon and the page CSS
- * are allowed under public/.
+ * This build is asset-free: every visual and every sound is generated in code. The
+ * suite guards that decision so a stray sprite pack or audio file cannot creep back in
+ * and break the offline WebView contract. Only the font licence, the font file, the
+ * favicon and the page CSS are allowed under public/.
  */
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));

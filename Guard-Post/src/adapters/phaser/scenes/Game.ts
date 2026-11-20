@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import type { AppDeps } from '../../../app/deps.ts';
+import { sfxForEvent } from '../../../app/sfx.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
 import { Simulation } from '../../../domain/simulation.ts';
 import type { RoundEvent } from '../../../domain/types.ts';
@@ -73,6 +74,8 @@ export class Game extends Phaser.Scene {
         this.#input = this.#deps.createInput(() => this.#context());
 
         // Every round — first play, Retry and Next Level alike — announces itself.
+        // startMusic is idempotent: it only restarts the loop if the Result Panel stopped it.
+        this.#deps.audio.startMusic();
         this.#deps.flow.beginRound();
 
         this.input.on('pointerdown', this.#onPointerDown, this);
@@ -98,6 +101,10 @@ export class Game extends Phaser.Scene {
         }
 
         sim.drainEvents(this.#pending);
+        for (const event of this.#pending) {
+            const sound = sfxForEvent(event);
+            if (sound) this.#deps.audio.play(sound);
+        }
         view.present(sim.snapshot(), this.#pending, { selection: this.#selection, paused, speed: this.#speed }, alpha);
         this.#pending.length = 0;
 
@@ -130,6 +137,7 @@ export class Game extends Phaser.Scene {
                 break;
             case 'toggleSpeed':
                 this.#speed = nextSpeed(this.#speed);
+                this.#deps.audio.play('speed');
                 break;
             case 'selectSpot':
                 this.#selection = { kind: 'spot', spotId: action.spotId };
@@ -144,6 +152,7 @@ export class Game extends Phaser.Scene {
                 const selection = this.#selection;
                 if (selection?.kind !== 'spot') break;
                 if (sim.build(selection.spotId, action.tower)) {
+                    this.#deps.audio.play('build');
                     // Hand the fresh tower its own menu, so Upgrade is one tap away.
                     const built = sim.towers.find((tower) => tower.spotId === selection.spotId);
                     this.#selection = built ? { kind: 'tower', towerId: built.id } : null;
@@ -153,13 +162,16 @@ export class Game extends Phaser.Scene {
             case 'upgrade': {
                 const selection = this.#selection;
                 if (selection?.kind !== 'tower') break;
-                sim.upgrade(selection.towerId);
+                if (sim.upgrade(selection.towerId)) this.#deps.audio.play('upgrade');
                 break;
             }
             case 'sell': {
                 const selection = this.#selection;
                 if (selection?.kind !== 'tower') break;
-                if (sim.sell(selection.towerId)) this.#selection = null;
+                if (sim.sell(selection.towerId)) {
+                    this.#deps.audio.play('sell');
+                    this.#selection = null;
+                }
                 break;
             }
         }

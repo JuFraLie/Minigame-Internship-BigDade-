@@ -153,6 +153,9 @@ export type BlockReason = 'gold' | 'occupied' | 'noSpot' | 'noTower' | 'maxLevel
 // ---------------------------------------------------------------------------
 
 export type RoundEvent =
+    | { readonly type: 'shot' }
+    | { readonly type: 'hit' }
+    | { readonly type: 'kill' }
     | { readonly type: 'leak'; readonly lives: number }
     | {
           readonly type: 'ddaChanged';

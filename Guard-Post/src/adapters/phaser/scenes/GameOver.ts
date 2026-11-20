@@ -36,6 +36,8 @@ export class GameOver extends Phaser.Scene {
 
     create(): void {
         applyRenderScale(this);
+        // The round is over: its score is final, so the battle loop can fade out.
+        this.#deps.audio.stopMusic();
         ensureTextures(this);
         this.#handled = false;
 
@@ -105,6 +107,8 @@ export class GameOver extends Phaser.Scene {
         if (hitRect(layout.primary, x, y)) {
             this.#handled = true;
             const flow = this.#deps.flow;
+            // A tap here is the gesture that lets music resume for the next round.
+            this.#deps.audio.startMusic();
             if (flow.outcome === 'victory') flow.nextLevel();
             else flow.retry();
             this.scene.start(SCENE_GAME);

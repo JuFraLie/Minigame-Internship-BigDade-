@@ -534,6 +534,8 @@ export class Simulation {
         projectile.targetId = target.id;
         projectile.tx = target.x;
         projectile.ty = target.y;
+
+        this.#emit({ type: 'shot' });
     }
 
     #takeProjectile(): ProjectileState | null {
@@ -600,6 +602,7 @@ export class Simulation {
     #damageEnemy(enemy: EnemyState, projectile: ProjectileState): void {
         const dealt = effectiveDamage(projectile.damage, enemy.armor, projectile.armorPierce);
         enemy.hp -= dealt;
+        this.#emit({ type: 'hit' });
 
         if (projectile.slow > 0) {
             applySlow(enemy.slow, projectile.slow, projectile.slowSeconds, enemy.type === 'boss');
@@ -612,6 +615,7 @@ export class Simulation {
             const points = Math.round(killScore(enemy.type, this.level) * ddaScoreMultiplier(this.ddaTier));
             this.gold += reward;
             this.score += points;
+            this.#emit({ type: 'kill' });
         }
     }
 

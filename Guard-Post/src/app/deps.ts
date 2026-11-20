@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 import type { InputPort, PlayContext } from '../adapters/phaser/inputAdapter.ts';
 import type { GameViewPort } from '../adapters/phaser/playView.ts';
-import type { CreditPort, MapSource, ViewportPort } from './ports.ts';
+import type { AudioPort, CreditPort, MapSource, ViewportPort } from './ports.ts';
 import type { SessionFlow } from './sessionFlow.ts';
 
 /**
@@ -23,6 +23,8 @@ export interface AppDeps {
     readonly viewport: ViewportPort;
     /** The Play Screen's credit line: a label, and what a tap on it does. */
     readonly credit: CreditPort;
+    /** Music and sound effects; the adapter owns the AudioContext. */
+    readonly audio: AudioPort;
     /** Builds the renderer for a scene. The scene only ever sees `GameViewPort`. */
     readonly createView: (scene: Phaser.Scene) => GameViewPort;
     /** Builds the input adapter, fed by whatever context the scene currently holds. */

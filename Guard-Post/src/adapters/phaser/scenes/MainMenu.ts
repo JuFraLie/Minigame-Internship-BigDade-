@@ -138,6 +138,9 @@ export class MainMenu extends Phaser.Scene {
     #start(): void {
         if (this.#started) return;
         this.#started = true;
+        // The first real tap: the only moment a mobile WebView lets audio begin.
+        this.#deps.audio.startMusic();
+        this.#deps.audio.play('start');
         this.#deps.flow.onPlay();
         this.scene.start(SCENE_GAME);
     }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { createProceduralAudio } from './adapters/audio/ProceduralAudio.ts';
 import { createHostBridge } from './adapters/hostBridge.ts';
 import { createCreditLink } from './adapters/creditLink.ts';
 import { ProceduralMapSource } from './adapters/maps/ProceduralMapSource.ts';
@@ -39,6 +40,7 @@ export function createGame(parent: string): Phaser.Game {
         maps: new ProceduralMapSource(Math.floor(Math.random() * 0xffffffff)),
         viewport,
         credit: createCreditLink(),
+        audio: createProceduralAudio(),
         createView: (scene) => new PhaserCanvasRenderer(scene),
         createInput: (contextOf) => new InputAdapter(contextOf),
     };
