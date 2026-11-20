@@ -28,6 +28,8 @@ import { assetImage, bakeSprites } from './assets.ts';
 export const NOMINAL_TILE = 44;
 
 export const COLORS = {
+    /** Bright sky behind the board and every screen — the mobile-game backdrop. */
+    background: 0x3fb6e8,
     void: 0x101a2e,
     grass: 0x27503b,
     grassEdge: 0x1f4131,

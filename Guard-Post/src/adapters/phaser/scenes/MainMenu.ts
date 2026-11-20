@@ -93,7 +93,8 @@ export class MainMenu extends Phaser.Scene {
 
         const howToSize = fitFontSize(layout.width - 32, 22, 10, 7);
         uiText(this, layout.width / 2, layout.howToY, HOW_TO, howToSize, {
-            color: COLORS.text,
+            // Dark ink, not white: the how-to sits on the bright sky backdrop.
+            color: COLORS.ink,
             lineSpacing: Math.round(howToSize * 0.8),
         })
             .setOrigin(0.5, 0)
@@ -108,13 +109,13 @@ export class MainMenu extends Phaser.Scene {
             layout.credit.y + layout.credit.height / 2,
             this.#deps.credit.label,
             creditSize,
-            { color: COLORS.textDim },
+            { color: COLORS.ink },
         )
             .setOrigin(0.5)
             .setDepth(5);
         const underline = this.add.graphics().setDepth(5);
         const underlineY = credit.y + creditSize / 2 + 3;
-        underline.fillStyle(COLORS.textDim, 0.9);
+        underline.fillStyle(COLORS.ink, 0.7);
         underline.fillRect(credit.x - credit.width / 2, underlineY, credit.width, 1);
 
         this.input.on('pointerdown', this.#onPointerDown, this);

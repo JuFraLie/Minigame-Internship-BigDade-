@@ -46,7 +46,7 @@ export function createGame(parent: string): Phaser.Game {
     const game = new Phaser.Game({
         type: Phaser.CANVAS,
         parent,
-        backgroundColor: hex(COLORS.void),
+        backgroundColor: hex(COLORS.background),
         // Backing store is design size x device pixel ratio; each scene's camera zooms
         // to match, so every scene lays itself out in plain design units.
         width: Math.round(size.width * scale),
