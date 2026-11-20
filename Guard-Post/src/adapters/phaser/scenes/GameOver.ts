@@ -18,7 +18,7 @@ import { SCENE_GAME, SCENE_RESULT } from './keys.ts';
  *
  * Styling is the same flat pixel language as the Play Screen: one panel, one gold
  * primary button, one red exit button, no beveled stone and no outlined text. The
- * panel floats on the same gold-framed border as the rest of the game.
+ * panel floats on the same sand-framed, olive border as the rest of the game.
  */
 export class GameOver extends Phaser.Scene {
     readonly #deps: AppDeps;

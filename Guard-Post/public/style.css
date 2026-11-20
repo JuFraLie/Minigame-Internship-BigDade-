@@ -16,7 +16,7 @@ body {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background-color: #101a2e;
+    background-color: #18271c;
     color: rgba(255, 255, 255, 0.87);
     /* The game is touch-only inside a mobile WebView: never scroll, never zoom,
        never trigger pull-to-refresh or the long-press callout. */

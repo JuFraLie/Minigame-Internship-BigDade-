@@ -22,15 +22,18 @@ import { assetImage, bakeSprites } from './assets.ts';
  *
  * Two surfaces are cut from the pack itself rather than drawn: the build pads (a
  * silvered slab of the stone tile set, so a pad reads as pavement) and the Play
- * Screen's gate castle. The masonry also weaves faintly through the gold-framed
- * border that backs every screen.
+ * Screen's gate castle. The sun-baked ground also dusts the sand-framed border
+ * that backs every screen, tying the UI to the level art.
  */
 
 export const NOMINAL_TILE = 44;
 
 export const COLORS = {
-    /** Dark navy behind the framed border — the outer field of every screen. */
-    background: 0x101a2e,
+    /** Deep olive green behind the frame — dark enough to sit under the grass field. */
+    background: 0x18271c,
+    /** Desert sand: the frame's warm accent, softer than the gate gold on the buttons. */
+    sand: 0xc2a15c,
+    sandLight: 0xe3c986,
     void: 0x101a2e,
     grass: 0x27503b,
     grassEdge: 0x1f4131,
@@ -162,11 +165,11 @@ export function pixelBox(scene: Phaser.Scene, width: number, height: number, var
 export const BACKDROP_KEY = 'ui-backdrop';
 
 /**
- * The border the whole game stands in: a dark slate field with a faint masonry
- * weave, wrapped in a gold pixel frame with corner and edge diamonds. It is the
- * framed backdrop from the earlier UI, redrawn in the flat pixel vocabulary of
- * this one — hard edges, no gradients, no blur — so the chrome on top stays the
- * voice of the game and the border is just its stage.
+ * The border the whole game stands in: a deep olive field with a faint dusty
+ * weave, wrapped in a muted desert-sand frame with small corner and edge diamonds.
+ * It is the framed backdrop from the earlier UI, redrawn in the flat pixel
+ * vocabulary of this one — hard edges, no gradients, no blur — and tuned to the
+ * pack's dark grass and sun-baked roads: present, never louder than the board.
  *
  * The frame starts below `topInset`, so status-bar icons and cutouts never cut
  * through it. Baked once per screen size and shared by all three scenes; a
@@ -188,14 +191,15 @@ export function renderBackdrop(scene: Phaser.Scene, width: number, height: numbe
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
 
-    // The field: flat navy, then the pack's masonry at a whisper so the border
-    // has texture without competing with the sprites. No pack, still a field.
+    // The field: deep olive, then the pack's sun-baked ground at a whisper so the
+    // border carries a hint of the level's sahara dust without competing with it.
+    // No pack, still a field.
     ctx.fillStyle = hex(COLORS.background);
     ctx.fillRect(0, 0, w, h);
-    const stone = assetImage(scene, STONE_TILESET.file);
-    const pattern = stone ? ctx.createPattern(stone, 'repeat') : null;
+    const dust = assetImage(scene, ROAD_TILESET.file);
+    const pattern = dust ? ctx.createPattern(dust, 'repeat') : null;
     if (pattern) {
-        ctx.globalAlpha = 0.09;
+        ctx.globalAlpha = 0.06;
         ctx.fillStyle = pattern;
         ctx.fillRect(0, 0, w, h);
         ctx.globalAlpha = 1;
@@ -207,24 +211,25 @@ export function renderBackdrop(scene: Phaser.Scene, width: number, height: numbe
     const frameHeight = Math.max(1, h - margin - top);
 
     // Darken the strip outside the frame: the border reads as a lip, not a line.
-    ctx.fillStyle = 'rgba(6, 11, 21, 0.55)';
+    ctx.fillStyle = 'rgba(9, 18, 11, 0.55)';
     ctx.fillRect(0, 0, w, top);
     ctx.fillRect(0, top, margin, h - top);
     ctx.fillRect(w - margin, top, margin, h - top);
     ctx.fillRect(margin, top + frameHeight, frameWidth, h - top - frameHeight);
 
-    // Three hard strokes: ink keyline, gate gold, a thin bright inner rule.
+    // Three hard strokes: ink keyline, muted sand, a faint bright inner rule.
     ctx.strokeStyle = hex(COLORS.ink);
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 3;
     ctx.strokeRect(margin, top, frameWidth, frameHeight);
-    ctx.strokeStyle = hex(COLORS.gold);
+    ctx.strokeStyle = hex(COLORS.sand);
     ctx.lineWidth = 2;
     ctx.strokeRect(margin + 2, top + 2, frameWidth - 4, frameHeight - 4);
-    ctx.strokeStyle = 'rgba(242, 217, 140, 0.5)';
+    ctx.strokeStyle = 'rgba(227, 201, 134, 0.35)';
     ctx.lineWidth = 1;
     ctx.strokeRect(margin + 6.5, top + 6.5, frameWidth - 13, frameHeight - 13);
 
-    // Pixel diamonds: four corners and four edge midpoints. Integer pixels only.
+    // Small pixel diamonds at the four corners and four edge midpoints. Integer
+    // pixels, soft sand — accents on the border, not gems competing with the HUD.
     const diamond = (x: number, y: number, r: number): void => {
         ctx.beginPath();
         ctx.moveTo(x, y - r);
@@ -232,8 +237,10 @@ export function renderBackdrop(scene: Phaser.Scene, width: number, height: numbe
         ctx.lineTo(x, y + r);
         ctx.lineTo(x - r, y);
         ctx.closePath();
-        ctx.fillStyle = hex(COLORS.goldBright);
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = hex(COLORS.sandLight);
         ctx.fill();
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = hex(COLORS.ink);
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -247,12 +254,12 @@ export function renderBackdrop(scene: Phaser.Scene, width: number, height: numbe
         [left, bottom],
         [right, bottom],
     ]) {
-        diamond(x, y, 6);
+        diamond(x, y, 5);
     }
-    diamond(Math.round((left + right) / 2), top, 5);
-    diamond(Math.round((left + right) / 2), bottom, 5);
-    diamond(left, Math.round((top + bottom) / 2), 5);
-    diamond(right, Math.round((top + bottom) / 2), 5);
+    diamond(Math.round((left + right) / 2), top, 4);
+    diamond(Math.round((left + right) / 2), bottom, 4);
+    diamond(left, Math.round((top + bottom) / 2), 4);
+    diamond(right, Math.round((top + bottom) / 2), 4);
 
     scene.textures.addCanvas(BACKDROP_KEY, canvas);
     markNearest(scene, BACKDROP_KEY);
