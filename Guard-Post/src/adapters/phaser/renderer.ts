@@ -15,6 +15,7 @@ import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
 import {
+    BACKDROP_KEY,
     BOARD_KEY,
     COLORS,
     NOMINAL_TILE,
@@ -22,6 +23,7 @@ import {
     ensureEntityTextures,
     ensureTextures,
     pixelBox,
+    renderBackdrop,
     renderBoardTexture,
     type PixelVariant,
 } from './textures.ts';
@@ -73,6 +75,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
     readonly #objects: Phaser.GameObjects.GameObject[] = [];
 
+    #backdrop: Phaser.GameObjects.Image | null = null;
     #board: Phaser.GameObjects.Image | null = null;
     #under: Phaser.GameObjects.Graphics | null = null;
     #over: Phaser.GameObjects.Graphics | null = null;
@@ -134,7 +137,11 @@ export class PhaserCanvasRenderer implements GameViewPort {
         ensureTextures(scene);
         ensureEntityTextures(scene);
         renderBoardTexture(scene, map, layout.board.tile);
+        renderBackdrop(scene, layout.width, layout.height, layout.topPad);
 
+        if (scene.textures.exists(BACKDROP_KEY)) {
+            this.#backdrop = this.#add(scene.add.image(0, 0, BACKDROP_KEY).setOrigin(0, 0).setDepth(0));
+        }
         this.#board = this.#add(scene.add.image(layout.board.x, layout.board.y, BOARD_KEY).setOrigin(0, 0).setDepth(1));
         this.#under = this.#add(scene.add.graphics().setDepth(4));
         this.#over = this.#add(scene.add.graphics().setDepth(13));
@@ -260,6 +267,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#entityScale = layout.board.tile / NOMINAL_TILE;
 
         renderBoardTexture(this.#scene, map, layout.board.tile);
+        renderBackdrop(this.#scene, layout.width, layout.height, layout.topPad);
+        this.#backdrop?.setPosition(0, 0).setDisplaySize(layout.width, layout.height);
         this.#board?.setPosition(layout.board.x, layout.board.y);
 
         for (const sprite of [...this.#enemySprites, ...this.#towerSprites, ...this.#shotSprites]) {
@@ -712,6 +721,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         for (const object of this.#objects) object.destroy();
         this.#objects.length = 0;
 
+        this.#backdrop = null;
         this.#board = null;
         this.#under = null;
         this.#over = null;

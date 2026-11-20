@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
-import { COLORS, ensureTextures, pixelBox } from '../textures.ts';
+import { BACKDROP_KEY, COLORS, ensureTextures, pixelBox, renderBackdrop } from '../textures.ts';
 import { computeResultLayout, hitRect, type ResultLayout } from '../layout.ts';
 import { applyRenderScale } from '../scale.ts';
 import { fitFontSize, uiText } from '../uiStyle.ts';
@@ -17,7 +17,8 @@ import { SCENE_GAME, SCENE_RESULT } from './keys.ts';
  * Play Screen never replays), and Exit calls the bridge once and does nothing else.
  *
  * Styling is the same flat pixel language as the Play Screen: one panel, one gold
- * primary button, one red exit button, no beveled stone and no outlined text.
+ * primary button, one red exit button, no beveled stone and no outlined text. The
+ * panel floats on the same gold-framed border as the rest of the game.
  */
 export class GameOver extends Phaser.Scene {
     readonly #deps: AppDeps;
@@ -43,6 +44,11 @@ export class GameOver extends Phaser.Scene {
         const viewport = this.#deps.viewport.current();
         const layout = computeResultLayout(viewport);
         this.#layout = layout;
+
+        renderBackdrop(this, viewport.width, viewport.height, viewport.safeTop);
+        if (this.textures.exists(BACKDROP_KEY)) {
+            this.add.image(0, 0, BACKDROP_KEY).setOrigin(0, 0).setDepth(-10);
+        }
 
         const panelKey = pixelBox(this, layout.panel.width, layout.panel.height, 'panel');
         this.add.image(Math.round(layout.panel.x), Math.round(layout.panel.y), panelKey).setOrigin(0, 0);

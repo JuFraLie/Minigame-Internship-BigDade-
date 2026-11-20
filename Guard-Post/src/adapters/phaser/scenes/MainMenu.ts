@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
 import { preloadSprites } from '../assets.ts';
-import { COLORS, ensureCastleIcon, ensureTextures, pixelBox } from '../textures.ts';
+import { BACKDROP_KEY, COLORS, ensureCastleIcon, ensureTextures, pixelBox, renderBackdrop } from '../textures.ts';
 import { computeMenuLayout, hitRect, type MenuLayout } from '../layout.ts';
 import { applyRenderScale } from '../scale.ts';
 import { fitFontSize, uiText } from '../uiStyle.ts';
@@ -22,7 +22,8 @@ const TITLE = 'GUARD POST';
  * is the one exception: tapping it opens the credited page and starts nothing.
  *
  * The screen uses the same flat pixel boxes as the HUD: one gold plaque, one gold
- * button, no stone pattern, no serif and no outlined text.
+ * button, no serif and no outlined text. They sit inside the framed gold border
+ * that backs every screen.
  */
 export class MainMenu extends Phaser.Scene {
     readonly #deps: AppDeps;
@@ -51,6 +52,12 @@ export class MainMenu extends Phaser.Scene {
         const viewport = this.#deps.viewport.current();
         const layout = computeMenuLayout(viewport);
         this.#layout = layout;
+
+        // The framed border, dropped below the cutout; the menu is its centrepiece.
+        renderBackdrop(this, viewport.width, viewport.height, viewport.safeTop);
+        if (this.textures.exists(BACKDROP_KEY)) {
+            this.add.image(0, 0, BACKDROP_KEY).setOrigin(0, 0).setDepth(-10);
+        }
 
         // The plaque: a flat dark banner with a gold pixel border behind the title.
         const plaqueKey = pixelBox(this, layout.titlePlate.width, layout.titlePlate.height, 'plaque');
@@ -93,8 +100,8 @@ export class MainMenu extends Phaser.Scene {
 
         const howToSize = fitFontSize(layout.width - 32, 22, 10, 7);
         uiText(this, layout.width / 2, layout.howToY, HOW_TO, howToSize, {
-            // Dark ink, not white: the how-to sits on the bright sky backdrop.
-            color: COLORS.ink,
+            // Light text: the how-to sits on the dark field inside the frame.
+            color: COLORS.text,
             lineSpacing: Math.round(howToSize * 0.8),
         })
             .setOrigin(0.5, 0)
@@ -109,13 +116,13 @@ export class MainMenu extends Phaser.Scene {
             layout.credit.y + layout.credit.height / 2,
             this.#deps.credit.label,
             creditSize,
-            { color: COLORS.ink },
+            { color: COLORS.textDim },
         )
             .setOrigin(0.5)
             .setDepth(5);
         const underline = this.add.graphics().setDepth(5);
         const underlineY = credit.y + creditSize / 2 + 3;
-        underline.fillStyle(COLORS.ink, 0.7);
+        underline.fillStyle(COLORS.textDim, 0.8);
         underline.fillRect(credit.x - credit.width / 2, underlineY, credit.width, 1);
 
         this.input.on('pointerdown', this.#onPointerDown, this);

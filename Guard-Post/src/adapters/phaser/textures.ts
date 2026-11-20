@@ -22,14 +22,15 @@ import { assetImage, bakeSprites } from './assets.ts';
  *
  * Two surfaces are cut from the pack itself rather than drawn: the build pads (a
  * silvered slab of the stone tile set, so a pad reads as pavement) and the Play
- * Screen's gate castle.
+ * Screen's gate castle. The masonry also weaves faintly through the gold-framed
+ * border that backs every screen.
  */
 
 export const NOMINAL_TILE = 44;
 
 export const COLORS = {
-    /** Bright sky behind the board and every screen — the mobile-game backdrop. */
-    background: 0x3fb6e8,
+    /** Dark navy behind the framed border — the outer field of every screen. */
+    background: 0x101a2e,
     void: 0x101a2e,
     grass: 0x27503b,
     grassEdge: 0x1f4131,
@@ -153,6 +154,108 @@ export function pixelBox(scene: Phaser.Scene, width: number, height: number, var
     scene.textures.addCanvas(key, canvas);
     markNearest(scene, key);
     return key;
+}
+
+// -- framed backdrop --------------------------------------------------------
+
+/** Texture key for the framed border that sits behind every screen. */
+export const BACKDROP_KEY = 'ui-backdrop';
+
+/**
+ * The border the whole game stands in: a dark slate field with a faint masonry
+ * weave, wrapped in a gold pixel frame with corner and edge diamonds. It is the
+ * framed backdrop from the earlier UI, redrawn in the flat pixel vocabulary of
+ * this one — hard edges, no gradients, no blur — so the chrome on top stays the
+ * voice of the game and the border is just its stage.
+ *
+ * The frame starts below `topInset`, so status-bar icons and cutouts never cut
+ * through it. Baked once per screen size and shared by all three scenes; a
+ * resize simply bakes a new canvas.
+ */
+export function renderBackdrop(scene: Phaser.Scene, width: number, height: number, topInset: number): void {
+    const w = Math.max(1, Math.round(width));
+    const h = Math.max(1, Math.round(height));
+    if (scene.textures.exists(BACKDROP_KEY)) {
+        const source = scene.textures.get(BACKDROP_KEY).source[0];
+        if (source && source.width === w && source.height === h) return;
+        scene.textures.remove(BACKDROP_KEY);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+
+    // The field: flat navy, then the pack's masonry at a whisper so the border
+    // has texture without competing with the sprites. No pack, still a field.
+    ctx.fillStyle = hex(COLORS.background);
+    ctx.fillRect(0, 0, w, h);
+    const stone = assetImage(scene, STONE_TILESET.file);
+    const pattern = stone ? ctx.createPattern(stone, 'repeat') : null;
+    if (pattern) {
+        ctx.globalAlpha = 0.09;
+        ctx.fillStyle = pattern;
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1;
+    }
+
+    const margin = Math.max(6, Math.round(Math.min(w, h) * 0.035));
+    const top = Math.max(margin + 5, Math.round(topInset) + 6);
+    const frameWidth = Math.max(1, w - margin * 2);
+    const frameHeight = Math.max(1, h - margin - top);
+
+    // Darken the strip outside the frame: the border reads as a lip, not a line.
+    ctx.fillStyle = 'rgba(6, 11, 21, 0.55)';
+    ctx.fillRect(0, 0, w, top);
+    ctx.fillRect(0, top, margin, h - top);
+    ctx.fillRect(w - margin, top, margin, h - top);
+    ctx.fillRect(margin, top + frameHeight, frameWidth, h - top - frameHeight);
+
+    // Three hard strokes: ink keyline, gate gold, a thin bright inner rule.
+    ctx.strokeStyle = hex(COLORS.ink);
+    ctx.lineWidth = 4;
+    ctx.strokeRect(margin, top, frameWidth, frameHeight);
+    ctx.strokeStyle = hex(COLORS.gold);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(margin + 2, top + 2, frameWidth - 4, frameHeight - 4);
+    ctx.strokeStyle = 'rgba(242, 217, 140, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(margin + 6.5, top + 6.5, frameWidth - 13, frameHeight - 13);
+
+    // Pixel diamonds: four corners and four edge midpoints. Integer pixels only.
+    const diamond = (x: number, y: number, r: number): void => {
+        ctx.beginPath();
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r, y);
+        ctx.lineTo(x, y + r);
+        ctx.lineTo(x - r, y);
+        ctx.closePath();
+        ctx.fillStyle = hex(COLORS.goldBright);
+        ctx.fill();
+        ctx.strokeStyle = hex(COLORS.ink);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    };
+    const left = margin;
+    const right = margin + frameWidth;
+    const bottom = top + frameHeight;
+    for (const [x, y] of [
+        [left, top],
+        [right, top],
+        [left, bottom],
+        [right, bottom],
+    ]) {
+        diamond(x, y, 6);
+    }
+    diamond(Math.round((left + right) / 2), top, 5);
+    diamond(Math.round((left + right) / 2), bottom, 5);
+    diamond(left, Math.round((top + bottom) / 2), 5);
+    diamond(right, Math.round((top + bottom) / 2), 5);
+
+    scene.textures.addCanvas(BACKDROP_KEY, canvas);
+    markNearest(scene, BACKDROP_KEY);
 }
 
 // ---------------------------------------------------------------------------
