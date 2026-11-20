@@ -7,7 +7,9 @@ import type { AudioPort, SfxName } from '../../app/ports.ts';
  * mark the game's events. The AudioContext is created lazily on the first user gesture (the
  * Play tap), which is what mobile WebViews require before they will make any sound.
  * Music is a look-ahead sequencer driven by the audio clock, so it keeps time even when
- * a frame is late; sounds are throttled so a busy wave never turns into a wall of noise.
+ * a frame is late. If the JS thread stalls (a 2x round is heavier), missed steps are
+ * skipped instead of replayed in a burst; sounds are throttled so a busy wave never
+ * turns into a wall of noise.
  */
 
 const MASTER_VOLUME = 0.9;
@@ -15,7 +17,8 @@ const MUSIC_VOLUME = 0.35;
 const SFX_VOLUME = 0.7;
 
 const STEP_SECONDS = 0.1; // driving eighth notes at 150 BPM
-const LOOKAHEAD_SECONDS = 0.12;
+/** Enough queue to ride out a busy frame; larger stalls are resynced, not replayed. */
+const LOOKAHEAD_SECONDS = 0.2;
 const TICK_MS = 25;
 
 /**
@@ -100,6 +103,29 @@ function arpeggio(
     notes.forEach((note, index) => tone(context, destination, hz(note), at + index * gap, gap * 1.4, type, peak));
 }
 
+/**
+ * Repairs the sequencer clock after a late timer callback.
+ *
+ * Web Audio treats a start time in the past as "now". Without this, a stalled JS thread
+ * dumps every missed note at once and the music turns into a harsh cluster. Instead we
+ * advance by whole steps to land back in the future and carry the pattern phase forward,
+ * so the groove continues cleanly at a steady tempo — including in 2x gameplay.
+ */
+export function resyncSequencer(
+    nextNoteAt: number,
+    audioTime: number,
+    step: number,
+    period: number,
+    patternLength: number,
+): { readonly nextNoteAt: number; readonly step: number } {
+    if (nextNoteAt >= audioTime) return { nextNoteAt, step };
+    const missed = Math.ceil((audioTime - nextNoteAt) / period);
+    return {
+        nextNoteAt: nextNoteAt + missed * period,
+        step: (step + missed) % patternLength,
+    };
+}
+
 export function createProceduralAudio(): AudioPort {
     let context: AudioContext | null = null;
     let master!: GainNode;
@@ -139,6 +165,10 @@ export function createProceduralAudio(): AudioPort {
 
     /** Schedules the next couple of notes from the audio clock, never from frame time. */
     function schedule(audio: AudioContext): void {
+        const synced = resyncSequencer(nextNoteAt, audio.currentTime, step, STEP_SECONDS, LEAD.length);
+        nextNoteAt = synced.nextNoteAt;
+        step = synced.step;
+
         while (nextNoteAt < audio.currentTime + LOOKAHEAD_SECONDS) {
             const beat = step % 4;
 

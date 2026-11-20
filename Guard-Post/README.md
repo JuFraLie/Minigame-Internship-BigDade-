@@ -48,7 +48,9 @@ that asset-free state.
 Music starts on the Play tap (the gesture mobile WebViews require) and again on Retry or
 Next Level; it stops when the Result Panel opens, so Exit still only signals the host.
 Game events become short synthesized SFX through `AudioPort`; the mapping lives in the
-headless `src/app/sfx.ts` and `tests/sfx.test.ts` checks it without a browser.
+headless `src/app/sfx.ts` and `tests/sfx.test.ts` checks it without a browser. The music
+scheduler skips steps missed during a busy 2x frame instead of replaying them at once, so
+the tempo stays steady when the game speeds up; `tests/audioScheduler.test.ts` guards it.
 
 ## Rules summary
 
