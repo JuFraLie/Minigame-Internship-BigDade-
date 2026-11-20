@@ -1,3 +1,5 @@
+import { clampDdaTier } from '../domain/dda.ts';
+import { STARTING_LIVES } from '../domain/types.ts';
 import type { HostPort } from './ports.ts';
 
 /**
@@ -34,6 +36,10 @@ export interface SessionFlow {
     /** The outcome shown on the Result Panel, or `null` before the first round ends. */
     readonly outcome: RoundOutcome | null;
     readonly lastScore: number;
+    /** Health carried into the next round; no regen, no reset on a new level. */
+    readonly lives: number;
+    /** Difficulty carried into the next round; a leak drops it back to normal. */
+    readonly ddaTier: number;
     /** The Play button (or a tap anywhere on the Play Screen) was pressed. */
     onPlay(): void;
     /** A round is starting — every Retry and Next Level included. */
@@ -41,7 +47,7 @@ export interface SessionFlow {
     pause(): void;
     resume(): void;
     /** The round ended; shows the Result Panel and reports the score. */
-    endRound(outcome: RoundOutcome, score: number): void;
+    endRound(outcome: RoundOutcome, score: number, lives?: number, ddaTier?: number): void;
     /** Result Panel → Retry: the same level, straight back to gameplay. */
     retry(): void;
     /** Result Panel → Next Level: level + 1, straight back to gameplay. */
@@ -56,6 +62,8 @@ export function createSessionFlow(host: HostPort): SessionFlow {
     let outcome: RoundOutcome | null = null;
     let lastScore = 0;
     let lastWin = ROUND_REPORTED_WIN;
+    let carriedLives = STARTING_LIVES;
+    let carriedDdaTier = 0;
 
     let launchSent = false;
     let roundEnded = true; // no round is running before the first beginRound()
@@ -73,6 +81,12 @@ export function createSessionFlow(host: HostPort): SessionFlow {
         },
         get lastScore(): number {
             return lastScore;
+        },
+        get lives(): number {
+            return carriedLives;
+        },
+        get ddaTier(): number {
+            return carriedDdaTier;
         },
 
         onPlay(): void {
@@ -99,24 +113,36 @@ export function createSessionFlow(host: HostPort): SessionFlow {
             state = 'playing';
         },
 
-        endRound(result: RoundOutcome, score: number): void {
+        endRound(result: RoundOutcome, score: number, lives = carriedLives, ddaTier = carriedDdaTier): void {
             if (state !== 'playing' || roundEnded) return;
             roundEnded = true;
             outcome = result;
             lastScore = score;
             lastWin = ROUND_REPORTED_WIN;
+            carriedLives = Math.max(0, Math.floor(lives));
+            carriedDdaTier = clampDdaTier(ddaTier);
             state = 'result';
             host.endRound(lastWin, score);
         },
 
         retry(): void {
             if (state !== 'result') return;
+            // Death ends the run; replaying a lost level starts a fresh one. A victory
+            // retry keeps the surviving health and the earned difficulty, same as Next Level.
+            if (outcome === 'defeat') {
+                carriedLives = STARTING_LIVES;
+                carriedDdaTier = 0;
+            }
             outcome = null;
             state = 'playing';
         },
 
         nextLevel(): void {
             if (state !== 'result') return;
+            if (outcome === 'defeat') {
+                carriedLives = STARTING_LIVES;
+                carriedDdaTier = 0;
+            }
             outcome = null;
             level += 1;
             state = 'playing';

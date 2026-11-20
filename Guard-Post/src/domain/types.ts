@@ -30,8 +30,25 @@ export function wavesForLevel(level: number): number {
     return Math.min(MAX_WAVES_PER_LEVEL, MIN_WAVES_PER_LEVEL + Math.floor((safeLevel - 1) / 2));
 }
 
-/** Lives at the start of every level. */
+/** Lives at the start of a run; they then carry through every level until defeat. */
 export const STARTING_LIVES = 10;
+
+/** Dynamic difficulty: clean play raises this, a leak drops it back to normal. */
+export const MAX_DDA_TIER = 8;
+/** Enemy HP multiplier per DDA tier. */
+export const DDA_HP_PER_TIER = 0.15;
+/** Flat armor added per DDA tier. */
+export const DDA_ARMOR_PER_TIER = 2;
+/** Enemy speed multiplier per DDA tier. */
+export const DDA_SPEED_PER_TIER = 0.02;
+/** Score multiplier per DDA tier — playing well pays better. */
+export const DDA_SCORE_PER_TIER = 0.25;
+
+/** Start-of-round state handed in by the session flow, never persisted. */
+export interface RoundStart {
+    readonly lives?: number;
+    readonly ddaTier?: number;
+}
 /** Seconds between waves when the player does not call the next one early. */
 export const WAVE_GAP_SECONDS = 8;
 /** Seconds wave 1 waits before starting on its own if the player never acts. */
@@ -148,6 +165,12 @@ export type RoundEvent =
           readonly score: number;
       }
     | { readonly type: 'leak'; readonly enemyId: number; readonly enemy: EnemyType; readonly lives: number }
+    | {
+          readonly type: 'ddaChanged';
+          readonly tier: number;
+          readonly multiplier: number;
+          readonly reason: 'clean' | 'leak';
+      }
     | { readonly type: 'waveIncoming'; readonly wave: number }
     | { readonly type: 'waveStarted'; readonly wave: number }
     | { readonly type: 'waveCleared'; readonly wave: number; readonly bonus: number; readonly score: number }
@@ -167,7 +190,7 @@ export type RoundPhase = 'playing' | 'won' | 'lost';
 /**
  * Where the round is between waves:
  * `grace` before wave 1, `active` while a wave is spawning or fighting,
- * `gap` while the timer runs before the next wave, `done` after wave 3.
+ * `gap` while the timer runs before the next wave, `done` after the last wave.
  */
 export type WaveState = 'grace' | 'active' | 'gap' | 'done';
 
@@ -233,7 +256,11 @@ export interface RoundSnapshot {
     readonly lives: number;
     readonly gold: number;
     readonly score: number;
-    /** 1..3. */
+    /** Current dynamic-difficulty tier, 0..MAX_DDA_TIER. */
+    readonly ddaTier: number;
+    /** Score multiplier earned by the current tier. */
+    readonly ddaMultiplier: number;
+    /** 3..10, depending on the level. */
     readonly wave: number;
     readonly waveState: WaveState;
     /** Seconds left in the grace period or wave gap, 0 otherwise. */

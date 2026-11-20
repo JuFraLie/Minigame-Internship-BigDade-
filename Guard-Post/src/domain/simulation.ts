@@ -1,3 +1,10 @@
+import {
+    clampDdaTier,
+    ddaScoreMultiplier,
+    nextDdaTier,
+    scaleEnemyStats,
+    type DdaReason,
+} from './dda.ts';
 import { applySlow, effectiveDamage, noSlow, speedMultiplier, tickSlow, type SlowState } from './damage.ts';
 import { earlyCallBonus, killReward, sellRefund, startingGold, upgradeCost, waveClearBonus } from './economy.ts';
 import { generateLevelPlan, type SpawnEntry } from './levelGenerator.ts';
@@ -26,6 +33,7 @@ import {
     type RoundEvent,
     type RoundPhase,
     type RoundSnapshot,
+    type RoundStart,
     type TowerType,
     type TowerView,
     type Vec2,
@@ -137,6 +145,8 @@ export class Simulation {
     score = 0;
     wave = 1;
     waveState: WaveState = 'grace';
+    /** Clean play raises this; a leak drops it. Carried between levels by the flow. */
+    ddaTier: number;
 
     readonly #plan: readonly (readonly SpawnEntry[])[];
     readonly #enemies: EnemyState[] = [];
@@ -155,8 +165,11 @@ export class Simulation {
     #projectileCursor = 0;
     /** Wave already given its INCOMING banner, so the announcement fires once. */
     #announcedWave = 0;
+    /** Lives lost during the current wave / whole round, for the DDA clean bonus. */
+    #damageThisWave = false;
+    #damageThisRound = false;
 
-    constructor(level: number, maps: MapSource) {
+    constructor(level: number, maps: MapSource, start: RoundStart = {}) {
         this.level = level;
         // The round asks the port for a layout and adapts it to the renderer's shape:
         // the name seeds the scenery, the theme picks the grass and castle.
@@ -169,7 +182,8 @@ export class Simulation {
         };
         this.mapIndex = this.map.theme;
         this.road = measureRoad(this.map);
-        this.lives = STARTING_LIVES;
+        this.lives = Math.max(0, Math.floor(start.lives ?? STARTING_LIVES));
+        this.ddaTier = clampDdaTier(start.ddaTier ?? 0);
         this.gold = startingGold(level);
         this.#plan = generateLevelPlan(level);
         for (let i = 0; i < PROJECTILE_POOL; i++) this.#projectiles.push(createProjectile());
@@ -208,6 +222,8 @@ export class Simulation {
             lives: this.lives,
             gold: this.gold,
             score: this.score,
+            ddaTier: this.ddaTier,
+            ddaMultiplier: ddaScoreMultiplier(this.ddaTier),
             wave: this.wave,
             waveState: this.waveState,
             pendingSeconds: this.#pending,
@@ -402,6 +418,19 @@ export class Simulation {
         if (this.waveState === 'grace') this.#startWave(1);
     }
 
+    /** One clean step raises the tier; any leak clears it straight back to normal. */
+    #changeDda(reason: DdaReason): void {
+        const next = nextDdaTier(this.ddaTier, reason);
+        if (next === this.ddaTier) return;
+        this.ddaTier = next;
+        this.#emit({
+            type: 'ddaChanged',
+            tier: next,
+            multiplier: ddaScoreMultiplier(next),
+            reason,
+        });
+    }
+
     #startWave(wave: number): void {
         this.wave = wave;
         this.#announcedWave = wave;
@@ -414,14 +443,15 @@ export class Simulation {
 
     #spawn(type: EnemyType): void {
         const spec = ENEMY_SPECS[type];
-        const hp = Math.round(spec.hp * HP_GROWTH_PER_LEVEL ** (this.level - 1));
+        const baseHp = Math.round(spec.hp * HP_GROWTH_PER_LEVEL ** (this.level - 1));
+        const stats = scaleEnemyStats({ hp: baseHp, armor: spec.armor, speed: spec.speed }, this.ddaTier);
         const enemy: EnemyState = {
             id: this.#nextEnemyId++,
             type,
-            hp,
-            maxHp: hp,
-            armor: spec.armor,
-            speed: spec.speed,
+            hp: stats.hp,
+            maxHp: stats.hp,
+            armor: stats.armor,
+            speed: stats.speed,
             progress: 0,
             x: 0,
             y: 0,
@@ -459,7 +489,10 @@ export class Simulation {
                 enemy.alive = false;
                 this.#enemiesDirty = true;
                 this.lives -= ENEMY_SPECS[enemy.type].leak;
+                this.#damageThisWave = true;
+                this.#damageThisRound = true;
                 this.#emit({ type: 'leak', enemyId: enemy.id, enemy: enemy.type, lives: this.lives });
+                this.#changeDda('leak');
             }
         }
         this.#compactEnemies();
@@ -596,7 +629,7 @@ export class Simulation {
             enemy.alive = false;
             this.#enemiesDirty = true;
             const reward = killReward(enemy.type, this.level);
-            const points = killScore(enemy.type, this.level);
+            const points = Math.round(killScore(enemy.type, this.level) * ddaScoreMultiplier(this.ddaTier));
             this.gold += reward;
             this.score += points;
             this.#emit({ type: 'kill', enemyId: enemy.id, enemy: enemy.type, x: enemy.x, y: enemy.y, reward, score: points });
@@ -610,16 +643,24 @@ export class Simulation {
         if (this.#enemies.length > 0) return;
 
         const bonus = waveClearBonus(this.level);
-        const points = waveClearScore(this.level);
+        const clean = !this.#damageThisWave;
+        const waveTier = clean ? nextDdaTier(this.ddaTier, 'clean') : this.ddaTier;
+        const points = Math.round(waveClearScore(this.level) * ddaScoreMultiplier(waveTier));
         this.gold += bonus;
         this.score += points;
         this.#emit({ type: 'waveCleared', wave: this.wave, bonus, score: points });
+        if (clean) this.#changeDda('clean');
+        this.#damageThisWave = false;
 
         if (this.wave >= wavesForLevel(this.level)) {
             this.waveState = 'done';
             this.phase = 'won';
-            this.score += levelClearScore(this.lives, this.level);
+            const levelClean = !this.#damageThisRound;
+            const levelTier = levelClean ? nextDdaTier(this.ddaTier, 'clean') : this.ddaTier;
+            const clearPoints = Math.round(levelClearScore(this.lives, this.level) * ddaScoreMultiplier(levelTier));
+            this.score += clearPoints;
             this.#emit({ type: 'levelCleared', score: this.score, lives: this.lives });
+            if (levelClean) this.#changeDda('clean');
             return;
         }
 

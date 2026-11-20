@@ -60,7 +60,10 @@ export class Game extends Phaser.Scene {
         this.#selection = null;
         this.#speed = 1;
 
-        const sim = new Simulation(this.#deps.flow.level, this.#deps.maps);
+        const sim = new Simulation(this.#deps.flow.level, this.#deps.maps, {
+            lives: this.#deps.flow.lives,
+            ddaTier: this.#deps.flow.ddaTier,
+        });
         this.#sim = sim;
         this.#layout = this.#buildLayout(sim);
         this.#transform = createViewTransform(this.#layout.board);
@@ -189,7 +192,7 @@ export class Game extends Phaser.Scene {
         const score = sim.score;
 
         this.time.delayedCall(RESULT_DELAY_MS, () => {
-            this.#deps.flow.endRound(outcome, score);
+            this.#deps.flow.endRound(outcome, score, sim.lives, sim.ddaTier);
             this.scene.start(SCENE_RESULT);
         });
     }

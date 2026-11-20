@@ -765,6 +765,12 @@ export class PhaserCanvasRenderer implements GameViewPort {
                 case 'leak':
                     this.#flashUntil = now + FLASH_MS;
                     break;
+                case 'ddaChanged':
+                    this.#showBanner(
+                        event.reason === 'leak' ? 'DDA RESET' : `DDA ${event.tier}  SCORE x${event.multiplier.toFixed(2)}`,
+                        now + BANNER_MS,
+                    );
+                    break;
                 default:
                     // shot / hit / kill / built / upgraded / sold / blocked already show
                     // up as projectiles, gold in the HUD and the menu that just changed.

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { ddaScoreMultiplier } from '../src/domain/dda.ts';
 import { earlyCallBonus, startingGold, waveClearBonus } from '../src/domain/economy.ts';
 import { isInsideGateCastle } from '../src/domain/maps.ts';
 import { Simulation } from '../src/domain/simulation.ts';
@@ -12,6 +13,7 @@ import {
     SIM_DT,
     STARTING_LIVES,
     WAVE_GAP_SECONDS,
+    wavesForLevel,
     type RoundEvent,
 } from '../src/domain/types.ts';
 
@@ -162,18 +164,30 @@ test('clearing a wave pays the bonus, opens the gap, and calling early pays for 
     const sim = new Simulation(1, MAP_SOURCE);
     const bot = createScriptedBot(sim.map.spots.length);
     let cleared: (RoundEvent & { type: 'waveCleared' }) | null = null;
+    let raised: Extract<RoundEvent, { type: 'ddaChanged' }> | null = null;
 
     for (let i = 0; i < 30 * 300 && !cleared; i++) {
         if (i % 15 === 0 && sim.phase === 'playing') {
             for (const command of bot.decide(sim.snapshot())) sim.handle(command);
         }
         sim.step();
-        cleared = drain(sim).find((event): event is RoundEvent & { type: 'waveCleared' } => event.type === 'waveCleared') ?? null;
+        const events = drain(sim);
+        cleared = events.find((event): event is RoundEvent & { type: 'waveCleared' } => event.type === 'waveCleared') ?? cleared;
+        raised =
+            events.find(
+                (event): event is Extract<RoundEvent, { type: 'ddaChanged' }> =>
+                    event.type === 'ddaChanged' && event.reason === 'clean',
+            ) ?? raised;
     }
 
     assert.ok(cleared, 'the scripted bot never cleared wave 1');
     assert.equal(cleared.bonus, waveClearBonus(1));
-    assert.equal(cleared.score, waveClearScore(1));
+    // A clean wave earns DDA tier 1, which pays a better score on that same clear.
+    assert.equal(cleared.score, Math.round(waveClearScore(1) * ddaScoreMultiplier(1)));
+    assert.ok(raised, 'the clean wave must announce its DDA gain');
+    assert.equal(raised.tier, 1);
+    assert.equal(raised.multiplier, ddaScoreMultiplier(1));
+    assert.equal(sim.ddaTier, 1);
     assert.equal(sim.waveState, 'gap');
     assert.equal(sim.wave, 2);
     assert.ok(Math.abs(sim.pendingSeconds - WAVE_GAP_SECONDS) < 1e-9, `gap was ${sim.pendingSeconds}`);
@@ -185,6 +199,58 @@ test('clearing a wave pays the bonus, opens the gap, and calling early pays for 
     assert.equal(sim.gold, gold + earlyCallBonus(pending));
     assert.equal(sim.waveState, 'active');
     assert.equal(sim.wave, 2);
+});
+
+test('a leak drops DDA back to normal immediately', () => {
+    const sim = new Simulation(1, MAP_SOURCE, { ddaTier: 5 });
+    sim.callWave();
+
+    let reset: Extract<RoundEvent, { type: 'ddaChanged' }> | null = null;
+    for (let i = 0; i < 30 * 30 && !reset; i++) {
+        sim.step();
+        reset =
+            drain(sim).find(
+                (event): event is Extract<RoundEvent, { type: 'ddaChanged' }> =>
+                    event.type === 'ddaChanged' && event.reason === 'leak',
+            ) ?? null;
+    }
+
+    assert.ok(reset, 'an undefended wave must leak and reset DDA');
+    assert.equal(reset.tier, 0);
+    assert.equal(reset.multiplier, 1);
+    assert.equal(sim.ddaTier, 0);
+});
+
+test('enemies spawned at a higher DDA tier are tougher', () => {
+    const normal = new Simulation(1, MAP_SOURCE);
+    const pushed = new Simulation(1, MAP_SOURCE, { ddaTier: 4 });
+    normal.callWave();
+    pushed.callWave();
+    run(normal, 1);
+    run(pushed, 1);
+
+    assert.ok(normal.enemies.length > 0 && pushed.enemies.length > 0);
+    assert.ok(pushed.enemies[0].maxHp > normal.enemies[0].maxHp, 'DDA must raise enemy HP');
+});
+
+test('a spotless level spikes DDA once per wave and once more for the level', () => {
+    const sim = new Simulation(1, MAP_SOURCE);
+    const bot = createScriptedBot(sim.map.spots.length);
+    const events: RoundEvent[] = [];
+
+    for (let i = 0; i < 30 * 600 && sim.phase === 'playing'; i++) {
+        if (i % 15 === 0) {
+            for (const command of bot.decide(sim.snapshot())) sim.handle(command);
+        }
+        sim.step();
+        sim.drainEvents(events);
+    }
+
+    assert.equal(sim.phase, 'won');
+    assert.equal(events.filter((event) => event.type === 'leak').length, 0, 'the bot must stay spotless');
+    const spikes = events.filter((event) => event.type === 'ddaChanged' && event.reason === 'clean');
+    assert.equal(spikes.length, wavesForLevel(1) + 1);
+    assert.equal(sim.ddaTier, wavesForLevel(1) + 1);
 });
 
 test('gold, occupancy and spot checks refuse bad commands with a reason', () => {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import type { HostPort } from '../src/app/ports.ts';
 import { ROUND_REPORTED_WIN, createSessionFlow } from '../src/app/sessionFlow.ts';
+import { STARTING_LIVES } from '../src/domain/types.ts';
 
 /**
  * The screen-flow state machine, and the bridge traffic it owns (AGENTS.md §2 and §4.2):
@@ -186,4 +187,34 @@ test('Retry and Next Level go straight back to gameplay, never through the Play 
     assert.equal(flow.state, 'playing');
     assert.equal(flow.outcome, null);
     assert.equal(flow.level, 2, 'Next Level advances the counter');
+});
+
+test('health and DDA carry through a run; only death restarts them', () => {
+    const { port } = fakeHost();
+    const flow = createSessionFlow(port);
+
+    assert.equal(flow.lives, STARTING_LIVES);
+    assert.equal(flow.ddaTier, 0);
+
+    flow.onPlay();
+    flow.beginRound();
+    flow.endRound('victory', 1000, 6, 3);
+    assert.equal(flow.lives, 6);
+    assert.equal(flow.ddaTier, 3);
+
+    flow.nextLevel();
+    assert.equal(flow.lives, 6, 'a new level must not heal the player');
+    assert.equal(flow.ddaTier, 3, 'DDA earned on clean play carries forward');
+    flow.beginRound();
+    flow.endRound('victory', 2000, 5, 5);
+
+    flow.retry();
+    assert.equal(flow.lives, 5, 'a victory retry also keeps the surviving health');
+    assert.equal(flow.ddaTier, 5);
+
+    flow.beginRound();
+    flow.endRound('defeat', 3000, 0, 0);
+    flow.retry();
+    assert.equal(flow.lives, STARTING_LIVES, 'only death starts a fresh run');
+    assert.equal(flow.ddaTier, 0);
 });
