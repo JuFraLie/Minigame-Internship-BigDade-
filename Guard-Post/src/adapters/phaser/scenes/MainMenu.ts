@@ -22,8 +22,8 @@ const TITLE = 'GUARD POST';
  * is the one exception: tapping it opens the credited page and starts nothing.
  *
  * The screen uses the same flat pixel boxes as the HUD: one gold plaque, one gold
- * button, no serif and no outlined text. They sit inside the sand-framed, olive
- * border that backs every screen.
+ * button, no serif and no outlined text. They sit on a plain olive field with
+ * one thin sand line, the way a simple mobile menu keeps the focus on the action.
  */
 export class MainMenu extends Phaser.Scene {
     readonly #deps: AppDeps;

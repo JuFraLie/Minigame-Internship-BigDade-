@@ -11,6 +11,7 @@ import {
     type RoundSnapshot,
     type TowerType,
 } from '../../domain/types.ts';
+import { ENEMY_STRIPS } from './assetManifest.ts';
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
@@ -87,8 +88,13 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #enemySprites: Phaser.GameObjects.Sprite[] = [];
     #towerSprites: Phaser.GameObjects.Image[] = [];
     #shotSprites: Phaser.GameObjects.Image[] = [];
-    /** Whether the walk cycles are held mid-stride behind the pause overlay. */
-    #animPaused = false;
+    /**
+     * Unpaused milliseconds, used to cycle enemy strip frames. `present` adds the
+     * elapsed time while play runs and drops it while paused, so enemies resume
+     * mid-stride instead of jumping or freezing on one frame.
+     */
+    #animTime = 0;
+    #animLastAt = 0;
 
     #level!: Capsule;
     #wave!: Capsule;
@@ -147,7 +153,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#over = this.#add(scene.add.graphics().setDepth(13));
 
         // Pads live under the selection Graphics (depth 3 vs 4), so the gold outline
-        // and the range circle always draw over the slab, and towers (6) stand on it.
+        // and the range circle always draw over the slab, and towers (9) stand on it.
         this.#padImages = [];
         for (let i = 0; i < layout.spots.length; i++) {
             this.#padImages.push(this.#add(scene.add.image(0, 0, PAD_KEY).setVisible(false).setDepth(3)));
@@ -160,8 +166,9 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#towerSprites = [];
         for (let i = 0; i < TOWER_POOL; i++) {
             this.#towerSprites.push(
-                // Bottom-anchored: a tall tower stands on its pad and grows upward.
-                this.#add(scene.add.image(0, 0, 'tower-dart-1').setVisible(false).setDepth(6).setOrigin(0.5, 1).setScale(this.#entityScale)),
+                // Bottom-anchored on its pad, and above the enemies (8): a tower an
+                // enemy walks past stays in front instead of being covered by it.
+                this.#add(scene.add.image(0, 0, 'tower-dart-1').setVisible(false).setDepth(9).setOrigin(0.5, 1).setScale(this.#entityScale)),
             );
         }
         this.#shotSprites = [];
@@ -364,6 +371,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const transform = this.#transform;
         if (!layout || !transform) return;
 
+        this.#advanceAnimClock(ui.paused);
         this.#selection = ui.selection;
         this.#presentHud(snapshot);
         this.#presentCallWave(snapshot);
@@ -371,17 +379,17 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#presentPause(ui, layout);
         this.#presentEntities(snapshot, transform, alpha);
         this.#presentEvents(events);
-        this.#setAnimsPaused(ui.paused);
     }
 
-    /** Holds every walk cycle mid-stride while the game is paused. */
-    #setAnimsPaused(paused: boolean): void {
-        if (this.#animPaused === paused) return;
-        this.#animPaused = paused;
-        for (const sprite of this.#enemySprites) {
-            if (paused) sprite.anims.pause();
-            else sprite.anims.resume();
+    /** Keeps the strip-frame clock running only while the round is playing. */
+    #advanceAnimClock(paused: boolean): void {
+        const now = this.#scene.time.now;
+        if (paused) {
+            this.#animLastAt = 0;
+            return;
         }
+        if (this.#animLastAt !== 0) this.#animTime += Math.max(0, now - this.#animLastAt);
+        this.#animLastAt = now;
     }
 
     #presentHud(snapshot: RoundSnapshot): void {
@@ -537,11 +545,10 @@ export class PhaserCanvasRenderer implements GameViewPort {
             const sprite = this.#enemySprites[i];
             if (i >= enemyCount) {
                 sprite.setVisible(false);
-                if (sprite.anims.isPlaying) sprite.anims.stop();
                 continue;
             }
             const enemy = enemies[i];
-            this.#walk(sprite, enemy.type);
+            this.#walk(sprite, enemy.type, i);
             const x = enemy.prevX + (enemy.x - enemy.prevX) * alpha;
             const y = enemy.prevY + (enemy.y - enemy.prevY) * alpha;
             sprite.setVisible(true).setPosition(transform.toScreenX(x), transform.toScreenY(y));
@@ -587,17 +594,20 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#presentHealthBars(snapshot, transform, tile);
     }
 
-    /** Plays the enemy's walk cycle, or its static frame when the pack has no strip. */
-    #walk(sprite: Phaser.GameObjects.Sprite, type: EnemyType): void {
-        const animKey = `walk-${type}`;
-        if (this.#animPaused) return;
-        if (sprite.anims.currentAnim?.key === animKey && sprite.anims.isPlaying) return;
-        if (this.#scene.anims.exists(animKey)) {
-            sprite.play(animKey);
-            return;
-        }
-        sprite.anims.stop();
-        const frameKey = `enemy-${type}-0`;
+    /**
+     * Cycles the enemy's own baked strip frames. Driving the frames from the strip
+     * data keeps every type on its own animation — no shared Phaser timeline that
+     * can stall or fall back to one frame — and a per-sprite offset stops a crowd
+     * from marching in lockstep. A missing frame falls back to that type's first.
+     */
+    #walk(sprite: Phaser.GameObjects.Sprite, type: EnemyType, slot: number): void {
+        const spec = ENEMY_STRIPS[type];
+        const frames = spec?.frames ?? 1;
+        const frameMs = 1000 / (spec?.fps ?? 6);
+        const offset = (slot * 137) % Math.max(1, frames);
+        const frame = frames > 1 ? Math.floor(this.#animTime / frameMs + offset) % frames : 0;
+        const key = `enemy-${type}-${frame}`;
+        const frameKey = this.#scene.textures.exists(key) ? key : `enemy-${type}-0`;
         if (sprite.texture.key !== frameKey) sprite.setTexture(frameKey);
     }
 
@@ -729,7 +739,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#towerSprites = [];
         this.#shotSprites = [];
         this.#padImages = [];
-        this.#animPaused = false;
+        this.#animTime = 0;
+        this.#animLastAt = 0;
         this.#layout = null;
         this.#map = null;
         this.#transform = null;

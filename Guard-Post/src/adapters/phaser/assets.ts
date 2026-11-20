@@ -62,8 +62,9 @@ function bakedProduct(file: string): string | null {
 }
 
 /**
- * Bakes every loaded file into its final texture: enemy frame textures plus their
- * `walk-<type>` animations, tower textures with level pips and shot textures. The
+ * Bakes every loaded file into its final texture: one texture per enemy strip frame,
+ * tower textures with level pips and shot textures. The renderer cycles the enemy
+ * frames itself. The
  * field, scenery, gate, the stone the UI cuts its pads from and the Play Screen's
  * castle are read raw instead. Called once per round, after `preloadSprites`.
  */
@@ -108,10 +109,7 @@ function bakeEnemyStrips(scene: Phaser.Scene): void {
     for (const type of Object.keys(ENEMY_STRIPS) as EnemyType[]) {
         const spec = ENEMY_STRIPS[type];
         const firstKey = `enemy-${type}-0`;
-        if (scene.textures.exists(firstKey)) {
-            ensureWalkAnimation(scene, type);
-            continue;
-        }
+        if (scene.textures.exists(firstKey)) continue;
         const source = sourceOf(scene, spec.file);
         if (!source) continue; // Not loaded — the procedural fallback stands in.
 
@@ -125,21 +123,8 @@ function bakeEnemyStrips(scene: Phaser.Scene): void {
             addPixelTexture(scene, `enemy-${type}-${frame}`, canvas);
         }
         if (!complete) continue;
-        ensureWalkAnimation(scene, type);
         scene.textures.remove(rawAssetKey(spec.file));
     }
-}
-
-function ensureWalkAnimation(scene: Phaser.Scene, type: EnemyType): void {
-    const animKey = `walk-${type}`;
-    if (scene.anims.exists(animKey)) return;
-    const spec = ENEMY_STRIPS[type];
-    scene.anims.create({
-        key: animKey,
-        frames: Array.from({ length: spec.frames }, (_unused, frame) => ({ key: `enemy-${type}-${frame}` })),
-        frameRate: spec.fps,
-        repeat: -1,
-    });
 }
 
 function bakeTowers(scene: Phaser.Scene): void {

@@ -9,9 +9,9 @@ import type { EnemyType, TowerType } from '../../domain/types.ts';
  * (AGENTS.md §3.4: bundled locally, no CDN). Paths are relative so the game works
  * from any base URL the host app serves it from.
  *
- * The renderer keys are fixed by the manifest: enemies bake to
- * `enemy-<type>-<frame>` textures driven by a `walk-<type>` animation, towers to
- * `tower-<type>-<level>`, shots to `shot-<type>`.
+ * The renderer keys are fixed by the manifest: enemies bake to one
+ * `enemy-<type>-<frame>` texture per strip frame (cycled by the renderer), towers
+ * to `tower-<type>-<level>`, shots to `shot-<type>`.
  */
 
 /** A horizontal strip of equal frames, baked with an integer nearest-neighbour upscale. */
@@ -22,7 +22,7 @@ export interface StripSpec {
     readonly frames: number;
     /** Integer scale applied when baking, so pixel art stays crisp at any screen size. */
     readonly scale: number;
-    /** Walk-cycle speed of the baked animation, in frames per second. */
+    /** Walk-cycle speed the renderer uses to cycle the baked frames, in fps. */
     readonly fps: number;
 }
 

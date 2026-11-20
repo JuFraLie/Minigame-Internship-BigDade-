@@ -22,8 +22,8 @@ import { assetImage, bakeSprites } from './assets.ts';
  *
  * Two surfaces are cut from the pack itself rather than drawn: the build pads (a
  * silvered slab of the stone tile set, so a pad reads as pavement) and the Play
- * Screen's gate castle. The sun-baked ground also dusts the sand-framed border
- * that backs every screen, tying the UI to the level art.
+ * Screen's gate castle. A plain olive field with one sand line backs every screen,
+ * quiet enough to let the grass field and the sprites be the detail.
  */
 
 export const NOMINAL_TILE = 44;
@@ -31,9 +31,8 @@ export const NOMINAL_TILE = 44;
 export const COLORS = {
     /** Deep olive green behind the frame — dark enough to sit under the grass field. */
     background: 0x18271c,
-    /** Desert sand: the frame's warm accent, softer than the gate gold on the buttons. */
+    /** Desert sand: one quiet line around the field, softer than the button gold. */
     sand: 0xc2a15c,
-    sandLight: 0xe3c986,
     void: 0x101a2e,
     grass: 0x27503b,
     grassEdge: 0x1f4131,
@@ -159,21 +158,18 @@ export function pixelBox(scene: Phaser.Scene, width: number, height: number, var
     return key;
 }
 
-// -- framed backdrop --------------------------------------------------------
+// -- simple backdrop --------------------------------------------------------
 
-/** Texture key for the framed border that sits behind every screen. */
+/** Texture key for the plain field that sits behind every screen. */
 export const BACKDROP_KEY = 'ui-backdrop';
 
 /**
- * The border the whole game stands in: a deep olive field with a faint dusty
- * weave, wrapped in a muted desert-sand frame with small corner and edge diamonds.
- * It is the framed backdrop from the earlier UI, redrawn in the flat pixel
- * vocabulary of this one — hard edges, no gradients, no blur — and tuned to the
- * pack's dark grass and sun-baked roads: present, never louder than the board.
+ * A simple mobile-game backdrop: one flat olive field and one quiet sand line
+ * around it. No weave, no diamonds, no bevel — the board and the buttons carry
+ * the detail, so the background only has to hold them steady.
  *
- * The frame starts below `topInset`, so status-bar icons and cutouts never cut
- * through it. Baked once per screen size and shared by all three scenes; a
- * resize simply bakes a new canvas.
+ * The line starts below `topInset`, clear of status-bar icons and cutouts. The
+ * canvas is baked once per screen size and shared by all three scenes.
  */
 export function renderBackdrop(scene: Phaser.Scene, width: number, height: number, topInset: number): void {
     const w = Math.max(1, Math.round(width));
@@ -189,77 +185,19 @@ export function renderBackdrop(scene: Phaser.Scene, width: number, height: numbe
     canvas.height = h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.imageSmoothingEnabled = false;
 
-    // The field: deep olive, then the pack's sun-baked ground at a whisper so the
-    // border carries a hint of the level's sahara dust without competing with it.
-    // No pack, still a field.
     ctx.fillStyle = hex(COLORS.background);
     ctx.fillRect(0, 0, w, h);
-    const dust = assetImage(scene, ROAD_TILESET.file);
-    const pattern = dust ? ctx.createPattern(dust, 'repeat') : null;
-    if (pattern) {
-        ctx.globalAlpha = 0.06;
-        ctx.fillStyle = pattern;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
-    }
 
-    const margin = Math.max(6, Math.round(Math.min(w, h) * 0.035));
-    const top = Math.max(margin + 5, Math.round(topInset) + 6);
+    const margin = Math.max(8, Math.round(Math.min(w, h) * 0.03));
+    const top = Math.max(margin + 4, Math.round(topInset) + 6);
     const frameWidth = Math.max(1, w - margin * 2);
     const frameHeight = Math.max(1, h - margin - top);
-
-    // Darken the strip outside the frame: the border reads as a lip, not a line.
-    ctx.fillStyle = 'rgba(9, 18, 11, 0.55)';
-    ctx.fillRect(0, 0, w, top);
-    ctx.fillRect(0, top, margin, h - top);
-    ctx.fillRect(w - margin, top, margin, h - top);
-    ctx.fillRect(margin, top + frameHeight, frameWidth, h - top - frameHeight);
-
-    // Three hard strokes: ink keyline, muted sand, a faint bright inner rule.
-    ctx.strokeStyle = hex(COLORS.ink);
-    ctx.lineWidth = 3;
-    ctx.strokeRect(margin, top, frameWidth, frameHeight);
+    ctx.globalAlpha = 0.45;
     ctx.strokeStyle = hex(COLORS.sand);
     ctx.lineWidth = 2;
-    ctx.strokeRect(margin + 2, top + 2, frameWidth - 4, frameHeight - 4);
-    ctx.strokeStyle = 'rgba(227, 201, 134, 0.35)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(margin + 6.5, top + 6.5, frameWidth - 13, frameHeight - 13);
-
-    // Small pixel diamonds at the four corners and four edge midpoints. Integer
-    // pixels, soft sand — accents on the border, not gems competing with the HUD.
-    const diamond = (x: number, y: number, r: number): void => {
-        ctx.beginPath();
-        ctx.moveTo(x, y - r);
-        ctx.lineTo(x + r, y);
-        ctx.lineTo(x, y + r);
-        ctx.lineTo(x - r, y);
-        ctx.closePath();
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = hex(COLORS.sandLight);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = hex(COLORS.ink);
-        ctx.lineWidth = 1;
-        ctx.stroke();
-    };
-    const left = margin;
-    const right = margin + frameWidth;
-    const bottom = top + frameHeight;
-    for (const [x, y] of [
-        [left, top],
-        [right, top],
-        [left, bottom],
-        [right, bottom],
-    ]) {
-        diamond(x, y, 5);
-    }
-    diamond(Math.round((left + right) / 2), top, 4);
-    diamond(Math.round((left + right) / 2), bottom, 4);
-    diamond(left, Math.round((top + bottom) / 2), 4);
-    diamond(right, Math.round((top + bottom) / 2), 4);
+    ctx.strokeRect(margin + 1, top + 1, frameWidth - 2, frameHeight - 2);
+    ctx.globalAlpha = 1;
 
     scene.textures.addCanvas(BACKDROP_KEY, canvas);
     markNearest(scene, BACKDROP_KEY);
