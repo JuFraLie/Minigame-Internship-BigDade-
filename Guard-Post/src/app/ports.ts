@@ -1,4 +1,4 @@
-import type { GameCommand, RoundSnapshot, TowerType } from '../domain/types.ts';
+import type { GameCommand, RoundSnapshot } from '../domain/types.ts';
 
 export type { MapSource } from '../domain/map/types.ts';
 
@@ -9,20 +9,6 @@ export type { MapSource } from '../domain/map/types.ts';
  * chosen in the composition root and handed to whoever declares a need for them, which
  * is what keeps every component replaceable and runnable in isolation.
  */
-
-/**
- * Input adapter → game logic.
- *
- * Implemented by the simulation. Commands carry world ids (spotId, towerId) only — the
- * conversion from screen pixels happens before anything reaches this port.
- */
-export interface GameCommandPort {
-    build(spotId: number, tower: TowerType): boolean;
-    upgrade(towerId: number): boolean;
-    sell(towerId: number): boolean;
-    callWave(): boolean;
-    handle(command: GameCommand): boolean;
-}
 
 /**
  * Session flow → host shell.

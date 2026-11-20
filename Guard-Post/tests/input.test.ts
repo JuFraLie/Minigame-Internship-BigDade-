@@ -48,7 +48,6 @@ function towerAt(spotId: number, overrides: Partial<TowerView> = {}): TowerView 
         y: spot.y,
         range: TOWER_SPECS.dart.range,
         damage: TOWER_SPECS.dart.damage,
-        cooldown: 0,
         spent: TOWER_SPECS.dart.cost,
         ...overrides,
     };

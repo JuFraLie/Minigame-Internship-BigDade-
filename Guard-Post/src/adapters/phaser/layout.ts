@@ -33,7 +33,6 @@ export interface Rect {
 
 /** A build spot, projected to screen space. */
 export interface SpotLayout {
-    readonly id: number;
     readonly x: number;
     readonly y: number;
 }
@@ -68,10 +67,6 @@ export interface PlayLayout {
         /** One tile, in design units. */
         readonly tile: number;
         readonly width: number;
-        readonly height: number;
-    };
-    readonly bottom: {
-        readonly y: number;
         readonly height: number;
     };
     readonly callWave: Rect;
@@ -181,8 +176,7 @@ export function computePlayLayout(input: LayoutInput): PlayLayout {
     const resumeWidth = Math.min(width * 0.6, 260);
     const resume: Rect = { x: (width - resumeWidth) / 2, y: height * 0.52, width: resumeWidth, height: CALL_WAVE_HEIGHT };
 
-    const spots: SpotLayout[] = input.spots.map((spot, id) => ({
-        id,
+    const spots: SpotLayout[] = input.spots.map((spot) => ({
         x: boardX + spot.x * tile,
         y: boardY + spot.y * tile,
     }));
@@ -193,7 +187,6 @@ export function computePlayLayout(input: LayoutInput): PlayLayout {
         topPad,
         hud: { y: hudY, height: HUD_HEIGHT, lives, gold, score, pause },
         board: { x: boardX, y: boardY, tile, width: boardWidth, height: boardHeight },
-        bottom: { y: bottomY, height: BOTTOM_CONTENT },
         callWave,
         speed,
         menu: { panel, buildButtons, towerButtons },

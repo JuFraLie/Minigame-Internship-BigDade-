@@ -135,7 +135,6 @@ function createProjectile(): ProjectileState {
 
 export class Simulation {
     readonly level: number;
-    readonly mapIndex: number;
     readonly map: GameMap;
     readonly road: Road;
 
@@ -180,7 +179,6 @@ export class Simulation {
             waypoints: definition.waypoints,
             spots: definition.spots.map((spot) => ({ x: spot.x, y: spot.y })),
         };
-        this.mapIndex = this.map.theme;
         this.road = measureRoad(this.map);
         this.lives = Math.max(0, Math.floor(start.lives ?? STARTING_LIVES));
         this.ddaTier = clampDdaTier(start.ddaTier ?? 0);
@@ -207,27 +205,15 @@ export class Simulation {
         return this.#projectiles;
     }
 
-    get spawnsLeft(): number {
-        if (this.waveState === 'grace') return this.#plan[0]?.length ?? 0;
-        if (this.waveState === 'active') return Math.max(0, this.#plan[this.wave - 1].length - this.#spawnIndex);
-        return 0;
-    }
-
     /** A fresh snapshot object over the live entity arrays (valid until the next step). */
     snapshot(): RoundSnapshot {
         return {
-            level: this.level,
-            mapIndex: this.mapIndex,
             phase: this.phase,
             lives: this.lives,
             gold: this.gold,
             score: this.score,
-            ddaTier: this.ddaTier,
-            ddaMultiplier: ddaScoreMultiplier(this.ddaTier),
-            wave: this.wave,
             waveState: this.waveState,
             pendingSeconds: this.#pending,
-            spawnsLeft: this.spawnsLeft,
             enemies: this.#enemies,
             towers: this.#towers,
             projectiles: this.projectiles,
@@ -297,7 +283,6 @@ export class Simulation {
             spent: spec.cost,
         };
         this.#towers.push(tower);
-        this.#emit({ type: 'built', spotId, towerId: tower.id, tower: type, gold: this.gold });
         return true;
     }
 
@@ -331,7 +316,6 @@ export class Simulation {
         tower.range = spec.range + UPGRADE_RANGE_BONUS[index];
         if (tower.type === 'frost') tower.slow = FROST_SLOW_BY_LEVEL[index];
 
-        this.#emit({ type: 'upgraded', towerId, level: tower.level, gold: this.gold });
         return true;
     }
 
@@ -348,7 +332,6 @@ export class Simulation {
         const refund = sellRefund(tower.spent);
         this.gold += refund;
         this.#towers.splice(index, 1);
-        this.#emit({ type: 'sold', towerId, refund, gold: this.gold });
         return true;
     }
 
@@ -491,7 +474,7 @@ export class Simulation {
                 this.lives -= ENEMY_SPECS[enemy.type].leak;
                 this.#damageThisWave = true;
                 this.#damageThisRound = true;
-                this.#emit({ type: 'leak', enemyId: enemy.id, enemy: enemy.type, lives: this.lives });
+                this.#emit({ type: 'leak', lives: this.lives });
                 this.#changeDda('leak');
             }
         }
@@ -551,8 +534,6 @@ export class Simulation {
         projectile.targetId = target.id;
         projectile.tx = target.x;
         projectile.ty = target.y;
-
-        this.#emit({ type: 'shot', towerId: tower.id, tower: tower.type, x: tower.x, y: tower.y });
     }
 
     #takeProjectile(): ProjectileState | null {
@@ -619,7 +600,6 @@ export class Simulation {
     #damageEnemy(enemy: EnemyState, projectile: ProjectileState): void {
         const dealt = effectiveDamage(projectile.damage, enemy.armor, projectile.armorPierce);
         enemy.hp -= dealt;
-        this.#emit({ type: 'hit', x: enemy.x, y: enemy.y, damage: dealt });
 
         if (projectile.slow > 0) {
             applySlow(enemy.slow, projectile.slow, projectile.slowSeconds, enemy.type === 'boss');
@@ -632,7 +612,6 @@ export class Simulation {
             const points = Math.round(killScore(enemy.type, this.level) * ddaScoreMultiplier(this.ddaTier));
             this.gold += reward;
             this.score += points;
-            this.#emit({ type: 'kill', enemyId: enemy.id, enemy: enemy.type, x: enemy.x, y: enemy.y, reward, score: points });
         }
     }
 
@@ -648,7 +627,7 @@ export class Simulation {
         const points = Math.round(waveClearScore(this.level) * ddaScoreMultiplier(waveTier));
         this.gold += bonus;
         this.score += points;
-        this.#emit({ type: 'waveCleared', wave: this.wave, bonus, score: points });
+        this.#emit({ type: 'waveCleared', bonus, score: points });
         if (clean) this.#changeDda('clean');
         this.#damageThisWave = false;
 
@@ -659,7 +638,7 @@ export class Simulation {
             const levelTier = levelClean ? nextDdaTier(this.ddaTier, 'clean') : this.ddaTier;
             const clearPoints = Math.round(levelClearScore(this.lives, this.level) * ddaScoreMultiplier(levelTier));
             this.score += clearPoints;
-            this.#emit({ type: 'levelCleared', score: this.score, lives: this.lives });
+            this.#emit({ type: 'levelCleared' });
             if (levelClean) this.#changeDda('clean');
             return;
         }

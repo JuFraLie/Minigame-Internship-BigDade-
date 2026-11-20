@@ -43,17 +43,11 @@ way, the same way it fences `window.MpPostMessage` inside `MpBridge.ts`.
 
 ## Assets
 
-The sprite pack in `public/` (by skyel) draws the game world: skeleton/bat/demon/slime
-enemies with walk cycles, archer/cannon/ice-wizard towers with projectiles, one grass
-tile per theme (levels cycle three themes), a road built from the ground tile set, trees,
-rocks, mushrooms and a gate castle per theme. Loading and baking live in
-`src/adapters/phaser/assets.ts`; `src/adapters/phaser/assetManifest.ts` is the only file
-that names image files, and `tests/assets.test.ts` checks every path against the disk
-plus the frame geometry against the actual PNG dimensions. UI chrome is drawn
-procedurally per size (flat pixel boxes, no image files) and uses the bundled
-`Press Start 2P` font in `public/fonts/` (SIL Open Font License, see the `OFL.txt` next
-to it). Any missing file falls back to the old procedural shape, so a lost asset never
-stops a round.
+There are no image or audio files: every visual is generated in code by
+`src/adapters/phaser/textures.ts` (entities, tiles, scenery, UI chrome). The only
+bundled files are the `Press Start 2P` font in `public/fonts/` (SIL Open Font License,
+see `OFL.txt`), the favicon and the page CSS. `tests/noAssets.test.ts` guards that
+asset-free state.
 
 ## Rules summary
 
@@ -61,6 +55,6 @@ stops a round.
 - Result Panel is the only place with Retry / Next Level / Exit; Pause only resumes.
 - Endless levels: every level generates a fresh layout (road, scenery and pads seeded
   by the level number, so a level replays identically) with a randomized wave mix within
-  the same threat budget; three waves per level, 10 lives.
+  the same threat budget; 3 to 10 waves per level, 10 lives.
 - Per `AGENTS.md` §4.2 the game is endless, so `endRound` always carries `win: true`
   (confirmed 11 November 2026); the Result Panel still shows Victory/Defeat to the player.

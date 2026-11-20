@@ -153,18 +153,7 @@ export type BlockReason = 'gold' | 'occupied' | 'noSpot' | 'noTower' | 'maxLevel
 // ---------------------------------------------------------------------------
 
 export type RoundEvent =
-    | { readonly type: 'shot'; readonly towerId: number; readonly tower: TowerType; readonly x: number; readonly y: number }
-    | { readonly type: 'hit'; readonly x: number; readonly y: number; readonly damage: number }
-    | {
-          readonly type: 'kill';
-          readonly enemyId: number;
-          readonly enemy: EnemyType;
-          readonly x: number;
-          readonly y: number;
-          readonly reward: number;
-          readonly score: number;
-      }
-    | { readonly type: 'leak'; readonly enemyId: number; readonly enemy: EnemyType; readonly lives: number }
+    | { readonly type: 'leak'; readonly lives: number }
     | {
           readonly type: 'ddaChanged';
           readonly tier: number;
@@ -173,12 +162,9 @@ export type RoundEvent =
       }
     | { readonly type: 'waveIncoming'; readonly wave: number }
     | { readonly type: 'waveStarted'; readonly wave: number }
-    | { readonly type: 'waveCleared'; readonly wave: number; readonly bonus: number; readonly score: number }
-    | { readonly type: 'levelCleared'; readonly score: number; readonly lives: number }
+    | { readonly type: 'waveCleared'; readonly bonus: number; readonly score: number }
+    | { readonly type: 'levelCleared' }
     | { readonly type: 'defeat'; readonly score: number }
-    | { readonly type: 'built'; readonly spotId: number; readonly towerId: number; readonly tower: TowerType; readonly gold: number }
-    | { readonly type: 'upgraded'; readonly towerId: number; readonly level: number; readonly gold: number }
-    | { readonly type: 'sold'; readonly towerId: number; readonly refund: number; readonly gold: number }
     | { readonly type: 'blocked'; readonly reason: BlockReason };
 
 // ---------------------------------------------------------------------------
@@ -194,12 +180,6 @@ export type RoundPhase = 'playing' | 'won' | 'lost';
  */
 export type WaveState = 'grace' | 'active' | 'gap' | 'done';
 
-/** The slow hanging on an enemy, as the renderer sees it. */
-export interface SlowView {
-    readonly strength: number;
-    readonly seconds: number;
-}
-
 export interface EnemyView {
     readonly id: number;
     readonly type: EnemyType;
@@ -210,8 +190,6 @@ export interface EnemyView {
     readonly prevY: number;
     readonly hp: number;
     readonly maxHp: number;
-    /** Current slow, for display: strength 0..1 and the seconds left on it. */
-    readonly slow: SlowView;
     /** Tiles travelled along the road; decides "First" targeting. */
     readonly progress: number;
 }
@@ -226,8 +204,6 @@ export interface TowerView {
     readonly range: number;
     /** Damage per shot after upgrades; the menu shows what the tower has become. */
     readonly damage: number;
-    /** Seconds until the next shot; 0 means ready. */
-    readonly cooldown: number;
     /** Total gold spent on this tower; drives the sell refund. */
     readonly spent: number;
 }
@@ -245,28 +221,18 @@ export interface ProjectileView {
 /**
  * The whole round, as one object.
  *
- * The `enemies`, `towers` and `projectsiles` arrays are live: they are mutated in place
+ * The `enemies`, `towers` and `projectiles` arrays are live: they are mutated in place
  * and reused between steps so the hot path never allocates. A snapshot is therefore only
  * valid until the next `step()` — copy anything that must outlive it.
  */
 export interface RoundSnapshot {
-    readonly level: number;
-    readonly mapIndex: number;
     readonly phase: RoundPhase;
     readonly lives: number;
     readonly gold: number;
     readonly score: number;
-    /** Current dynamic-difficulty tier, 0..MAX_DDA_TIER. */
-    readonly ddaTier: number;
-    /** Score multiplier earned by the current tier. */
-    readonly ddaMultiplier: number;
-    /** 3..10, depending on the level. */
-    readonly wave: number;
     readonly waveState: WaveState;
     /** Seconds left in the grace period or wave gap, 0 otherwise. */
     readonly pendingSeconds: number;
-    /** Spawn entries of the current wave not yet emitted. */
-    readonly spawnsLeft: number;
     readonly enemies: readonly EnemyView[];
     readonly towers: readonly TowerView[];
     readonly projectiles: readonly ProjectileView[];

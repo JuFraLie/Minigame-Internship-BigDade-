@@ -31,21 +31,3 @@ export interface GameViewPort {
     /** Drops everything drawn for the current round. */
     destroy(): void;
 }
-
-/** A view that draws nothing — the headless half of the "runs with or without a renderer" rule. */
-export function createNullView(): GameViewPort {
-    return {
-        create(): void {
-            /* nothing to build */
-        },
-        present(): void {
-            /* nothing to draw */
-        },
-        relayout(): void {
-            /* nothing to move */
-        },
-        destroy(): void {
-            /* nothing to drop */
-        },
-    };
-}

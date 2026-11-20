@@ -1,5 +1,5 @@
 import { ENEMY_SPECS, ENEMY_TYPES, wavesForLevel, type EnemyType } from './types.ts';
-import { mulberry32, seedOf } from './rng.ts';
+import { mulberry32, seedOf } from './map/prng.ts';
 
 /**
  * Seeded wave generation from a threat budget.

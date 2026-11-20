@@ -772,8 +772,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
                     );
                     break;
                 default:
-                    // shot / hit / kill / built / upgraded / sold / blocked already show
-                    // up as projectiles, gold in the HUD and the menu that just changed.
+                    // A blocked command already shows up as a HUD/menu state change.
                     break;
             }
         }
