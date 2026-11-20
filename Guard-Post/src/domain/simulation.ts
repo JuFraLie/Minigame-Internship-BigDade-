@@ -2,7 +2,7 @@ import { applySlow, effectiveDamage, noSlow, speedMultiplier, tickSlow, type Slo
 import { earlyCallBonus, killReward, sellRefund, startingGold, upgradeCost, waveClearBonus } from './economy.ts';
 import { generateLevelPlan, type SpawnEntry } from './levelGenerator.ts';
 import type { MapSource } from './map/types.ts';
-import { measureRoad, pointOnRoad, type GameMap, type Road } from './maps.ts';
+import { isInsideGateCastle, measureRoad, pointOnRoad, type GameMap, type Road } from './maps.ts';
 import { killScore, levelClearScore, waveClearScore } from './score.ts';
 import {
     ENEMY_SPECS,
@@ -438,16 +438,19 @@ export class Simulation {
             enemy.prevY = enemy.y;
             tickSlow(enemy.slow, dt);
             enemy.progress += enemy.speed * speedMultiplier(enemy.slow) * dt;
+            pointOnRoad(this.map, this.road, enemy.progress, this.#scratch);
+            enemy.x = this.#scratch.x;
+            enemy.y = this.#scratch.y;
 
-            if (enemy.progress >= this.road.total) {
+            // Spend the life at the moment the enemy steps into the castle footprint,
+            // which lies inside the board. Keeping the road end as a fallback means an
+            // enemy can never walk past the gate, even if a map changes its art bounds.
+            const gate = this.map.waypoints[this.map.waypoints.length - 1];
+            if (enemy.progress >= this.road.total || isInsideGateCastle(enemy, gate)) {
                 enemy.alive = false;
                 this.#enemiesDirty = true;
                 this.lives -= ENEMY_SPECS[enemy.type].leak;
                 this.#emit({ type: 'leak', enemyId: enemy.id, enemy: enemy.type, lives: this.lives });
-            } else {
-                pointOnRoad(this.map, this.road, enemy.progress, this.#scratch);
-                enemy.x = this.#scratch.x;
-                enemy.y = this.#scratch.y;
             }
         }
         this.#compactEnemies();

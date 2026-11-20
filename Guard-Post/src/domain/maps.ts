@@ -30,23 +30,37 @@ export interface GameMap {
     readonly spots: readonly Vec2[];
 }
 
+/** Gate castle footprint in world tiles, matching the code-drawn castle art. */
+const CASTLE_HALF_WIDTH = 1.5;
+const CASTLE_HEIGHT = 1.9;
+const CASTLE_BASE = 0.32;
+/** Extra clearance kept around the castle when placing build pads. */
+const PAD_CLEARANCE = 0.5;
+
 /**
- * The gate castle's footprint in world tiles, mirroring what `paintGate` draws: three
- * tiles wide, its frame (52 x 38) scaled to about 1.9 tiles tall with the base 0.32
- * tiles below the gate point. A build pad must stay outside this box — the renderer
- * draws the castle over it, and a pad under the castle is a pad the player cannot see.
- * The box hugs the art exactly, so the row of pads just above the battlements stays
- * buildable: those are the pads that defend the final approach beside the castle.
+ * A build pad must stay outside the castle's box — the castle is drawn over the field,
+ * and a pad under it is a pad the player cannot see. The row of pads just above the
+ * battlements stays buildable: those defend the final approach beside the castle.
  */
 export function fitsBesideGateCastle(spot: Vec2, gate: Vec2): boolean {
-    const halfWidth = 1.5;
-    const height = 1.9;
-    const apron = 0.5;
     return (
-        spot.x + PAD_HALF <= gate.x - halfWidth ||
-        spot.x - PAD_HALF >= gate.x + halfWidth ||
-        spot.y + PAD_HALF <= gate.y - height ||
-        spot.y - PAD_HALF >= gate.y + apron
+        spot.x + PAD_HALF <= gate.x - CASTLE_HALF_WIDTH ||
+        spot.x - PAD_HALF >= gate.x + CASTLE_HALF_WIDTH ||
+        spot.y + PAD_HALF <= gate.y - CASTLE_HEIGHT ||
+        spot.y - PAD_HALF >= gate.y + PAD_CLEARANCE
+    );
+}
+
+/**
+ * True when a point is inside the castle, including its front step. The simulation
+ * uses this to spend a life only as an enemy enters the castle — still on the board —
+ * instead of letting it walk over the art or past the map edge first.
+ */
+export function isInsideGateCastle(point: Vec2, gate: Vec2): boolean {
+    return (
+        Math.abs(point.x - gate.x) <= CASTLE_HALF_WIDTH &&
+        point.y >= gate.y - CASTLE_HEIGHT &&
+        point.y <= gate.y + CASTLE_BASE
     );
 }
 

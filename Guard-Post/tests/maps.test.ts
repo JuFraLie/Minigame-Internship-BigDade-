@@ -9,6 +9,7 @@ import {
     MAPS,
     distanceToRoad,
     fitsBesideGateCastle,
+    isInsideGateCastle,
     measureRoad,
     pointOnRoad,
     type GameMap,
@@ -189,3 +190,14 @@ for (const map of MAPS) {
         assertRoadSampling(map, map.name);
     });
 }
+
+test('the castle touch box sits inside the board and follows the gate art', () => {
+    const gate = MAPS[0].waypoints[MAPS[0].waypoints.length - 1];
+
+    assert.ok(isInsideGateCastle(gate, gate), 'the gate point itself is inside the castle');
+    assert.ok(isInsideGateCastle({ x: gate.x, y: gate.y - 1.9 }, gate), 'the battlement edge');
+    assert.ok(!isInsideGateCastle({ x: gate.x, y: gate.y - 1.91 }, gate), 'not one step earlier');
+    assert.ok(!isInsideGateCastle({ x: gate.x + 1.51, y: gate.y }, gate), 'outside the side walls');
+    assert.ok(!isInsideGateCastle({ x: gate.x, y: gate.y + 0.33 }, gate), 'past the front step');
+    assert.ok(gate.y - 1.9 >= 0 && gate.y + 0.32 <= GRID_HEIGHT, 'the box stays on the board');
+});

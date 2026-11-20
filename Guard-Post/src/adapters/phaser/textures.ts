@@ -167,31 +167,38 @@ export function pixelBox(scene: Phaser.Scene, width: number, height: number, var
 
 // -- simple backdrop --------------------------------------------------------
 
-/** Texture key for the plain field that sits behind every screen. */
+/** Framed backdrop for the Play Screen and Result Panel. */
 export const BACKDROP_KEY = 'ui-backdrop';
+/** Olive-only backdrop for gameplay: the board carries its own front frame there. */
+export const BACKDROP_PLAIN_KEY = 'ui-backdrop-plain';
 
 /**
- * A simple mobile-game backdrop: one flat olive field inside a chunky pixel
- * border — a dark block keyline with a sand inner band, all drawn in 4 px steps.
- * No weave, no diamonds, no bevel: the board and buttons still carry the detail.
- *
- * The border starts below `topInset`, clear of status-bar icons and cutouts. The
- * canvas is baked once per screen size and shared by all three scenes.
+ * A flat olive field. Menus and the Result Panel get the chunky pixel ring — a dark
+ * keyline with a sand inner band — while gameplay stays unframed so the board's own
+ * front frame is the only border on screen. The ring starts below `topInset`, clear
+ * of status-bar icons and cutouts. Each key is baked once per screen size.
  */
-export function renderBackdrop(scene: Phaser.Scene, width: number, height: number, topInset: number): void {
+export function renderBackdrop(
+    scene: Phaser.Scene,
+    width: number,
+    height: number,
+    topInset: number,
+    framed = true,
+): string {
     const w = Math.max(1, Math.round(width));
     const h = Math.max(1, Math.round(height));
-    if (scene.textures.exists(BACKDROP_KEY)) {
-        const source = scene.textures.get(BACKDROP_KEY).source[0];
-        if (source && source.width === w && source.height === h) return;
-        scene.textures.remove(BACKDROP_KEY);
+    const key = framed ? BACKDROP_KEY : BACKDROP_PLAIN_KEY;
+    if (scene.textures.exists(key)) {
+        const source = scene.textures.get(key).source[0];
+        if (source && source.width === w && source.height === h) return key;
+        scene.textures.remove(key);
     }
 
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return key;
 
     ctx.fillStyle = hex(COLORS.background);
     ctx.fillRect(0, 0, w, h);
@@ -212,13 +219,61 @@ export function renderBackdrop(scene: Phaser.Scene, width: number, height: numbe
         ctx.fillRect(x + rw - thickness, y + thickness, thickness, rh - thickness * 2);
     };
 
-    ring(margin, top, frameWidth, frameHeight, unit * 2, hex(COLORS.ink));
-    ctx.globalAlpha = 0.8;
-    ring(margin + unit * 2, top + unit * 2, frameWidth - unit * 4, frameHeight - unit * 4, unit, hex(COLORS.sand));
-    ctx.globalAlpha = 1;
+    if (framed) {
+        ring(margin, top, frameWidth, frameHeight, unit * 2, hex(COLORS.ink));
+        ctx.globalAlpha = 0.8;
+        ring(margin + unit * 2, top + unit * 2, frameWidth - unit * 4, frameHeight - unit * 4, unit, hex(COLORS.sand));
+        ctx.globalAlpha = 1;
+    }
 
-    scene.textures.addCanvas(BACKDROP_KEY, canvas);
-    markNearest(scene, BACKDROP_KEY);
+    scene.textures.addCanvas(key, canvas);
+    markNearest(scene, key);
+    return key;
+}
+
+/** Texture key for the yellow frame drawn in front of the game board. */
+export const BOARD_FRAME_KEY = 'ui-board-frame';
+/** Border thickness around the board, in design pixels. */
+export const BOARD_FRAME_THICKNESS = 12;
+
+/**
+ * A transparent texture containing only the board frame: a 4 px ink keyline outside
+ * an 8 px sand band. The centre is deliberately empty, so it can sit in front of the
+ * map and its sprites without covering gameplay. Sized to the board, not the screen,
+ * so the frame and the map always share the same height.
+ */
+export function renderBoardFrame(scene: Phaser.Scene, boardWidth: number, boardHeight: number): void {
+    const boardW = Math.max(1, Math.round(boardWidth));
+    const boardH = Math.max(1, Math.round(boardHeight));
+    const w = boardW + BOARD_FRAME_THICKNESS * 2;
+    const h = boardH + BOARD_FRAME_THICKNESS * 2;
+
+    if (scene.textures.exists(BOARD_FRAME_KEY)) {
+        const source = scene.textures.get(BOARD_FRAME_KEY).source[0];
+        if (source && source.width === w && source.height === h) return;
+        scene.textures.remove(BOARD_FRAME_KEY);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const ring = (x: number, y: number, rw: number, rh: number, thickness: number, color: string): void => {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, rw, thickness);
+        ctx.fillRect(x, y + rh - thickness, rw, thickness);
+        ctx.fillRect(x, y + thickness, thickness, rh - thickness * 2);
+        ctx.fillRect(x + rw - thickness, y + thickness, thickness, rh - thickness * 2);
+    };
+
+    ring(0, 0, w, h, 4, hex(COLORS.ink));
+    ring(4, 4, w - 8, h - 8, 8, hex(COLORS.sand));
+    ring(BOARD_FRAME_THICKNESS - 2, BOARD_FRAME_THICKNESS - 2, boardW + 4, boardH + 4, 2, hex(COLORS.ink));
+
+    scene.textures.addCanvas(BOARD_FRAME_KEY, canvas);
+    markNearest(scene, BOARD_FRAME_KEY);
 }
 
 // ---------------------------------------------------------------------------

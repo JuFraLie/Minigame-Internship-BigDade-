@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { earlyCallBonus, startingGold, waveClearBonus } from '../src/domain/economy.ts';
+import { isInsideGateCastle } from '../src/domain/maps.ts';
 import { Simulation } from '../src/domain/simulation.ts';
 import { waveClearScore } from '../src/domain/score.ts';
 import { ProceduralMapSource } from '../src/adapters/maps/ProceduralMapSource.ts';
@@ -111,6 +112,33 @@ test('a wave with no defence walks through: each leak costs a life, an empty poo
     // After the round the commands are dead: no restart path outside the Result Panel.
     assert.equal(sim.build(1, 'dart'), false);
     assert.equal(sim.callWave(), false);
+});
+
+test('a life is spent only when an enemy steps inside the castle box', () => {
+    const sim = new Simulation(1, MAP_SOURCE);
+    drain(sim);
+    sim.callWave();
+    const gate = sim.map.waypoints[sim.map.waypoints.length - 1];
+
+    let spent = false;
+    for (let i = 0; i < 30 * 90 && !spent; i++) {
+        const before = sim.snapshot().enemies.map((enemy) => ({ x: enemy.x, y: enemy.y }));
+        const livesBefore = sim.lives;
+        sim.step();
+        const events = drain(sim);
+
+        if (sim.lives < livesBefore) {
+            const leaks = events.filter((event): event is RoundEvent & { type: 'leak' } => event.type === 'leak');
+            assert.equal(leaks.length, 1, 'one life drop is one leak');
+            assert.ok(
+                before.every((enemy) => !isInsideGateCastle(enemy, gate)),
+                'no life may be lost while every enemy is still outside the castle',
+            );
+            spent = true;
+        }
+    }
+
+    assert.ok(spent, 'an undefended wave must eventually leak');
 });
 
 test('clearing a wave pays the bonus, opens the gap, and calling early pays for the skip', () => {

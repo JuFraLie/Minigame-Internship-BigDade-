@@ -14,7 +14,9 @@ import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
 import {
-    BACKDROP_KEY,
+    BACKDROP_PLAIN_KEY,
+    BOARD_FRAME_KEY,
+    BOARD_FRAME_THICKNESS,
     BOARD_KEY,
     COLORS,
     ENEMY_ANIM,
@@ -24,6 +26,7 @@ import {
     ensureTextures,
     pixelBox,
     renderBackdrop,
+    renderBoardFrame,
     renderBoardTexture,
     type PixelVariant,
 } from './textures.ts';
@@ -79,6 +82,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
     #backdrop: Phaser.GameObjects.Image | null = null;
     #board: Phaser.GameObjects.Image | null = null;
+    /** Yellow frame around the board, drawn in front of enemies but behind the HUD. */
+    #boardFrame: Phaser.GameObjects.Image | null = null;
     #under: Phaser.GameObjects.Graphics | null = null;
     #over: Phaser.GameObjects.Graphics | null = null;
     /** Per-spot flag: a tower stands there, so its pad is not drawn. Reused every frame. */
@@ -145,12 +150,25 @@ export class PhaserCanvasRenderer implements GameViewPort {
         ensureTextures(scene);
         ensureEntityTextures(scene);
         renderBoardTexture(scene, map, layout.board.tile);
-        renderBackdrop(scene, layout.width, layout.height, layout.topPad);
+        renderBackdrop(scene, layout.width, layout.height, layout.topPad, false);
+        renderBoardFrame(scene, layout.board.width, layout.board.height);
 
-        if (scene.textures.exists(BACKDROP_KEY)) {
-            this.#backdrop = this.#add(scene.add.image(0, 0, BACKDROP_KEY).setOrigin(0, 0).setDepth(0));
+        if (scene.textures.exists(BACKDROP_PLAIN_KEY)) {
+            this.#backdrop = this.#add(scene.add.image(0, 0, BACKDROP_PLAIN_KEY).setOrigin(0, 0).setDepth(0));
         }
         this.#board = this.#add(scene.add.image(layout.board.x, layout.board.y, BOARD_KEY).setOrigin(0, 0).setDepth(1));
+        if (scene.textures.exists(BOARD_FRAME_KEY)) {
+            this.#boardFrame = this.#add(
+                scene.add
+                    .image(
+                        Math.round(layout.board.x - BOARD_FRAME_THICKNESS),
+                        Math.round(layout.board.y - BOARD_FRAME_THICKNESS),
+                        BOARD_FRAME_KEY,
+                    )
+                    .setOrigin(0, 0)
+                    .setDepth(19),
+            );
+        }
         this.#under = this.#add(scene.add.graphics().setDepth(4));
         this.#over = this.#add(scene.add.graphics().setDepth(13));
 
@@ -276,9 +294,19 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#entityScale = layout.board.tile / NOMINAL_TILE;
 
         renderBoardTexture(this.#scene, map, layout.board.tile);
-        renderBackdrop(this.#scene, layout.width, layout.height, layout.topPad);
+        renderBackdrop(this.#scene, layout.width, layout.height, layout.topPad, false);
+        renderBoardFrame(this.#scene, layout.board.width, layout.board.height);
         this.#backdrop?.setPosition(0, 0).setDisplaySize(layout.width, layout.height);
         this.#board?.setPosition(layout.board.x, layout.board.y);
+        this.#boardFrame
+            ?.setPosition(
+                Math.round(layout.board.x - BOARD_FRAME_THICKNESS),
+                Math.round(layout.board.y - BOARD_FRAME_THICKNESS),
+            )
+            .setDisplaySize(
+                layout.board.width + BOARD_FRAME_THICKNESS * 2,
+                layout.board.height + BOARD_FRAME_THICKNESS * 2,
+            );
 
         for (const sprite of [...this.#enemySprites, ...this.#towerSprites, ...this.#shotSprites]) {
             sprite.setScale(this.#entityScale);
@@ -731,6 +759,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
 
         this.#backdrop = null;
         this.#board = null;
+        this.#boardFrame = null;
         this.#under = null;
         this.#over = null;
         this.#enemySprites = [];
