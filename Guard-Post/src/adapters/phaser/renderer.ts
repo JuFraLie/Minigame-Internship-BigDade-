@@ -14,7 +14,18 @@ import {
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
-import { BOARD_KEY, COLORS, NOMINAL_TILE, PAD_KEY, ensureEntityTextures, ensureTextures, hex, renderBackdrop, renderBoardTexture } from './textures.ts';
+import {
+    BOARD_KEY,
+    COLORS,
+    NOMINAL_TILE,
+    PAD_KEY,
+    ensureEntityTextures,
+    ensureTextures,
+    pixelBox,
+    renderBoardTexture,
+    type PixelVariant,
+} from './textures.ts';
+import { fitFontSize, setUiFontSize, uiText } from './uiStyle.ts';
 import { createViewTransform, type ViewTransform } from './viewTransform.ts';
 
 /**
@@ -36,12 +47,9 @@ const SHOT_POOL = 160;
 const BANNER_MS = 1400;
 const FLASH_MS = 240;
 
-const FONT = 'Segoe UI, Arial, sans-serif';
-
 interface Capsule {
     readonly image: Phaser.GameObjects.Image;
     readonly label: Phaser.GameObjects.Text;
-    readonly rect: { x: number; y: number; width: number; height: number };
     cached: string;
 }
 
@@ -66,7 +74,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
     readonly #objects: Phaser.GameObjects.GameObject[] = [];
 
     #board: Phaser.GameObjects.Image | null = null;
-    #backdrop: Phaser.GameObjects.Image | null = null;
     #under: Phaser.GameObjects.Graphics | null = null;
     #over: Phaser.GameObjects.Graphics | null = null;
     /** Per-spot flag: a tower stands there, so its pad is not drawn. Reused every frame. */
@@ -92,7 +99,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #callWaveCached = '';
 
     #menuPanel!: Phaser.GameObjects.Image;
-    #menuOrnament!: Phaser.GameObjects.Graphics;
     #menuTitle!: Phaser.GameObjects.Text;
     #buildImages: Phaser.GameObjects.Image[] = [];
     #buildLabels: Phaser.GameObjects.Text[] = [];
@@ -106,7 +112,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
     #dim!: Phaser.GameObjects.Image;
     #resumeImage!: Phaser.GameObjects.Image;
     #resumeLabel!: Phaser.GameObjects.Text;
-    #pauseTitle!: Phaser.GameObjects.Text;
 
     #banner!: Phaser.GameObjects.Text;
     #bannerUntil = 0;
@@ -128,10 +133,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const scene = this.#scene;
         ensureTextures(scene);
         ensureEntityTextures(scene);
-        renderBackdrop(scene, layout.width, layout.height, layout.topPad);
         renderBoardTexture(scene, map, layout.board.tile);
 
-        this.#backdrop = this.#add(scene.add.image(0, 0, 'ui-backdrop').setOrigin(0, 0).setDepth(0));
         this.#board = this.#add(scene.add.image(layout.board.x, layout.board.y, BOARD_KEY).setOrigin(0, 0).setDepth(1));
         this.#under = this.#add(scene.add.graphics().setDepth(4));
         this.#over = this.#add(scene.add.graphics().setDepth(13));
@@ -159,24 +162,34 @@ export class PhaserCanvasRenderer implements GameViewPort {
             this.#shotSprites.push(this.#add(scene.add.image(0, 0, 'shot-dart').setVisible(false).setDepth(10).setScale(this.#entityScale)));
         }
 
-        this.#level = this.#capsule(layout.hud.level, 'Lv 1');
+        this.#level = this.#capsule(layout.hud.level, 'LV 1');
         this.#wave = this.#capsule(layout.hud.wave, 'W 1/3');
-        this.#lives = this.#capsule(layout.hud.lives, '♥ 10');
+        this.#lives = this.#capsule(layout.hud.lives, 'HP 10');
         this.#gold = this.#capsule(layout.hud.gold, 'G 100');
         this.#score = this.#capsule(layout.hud.score, '0');
         this.#pause = this.#capsule(layout.hud.pause, 'II');
 
-        this.#callWaveImage = this.#button(layout.callWave, 'ui-button-primary');
-        this.#callWaveLabel = this.#label(layout.callWave, 'Call wave', 20);
+        this.#callWaveImage = this.#button(layout.callWave, 'primary');
+        this.#callWaveLabel = this.#label(layout.callWave, 'CALL WAVE', 12, COLORS.ink);
         this.#callWaveCached = '';
 
         this.#menuPanel = this.#add(
-            scene.add.image(layout.menu.panel.x, layout.menu.panel.y, 'ui-panel').setOrigin(0, 0).setDepth(20).setVisible(false),
+            scene.add
+                .image(
+                    Math.round(layout.menu.panel.x),
+                    Math.round(layout.menu.panel.y),
+                    pixelBox(scene, layout.menu.panel.width, layout.menu.panel.height, 'panel'),
+                )
+                .setOrigin(0, 0)
+                .setDepth(20)
+                .setVisible(false),
         );
-        // Ornaments sit above the panel (20.5) and below the buttons (21), so the
-        // brackets frame the menu without ever covering a label.
-        this.#menuOrnament = this.#add(scene.add.graphics().setDepth(20.5).setVisible(false));
-        this.#menuTitle = this.#text(layout.menu.panel.x + layout.menu.panel.width / 2, layout.menu.panel.y + 20, 17, COLORS.goldBright).setVisible(false);
+        this.#menuTitle = this.#text(
+            layout.menu.panel.x + layout.menu.panel.width / 2,
+            layout.menu.panel.y + 18,
+            10,
+            COLORS.goldBright,
+        ).setVisible(false);
 
         this.#buildImages = [];
         this.#buildLabels = [];
@@ -185,10 +198,24 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#buildCostCached = [];
         const buildColor: Record<TowerType, number> = { dart: COLORS.dart, cannon: COLORS.cannon, frost: COLORS.frost };
         layout.menu.buildButtons.forEach((rect, index) => {
-            this.#buildImages.push(this.#button(rect, 'ui-button').setVisible(false));
+            this.#buildImages.push(this.#button(rect, 'button').setVisible(false));
             const type = TOWER_TYPES[index];
-            this.#buildLabels.push(this.#label({ ...rect, y: rect.y + 16 }, '', 16, type ? buildColor[type] : COLORS.text).setVisible(false));
-            this.#buildCosts.push(this.#label({ ...rect, y: rect.y + rect.height - 22 }, '', 14, COLORS.textDim).setVisible(false));
+            this.#buildLabels.push(
+                this.#label(
+                    { ...rect, y: rect.y + rect.height * 0.3 },
+                    '',
+                    fitFontSize(rect.width - 8, 8, 11, 8),
+                    type ? buildColor[type] : COLORS.text,
+                ).setVisible(false),
+            );
+            this.#buildCosts.push(
+                this.#label(
+                    { ...rect, y: rect.y + rect.height * 0.7 },
+                    '',
+                    fitFontSize(rect.width - 8, 5, 9, 7),
+                    COLORS.textDim,
+                ).setVisible(false),
+            );
             this.#buildCached.push('');
             this.#buildCostCached.push('');
         });
@@ -197,20 +224,26 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#towerLabels = [];
         this.#towerCached = [];
         for (const rect of layout.menu.towerButtons) {
-            this.#towerImages.push(this.#button(rect, 'ui-button').setVisible(false));
-            this.#towerLabels.push(this.#label(rect, '', 16).setVisible(false));
+            this.#towerImages.push(this.#button(rect, 'button').setVisible(false));
+            this.#towerLabels.push(
+                this.#label(rect, '', fitFontSize(rect.width - 10, 13, 11, 7)).setVisible(false),
+            );
             this.#towerCached.push('');
         }
 
         this.#dim = this.#add(
-            scene.add.image(0, 0, 'ui-white').setOrigin(0, 0).setDepth(40).setAlpha(0.62).setVisible(false).setDisplaySize(layout.width, layout.height),
+            scene.add.image(0, 0, 'ui-ink').setOrigin(0, 0).setDepth(40).setAlpha(0.62).setVisible(false).setDisplaySize(layout.width, layout.height),
         );
-        this.#resumeImage = this.#button(layout.resume, 'ui-button-primary', 41).setVisible(false);
-        this.#resumeLabel = this.#label(layout.resume, 'Resume', 20, COLORS.text, 42).setVisible(false);
-        // Above the dim (depth 40) and gold, so the pause screen reads as a state.
-        this.#pauseTitle = this.#text(layout.width / 2, layout.resume.y - 36, 26, COLORS.goldBright).setText('Paused').setVisible(false).setDepth(42);
+        this.#resumeImage = this.#button(layout.resume, 'primary', 41).setVisible(false);
+        this.#resumeLabel = this.#label(
+            layout.resume,
+            'RESUME',
+            fitFontSize(layout.resume.width - 24, 6, 14, 9),
+            COLORS.ink,
+            42,
+        ).setVisible(false);
 
-        this.#banner = this.#text(layout.width / 2, layout.height * 0.4, 26, COLORS.goldBright).setVisible(false).setDepth(50);
+        this.#banner = this.#text(layout.width / 2, layout.height * 0.4, 14, COLORS.goldBright, true).setVisible(false).setDepth(50);
         this.#flash = this.#add(
             scene.add.image(0, 0, 'ui-white').setOrigin(0, 0).setDepth(60).setAlpha(0).setVisible(false).setDisplaySize(layout.width, layout.height),
         );
@@ -226,9 +259,7 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#transform = createViewTransform(layout.board);
         this.#entityScale = layout.board.tile / NOMINAL_TILE;
 
-        renderBackdrop(this.#scene, layout.width, layout.height, layout.topPad);
         renderBoardTexture(this.#scene, map, layout.board.tile);
-        this.#backdrop?.setPosition(0, 0).setDisplaySize(layout.width, layout.height);
         this.#board?.setPosition(layout.board.x, layout.board.y);
 
         for (const sprite of [...this.#enemySprites, ...this.#towerSprites, ...this.#shotSprites]) {
@@ -254,33 +285,55 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#place(this.#score, layout.hud.score);
         this.#place(this.#pause, layout.hud.pause);
 
-        this.#callWaveImage.setPosition(layout.callWave.x, layout.callWave.y).setDisplaySize(layout.callWave.width, layout.callWave.height);
-        this.#callWaveLabel.setPosition(layout.callWave.x + layout.callWave.width / 2, layout.callWave.y + layout.callWave.height / 2);
+        this.#callWaveImage
+            .setTexture(pixelBox(this.#scene, layout.callWave.width, layout.callWave.height, 'primary'))
+            .setPosition(Math.round(layout.callWave.x), Math.round(layout.callWave.y));
+        this.#callWaveLabel.setPosition(
+            layout.callWave.x + layout.callWave.width / 2,
+            layout.callWave.y + layout.callWave.height / 2,
+        );
+        setUiFontSize(this.#callWaveLabel, fitFontSize(layout.callWave.width - 24, 14, 14, 8));
 
-        this.#menuPanel.setPosition(layout.menu.panel.x, layout.menu.panel.y).setDisplaySize(layout.menu.panel.width, layout.menu.panel.height);
-        this.#menuTitle.setPosition(layout.menu.panel.x + layout.menu.panel.width / 2, layout.menu.panel.y + 20);
+        this.#menuPanel
+            .setTexture(pixelBox(this.#scene, layout.menu.panel.width, layout.menu.panel.height, 'panel'))
+            .setPosition(Math.round(layout.menu.panel.x), Math.round(layout.menu.panel.y));
+        this.#menuTitle.setPosition(layout.menu.panel.x + layout.menu.panel.width / 2, layout.menu.panel.y + 18);
+        setUiFontSize(this.#menuTitle, fitFontSize(layout.menu.panel.width - 20, 19, 12, 8));
 
         layout.menu.buildButtons.forEach((rect, index) => {
             const image = this.#buildImages[index];
             const label = this.#buildLabels[index];
             const cost = this.#buildCosts[index];
             if (!image || !label || !cost) return;
-            image.setPosition(rect.x, rect.y).setDisplaySize(rect.width, rect.height);
-            label.setPosition(rect.x + rect.width / 2, rect.y + 18);
-            cost.setPosition(rect.x + rect.width / 2, rect.y + rect.height - 20);
+            const type = TOWER_TYPES[index];
+            image
+                .setTexture(pixelBox(this.#scene, rect.width, rect.height, type ?? 'button'))
+                .setPosition(Math.round(rect.x), Math.round(rect.y));
+            label
+                .setPosition(rect.x + rect.width / 2, rect.y + rect.height * 0.3)
+                .setFontSize(fitFontSize(rect.width - 8, 8, 11, 8));
+            cost
+                .setPosition(rect.x + rect.width / 2, rect.y + rect.height * 0.7)
+                .setFontSize(fitFontSize(rect.width - 8, 5, 9, 7));
         });
         layout.menu.towerButtons.forEach((rect, index) => {
             const image = this.#towerImages[index];
             const label = this.#towerLabels[index];
             if (!image || !label) return;
-            image.setPosition(rect.x, rect.y).setDisplaySize(rect.width, rect.height);
+            image
+                .setTexture(pixelBox(this.#scene, rect.width, rect.height, 'button'))
+                .setPosition(Math.round(rect.x), Math.round(rect.y));
             label.setPosition(rect.x + rect.width / 2, rect.y + rect.height / 2);
+            label.setFontSize(fitFontSize(rect.width - 10, 13, 11, 7));
         });
 
         this.#dim.setDisplaySize(layout.width, layout.height);
-        this.#resumeImage.setPosition(layout.resume.x, layout.resume.y).setDisplaySize(layout.resume.width, layout.resume.height);
-        this.#resumeLabel.setPosition(layout.resume.x + layout.resume.width / 2, layout.resume.y + layout.resume.height / 2);
-        this.#pauseTitle.setPosition(layout.width / 2, layout.resume.y - 36);
+        this.#resumeImage
+            .setTexture(pixelBox(this.#scene, layout.resume.width, layout.resume.height, 'primary'))
+            .setPosition(Math.round(layout.resume.x), Math.round(layout.resume.y));
+        this.#resumeLabel
+            .setPosition(layout.resume.x + layout.resume.width / 2, layout.resume.y + layout.resume.height / 2)
+            .setFontSize(fitFontSize(layout.resume.width - 24, 6, 14, 9));
 
         // Pads sit at their spot centres, sized to the pad footprint; visibility is
         // the only thing `present` changes per frame.
@@ -291,60 +344,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
         });
 
         this.#banner.setPosition(layout.width / 2, layout.height * 0.4);
+        this.#banner.setFontSize(fitFontSize(layout.width - 24, 21, 18, 8));
         this.#flash.setDisplaySize(layout.width, layout.height);
-        this.#layoutMenuOrnament(layout);
-    }
-
-    /**
-     * Gold L-brackets on the build menu's four corners, drawn at the panel's real
-     * rect once per layout — never stretched with a texture, never in the frame path.
-     */
-    #layoutMenuOrnament(layout: PlayLayout): void {
-        const g = this.#menuOrnament;
-        if (!g) return;
-        g.clear();
-
-        const panel = layout.menu.panel;
-        const inset = 5;
-        const length = 13;
-        const x0 = panel.x + inset;
-        const y0 = panel.y + inset;
-        const x1 = panel.x + panel.width - inset;
-        const y1 = panel.y + panel.height - inset;
-
-        g.lineStyle(3, COLORS.gold, 0.95);
-        g.beginPath();
-        g.moveTo(x0, y0 + length);
-        g.lineTo(x0, y0);
-        g.lineTo(x0 + length, y0);
-        g.moveTo(x1, y0 + length);
-        g.lineTo(x1, y0);
-        g.lineTo(x1 - length, y0);
-        g.moveTo(x0, y1 - length);
-        g.lineTo(x0, y1);
-        g.lineTo(x0 + length, y1);
-        g.moveTo(x1, y1 - length);
-        g.lineTo(x1, y1);
-        g.lineTo(x1 - length, y1);
-        g.strokePath();
-
-        g.fillStyle(COLORS.goldBright, 1);
-        for (const [cx, cy] of [
-            [x0, y0],
-            [x1, y0],
-            [x0, y1],
-            [x1, y1],
-        ]) {
-            g.fillPoints(
-                [
-                    new Phaser.Geom.Point(cx, cy - 4),
-                    new Phaser.Geom.Point(cx + 4, cy),
-                    new Phaser.Geom.Point(cx, cy + 4),
-                    new Phaser.Geom.Point(cx - 4, cy),
-                ],
-                true,
-            );
-        }
     }
 
     // -- drawing ----------------------------------------------------------
@@ -380,9 +381,9 @@ export class PhaserCanvasRenderer implements GameViewPort {
             capsule.cached = value;
             capsule.label.setText(value);
         };
-        set(this.#level, `Lv ${snapshot.level}`);
+        set(this.#level, `LV ${snapshot.level}`);
         set(this.#wave, `W ${snapshot.wave}/${WAVES_PER_LEVEL}`);
-        set(this.#lives, `♥ ${Math.max(0, snapshot.lives)}`);
+        set(this.#lives, `HP ${Math.max(0, snapshot.lives)}`);
         set(this.#gold, `G ${formatGold(snapshot.gold)}`);
         set(this.#score, formatScore(snapshot.score));
     }
@@ -393,8 +394,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#callWaveLabel.setVisible(visible);
         if (!visible) return;
 
-        const countdown = snapshot.waveState === 'gap' ? `  ${Math.ceil(snapshot.pendingSeconds)}s` : '';
-        const value = `Call wave${countdown}`;
+        const countdown = snapshot.waveState === 'gap' ? `  ${Math.ceil(snapshot.pendingSeconds)}S` : '';
+        const value = `CALL WAVE${countdown}`;
         if (this.#callWaveCached === value) return;
         this.#callWaveCached = value;
         this.#callWaveLabel.setText(value);
@@ -407,7 +408,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const showAny = showBuild || showTower;
 
         this.#menuPanel.setVisible(showAny);
-        this.#menuOrnament.setVisible(showAny);
         this.#menuTitle.setVisible(showAny);
 
         for (let i = 0; i < this.#buildImages.length; i++) {
@@ -422,15 +422,24 @@ export class PhaserCanvasRenderer implements GameViewPort {
         if (!showAny || selection === null) return;
 
         if (showBuild) {
-            this.#menuTitle.setText('Build tower');
-            layout.menu.buildButtons.forEach((_rect, index) => {
+            this.#menuTitle.setText('BUILD TOWER');
+            layout.menu.buildButtons.forEach((rect, index) => {
                 const type = TOWER_TYPES[index];
                 if (!type) return;
                 const spec = TOWER_SPECS[type];
                 const affordable = snapshot.gold >= spec.cost;
-                const name = type.charAt(0).toUpperCase() + type.slice(1);
-                this.#setButton(this.#buildImages[index], this.#buildLabels[index], this.#buildCached, index, `${name}`, !affordable, `ui-button-${type}`);
-                const costValue = `${spec.cost}g`;
+                const name = type.toUpperCase();
+                this.#setButton(
+                    this.#buildImages[index],
+                    this.#buildLabels[index],
+                    this.#buildCached,
+                    index,
+                    name,
+                    !affordable,
+                    rect,
+                    type,
+                );
+                const costValue = `${spec.cost}G`;
                 const cost = this.#buildCosts[index];
                 const costKey = `${costValue}:${affordable ? 1 : 0}`;
                 if (this.#buildCostCached[index] !== costKey) {
@@ -445,22 +454,42 @@ export class PhaserCanvasRenderer implements GameViewPort {
         const tower = snapshot.towers.find((candidate) => candidate.id === towerId);
         if (!tower) return;
 
-        const name = tower.type.charAt(0).toUpperCase() + tower.type.slice(1);
-        this.#menuTitle.setText(`${name} tower  ·  Lv ${tower.level}`);
+        const name = tower.type.toUpperCase();
+        this.#menuTitle.setText(`${name} TOWER - LV ${tower.level}`);
 
         const maxed = tower.level >= 3;
-        const upgradeCostValue = maxed ? 'Max level' : `${upgradeCost(tower.type, tower.level + 1)}g`;
+        const upgradeCostValue = maxed ? 'MAX' : `${upgradeCost(tower.type, tower.level + 1)}G`;
         const canUpgrade = !maxed && snapshot.gold >= upgradeCost(tower.type, tower.level + 1);
         const refund = sellRefund(tower.spent);
 
-        this.#setButton(this.#towerImages[0], this.#towerLabels[0], this.#towerCached, 0, `Upgrade  ${upgradeCostValue}`, !canUpgrade, 'ui-button-primary');
-        this.#setButton(this.#towerImages[1], this.#towerLabels[1], this.#towerCached, 1, `Sell  +${refund}g`, false, 'ui-button-danger');
+        const [upgradeRect, sellRect] = layout.menu.towerButtons;
+        if (!upgradeRect || !sellRect) return;
+        this.#setButton(
+            this.#towerImages[0],
+            this.#towerLabels[0],
+            this.#towerCached,
+            0,
+            `UPGRADE ${upgradeCostValue}`,
+            !canUpgrade,
+            upgradeRect,
+            'primary',
+        );
+        this.#setButton(
+            this.#towerImages[1],
+            this.#towerLabels[1],
+            this.#towerCached,
+            1,
+            `SELL +${refund}G`,
+            false,
+            sellRect,
+            'danger',
+        );
     }
 
     /**
-     * Swaps a button between its variant and the disabled slab. `enabledKey` carries
-     * the variant — gold for the action that moves the round forward, the tower's
-     * colour for a build, red for selling — and disabled always wins.
+     * Swaps a button between its variant and the disabled box. `enabledVariant` carries
+     * the role — gold for the action that moves the round forward, the tower's colour
+     * for a build, red for selling — and disabled always wins.
      */
     #setButton(
         image: Phaser.GameObjects.Image,
@@ -469,9 +498,10 @@ export class PhaserCanvasRenderer implements GameViewPort {
         index: number,
         value: string,
         disabled: boolean,
-        enabledKey = 'ui-button',
+        rect: { x: number; y: number; width: number; height: number },
+        enabledVariant: PixelVariant = 'button',
     ): void {
-        const key = disabled ? 'ui-button-disabled' : enabledKey;
+        const key = pixelBox(this.#scene, rect.width, rect.height, disabled ? 'disabled' : enabledVariant);
         if (image.texture.key !== key) image.setTexture(key);
         label.setAlpha(disabled ? 0.55 : 1);
         if (cache[index] === value) return;
@@ -483,7 +513,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#dim.setVisible(ui.paused);
         this.#resumeImage.setVisible(ui.paused);
         this.#resumeLabel.setVisible(ui.paused);
-        this.#pauseTitle.setVisible(ui.paused);
         if (ui.paused) {
             this.#dim.setDisplaySize(layout.width, layout.height);
         }
@@ -641,16 +670,16 @@ export class PhaserCanvasRenderer implements GameViewPort {
         for (const event of events) {
             switch (event.type) {
                 case 'waveStarted':
-                    this.#showBanner(`Wave ${event.wave} of ${WAVES_PER_LEVEL}`, now + 1000);
+                    this.#showBanner(`WAVE ${event.wave} OF ${WAVES_PER_LEVEL}`, now + 1000);
                     break;
                 case 'waveCleared':
-                    this.#showBanner(`Wave cleared   +${event.bonus}g`, now + BANNER_MS);
+                    this.#showBanner(`WAVE CLEARED   +${event.bonus}G`, now + BANNER_MS);
                     break;
                 case 'levelCleared':
-                    this.#showBanner('Level cleared!', now + BANNER_MS);
+                    this.#showBanner('LEVEL CLEARED!', now + BANNER_MS);
                     break;
                 case 'defeat':
-                    this.#showBanner('The gate fell!', now + BANNER_MS);
+                    this.#showBanner('THE GATE FELL!', now + BANNER_MS);
                     break;
                 case 'leak':
                     this.#flashUntil = now + FLASH_MS;
@@ -684,7 +713,6 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#objects.length = 0;
 
         this.#board = null;
-        this.#backdrop = null;
         this.#under = null;
         this.#over = null;
         this.#enemySprites = [];
@@ -707,43 +735,59 @@ export class PhaserCanvasRenderer implements GameViewPort {
         return object;
     }
 
-    #text(x: number, y: number, size: number, color: number): Phaser.GameObjects.Text {
-        // Every label carries an ink stroke: the HUD sits on grass, the menu on stone,
-        // and the banner on the field — one treatment keeps all three readable.
-        const text = this.#scene.add
-            .text(x, y, '', {
-                fontFamily: FONT,
-                fontSize: `${size}px`,
-                color: hex(color),
-                stroke: hex(COLORS.ink),
-                strokeThickness: Math.max(2, Math.round(size * 0.14)),
-            })
-            .setOrigin(0.5)
-            .setDepth(20);
+    #text(
+        x: number,
+        y: number,
+        size: number,
+        color: number,
+        shadow: boolean | { x?: number; y?: number } = false,
+    ): Phaser.GameObjects.Text {
+        // One type voice, no outline: the pixel box behind each label carries the
+        // contrast. The banner sits straight on the field, so it keeps a hard shadow.
+        const text = uiText(this.#scene, x, y, '', size, { color, shadow }).setOrigin(0.5).setDepth(20);
         return this.#add(text);
     }
 
     #capsule(rect: { x: number; y: number; width: number; height: number }, value: string): Capsule {
         const image = this.#add(
             this.#scene.add
-                .image(rect.x, rect.y, 'ui-capsule')
+                .image(
+                    Math.round(rect.x),
+                    Math.round(rect.y),
+                    pixelBox(this.#scene, rect.width, rect.height, 'capsule'),
+                )
                 .setOrigin(0, 0)
-                .setDepth(20)
-                .setDisplaySize(rect.width, rect.height),
+                .setDepth(20),
         );
-        const label = this.#text(rect.x + rect.width / 2, rect.y + rect.height / 2, 14, COLORS.text);
+        const label = this.#text(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2,
+            fitFontSize(rect.width - 4, 5, 10, 7),
+            COLORS.text,
+        );
         label.setText(value);
-        return { image, label, rect, cached: value };
+        return { image, label, cached: value };
     }
 
     #place(capsule: Capsule, rect: { x: number; y: number; width: number; height: number }): void {
-        capsule.image.setPosition(rect.x, rect.y).setDisplaySize(rect.width, rect.height);
-        capsule.label.setPosition(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        capsule.image
+            .setTexture(pixelBox(this.#scene, rect.width, rect.height, 'capsule'))
+            .setPosition(Math.round(rect.x), Math.round(rect.y));
+        capsule.label
+            .setPosition(rect.x + rect.width / 2, rect.y + rect.height / 2)
+            .setFontSize(fitFontSize(rect.width - 4, 5, 10, 7));
     }
 
-    #button(rect: { x: number; y: number; width: number; height: number }, key: string, depth = 21): Phaser.GameObjects.Image {
+    #button(
+        rect: { x: number; y: number; width: number; height: number },
+        variant: PixelVariant,
+        depth = 21,
+    ): Phaser.GameObjects.Image {
         return this.#add(
-            this.#scene.add.image(rect.x, rect.y, key).setOrigin(0, 0).setDepth(depth).setDisplaySize(rect.width, rect.height),
+            this.#scene.add
+                .image(Math.round(rect.x), Math.round(rect.y), pixelBox(this.#scene, rect.width, rect.height, variant))
+                .setOrigin(0, 0)
+                .setDepth(depth),
         );
     }
 

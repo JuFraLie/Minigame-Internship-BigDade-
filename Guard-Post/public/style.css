@@ -1,5 +1,14 @@
 /* Layout only — the game itself is rendered exclusively by the Phaser canvas. */
 
+/* Bundled locally: the UI font must load before Phaser lays out any text. */
+@font-face {
+    font-family: 'Press Start 2P';
+    src: url('./fonts/PressStart2P-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+}
+
 html,
 body {
     width: 100%;
@@ -7,7 +16,7 @@ body {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background-color: #101a2e;
+    background-color: #3fb6e8;
     color: rgba(255, 255, 255, 0.87);
     /* The game is touch-only inside a mobile WebView: never scroll, never zoom,
        never trigger pull-to-refresh or the long-press callout. */

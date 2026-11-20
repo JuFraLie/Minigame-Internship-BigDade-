@@ -8,29 +8,28 @@ import { assetImage, bakeSprites } from './assets.ts';
 /**
  * Textures: everything the game draws with.
  *
- * UI chrome (buttons, panels, capsules, backdrop) is baked at boot from canvas
- * gradients — no image file and no CDN (AGENTS.md §3.4). The chrome is carved-stone
- * by design: chamfered slabs with a top sheen, a bottom shade and a light slate
- * bevel over a dark slate fill, so the HUD reads as part of the pack's pixel-art
- * world rather than a modern overlay; primary actions are gate-gold gradients, the
- * mobile-game "juicy button" look. The sprite pack in `public/` supplies the game
- * world: enemies, towers, shots, the grass field, the tile-set road, the gate
- * castle and the scenery, baked into the renderer's texture keys by `assets.ts`.
- * Entity textures are authored at a nominal tile of `NOMINAL_TILE` px and scaled by
- * the renderer, so a resize never regenerates anything but the board itself. Any
- * entity texture the pack did not provide falls back to the old procedural drawing,
- * so a missing file never stops a round.
+ * UI chrome (buttons, panels, capsules) is generated per size with a 2D canvas — no
+ * image file and no CDN (AGENTS.md §3.4). The chrome is deliberately flat pixel art:
+ * a hard ink border, a solid fill, and a two-pixel light/shade bevel. No gradients,
+ * rounded corners or inner outlines, so the UI speaks the same visual language as the
+ * sprites instead of looking like a modern overlay. The sprite pack in `public/`
+ * supplies the game world: enemies, towers, shots, the grass field, the tile-set
+ * road, the gate castle and the scenery, baked into the renderer's texture keys by
+ * `assets.ts`. Entity textures are authored at a nominal tile of `NOMINAL_TILE` px
+ * and scaled by the renderer, so a resize never regenerates anything but the board
+ * itself. Any entity texture the pack did not provide falls back to the old procedural
+ * drawing, so a missing file never stops a round.
  *
- * Three surfaces are cut from the pack itself rather than drawn: the build pads (a
- * silvered slab of the stone tile set, so a pad reads as pavement), the Play
- * Screen's title plaque (the same stone, as a banner behind the gold title) and the
- * full-screen backdrop (masonry, glow, vignette and a gold frame) every screen
- * stands on.
+ * Two surfaces are cut from the pack itself rather than drawn: the build pads (a
+ * silvered slab of the stone tile set, so a pad reads as pavement) and the Play
+ * Screen's gate castle.
  */
 
 export const NOMINAL_TILE = 44;
 
 export const COLORS = {
+    /** Bright sky behind the board and every screen — the mobile-game backdrop. */
+    background: 0x3fb6e8,
     void: 0x101a2e,
     grass: 0x27503b,
     grassEdge: 0x1f4131,
@@ -44,21 +43,6 @@ export const COLORS = {
     gate: 0xd9b64a,
     gold: 0xd9b64a,
     goldBright: 0xf2d98c,
-    goldDark: 0x8a7426,
-    /** Slate sampled from the stone tile set, darkened for chrome fills. */
-    stone: 0x27314e,
-    stoneEdge: 0x9db0cf,
-    stoneShadow: 0x151b2e,
-    capsule: 0x27314e,
-    capsuleEdge: 0x9db0cf,
-    button: 0x2c3854,
-    buttonEdge: 0x9db0cf,
-    buttonPrimary: 0x7d6a24,
-    buttonDanger: 0x5c2f36,
-    buttonDisabled: 0x242a3a,
-    buttonDisabledEdge: 0x4a5163,
-    panel: 0x1a2340,
-    panelEdge: 0x8fa2c4,
     white: 0xffffff,
     text: 0xe8eefc,
     textDim: 0x9db1d4,
@@ -75,12 +59,100 @@ export const COLORS = {
     select: 0xf2d98c,
     hp: 0x68d391,
     hpLost: 0x3a2029,
-    /** Ink behind every label stroke, so text survives on grass or stone alike. */
+    /** Ink used for pixel borders and the hard title shadow. */
     ink: 0x0d1524,
 } as const;
 
 export function hex(color: number): string {
     return `#${color.toString(16).padStart(6, '0')}`;
+}
+
+/**
+ * Makes a texture sample with nearest-neighbour. The Canvas renderer reads this from
+ * the texture source, so it is the only way to keep generated pixels crisp when the
+ * camera zooms for a high-density screen.
+ */
+function markNearest(scene: Phaser.Scene, key: string): void {
+    const texture = scene.textures.get(key);
+    if (texture && texture.key !== '__MISSING') texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+}
+
+// ---------------------------------------------------------------------------
+// Pixel chrome
+// ---------------------------------------------------------------------------
+
+/** Every UI surface variant. One variant = one flat palette, no gradients. */
+export type PixelVariant =
+    | 'panel'
+    | 'plaque'
+    | 'capsule'
+    | 'button'
+    | 'primary'
+    | 'danger'
+    | 'disabled'
+    | 'dart'
+    | 'cannon'
+    | 'frost';
+
+interface PixelPalette {
+    readonly body: number;
+    readonly light: number;
+    readonly shade: number;
+    readonly border: number;
+}
+
+/**
+ * Colours sampled from the sprite pack: ink for outlines, slate for neutral chrome,
+ * gate gold for the forward action, and each tower's own colour for its build button.
+ */
+const PIXEL: Record<PixelVariant, PixelPalette> = {
+    panel: { border: 0x070b14, body: 0x1a2238, light: 0x2f3d5e, shade: 0x111827 },
+    plaque: { border: 0xd9b64a, body: 0x18223a, light: 0xf2d98c, shade: 0x8a7426 },
+    capsule: { border: 0x070b14, body: 0x1c263e, light: 0x33415f, shade: 0x121a2b },
+    button: { border: 0x070b14, body: 0x2b3552, light: 0x47577f, shade: 0x171d2e },
+    primary: { border: 0x2a1c08, body: 0xe0a92e, light: 0xffd76a, shade: 0x9c6b12 },
+    danger: { border: 0x2a0e0e, body: 0xb0443f, light: 0xe07168, shade: 0x6e2422 },
+    disabled: { border: 0x070b14, body: 0x262c3c, light: 0x333b4d, shade: 0x181c28 },
+    dart: { border: 0x1b7a74, body: 0x243652, light: 0x7fe8e0, shade: 0x143f4a },
+    cannon: { border: 0x8f4a1d, body: 0x3a2b3e, light: 0xffb07a, shade: 0x5a2a14 },
+    frost: { border: 0x3f7fa8, body: 0x22324e, light: 0xc4e8ff, shade: 0x254c68 },
+};
+
+/**
+ * A flat pixel box drawn at its exact final size: a hard 2 px ink border, a solid
+ * body, a 2 px light bevel on top/left and a 2 px shade bevel on bottom/right.
+ *
+ * No rounding, gradient, shadow or inner outline — the same vocabulary as the sprites.
+ * Generating one texture per size keeps the 2 px bevel identical on every screen
+ * instead of stretching a small texture and blurring its edges.
+ */
+export function pixelBox(scene: Phaser.Scene, width: number, height: number, variant: PixelVariant): string {
+    const w = Math.max(10, Math.round(width));
+    const h = Math.max(10, Math.round(height));
+    const key = `ui-${variant}-${w}x${h}`;
+    if (scene.textures.exists(key)) return key;
+
+    const palette = PIXEL[variant];
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 'ui-white';
+
+    ctx.fillStyle = hex(palette.border);
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = hex(palette.body);
+    ctx.fillRect(2, 2, w - 4, h - 4);
+    ctx.fillStyle = hex(palette.light);
+    ctx.fillRect(2, 2, w - 4, 2);
+    ctx.fillRect(2, 2, 2, h - 4);
+    ctx.fillStyle = hex(palette.shade);
+    ctx.fillRect(2, h - 4, w - 4, 2);
+    ctx.fillRect(w - 4, 2, 2, h - 4);
+
+    scene.textures.addCanvas(key, canvas);
+    markNearest(scene, key);
+    return key;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,70 +169,16 @@ function polygon(g: Phaser.GameObjects.Graphics, cx: number, cy: number, radius:
     g.strokePoints(points, true);
 }
 
-/**
- * Bakes a canvas texture once; `draw` receives a context sized to the texture.
- * Canvas (not Graphics) because the chrome needs gradients and sheens — the lifted,
- * lit look every mobile button has.
- */
-function ensureCanvas(scene: Phaser.Scene, key: string, width: number, height: number, draw: (ctx: Ctx) => void): void {
-    if (scene.textures.exists(key)) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(width));
-    canvas.height = Math.max(1, Math.round(height));
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    draw(ctx);
-    scene.textures.addCanvas(key, canvas);
-}
-
-/** Chamfered path on a 2D context — the carved corner every slab shares. */
-function chamferPath(ctx: Ctx, x: number, y: number, width: number, height: number, cut: number): void {
-    const c = Math.min(cut, width / 2, height / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + c, y);
-    ctx.lineTo(x + width - c, y);
-    ctx.lineTo(x + width, y + c);
-    ctx.lineTo(x + width, y + height - c);
-    ctx.lineTo(x + width - c, y + height);
-    ctx.lineTo(x + c, y + height);
-    ctx.lineTo(x, y + height - c);
-    ctx.lineTo(x, y + c);
-    ctx.closePath();
-}
-
-interface SlabStyle {
-    readonly fill: string;
-    /** Border colour; the variant's identity (gold, silver, tower colour, red). */
-    readonly edge: string;
-}
-
-const SLATE: SlabStyle = { fill: '#2c3854', edge: '#55648a' };
-const GOLD: SlabStyle = { fill: '#b39134', edge: '#7d6a24' };
-
-/**
- * The one look every chrome slab shares, kept deliberately plain: a flat fill and
- * a thin border around a chamfered outline — no gradients, no sheens, no inner
- * lines. Colour alone carries the variant.
- */
-function paintSlab(ctx: Ctx, width: number, height: number, cut: number, style: SlabStyle): void {
-    chamferPath(ctx, 1, 1, width - 2, height - 2, cut);
-    ctx.fillStyle = style.fill;
-    ctx.fill();
-    chamferPath(ctx, 1, 1, width - 2, height - 2, cut);
-    ctx.strokeStyle = style.edge;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-}
-
 function ensure(scene: Phaser.Scene, key: string, width: number, height: number, draw: (g: Phaser.GameObjects.Graphics) => void): void {
     if (scene.textures.exists(key)) return;
     const g = scene.add.graphics();
     draw(g);
     g.generateTexture(key, width, height);
     g.destroy();
+    markNearest(scene, key);
 }
 
-/** Solid white block; stretched and tinted for fills, flashes and the pause dim. */
+/** Solid white block, used for the leak flash. */
 function ensureWhite(scene: Phaser.Scene): void {
     ensure(scene, 'ui-white', 8, 8, (g) => {
         g.fillStyle(COLORS.white, 1);
@@ -168,40 +186,11 @@ function ensureWhite(scene: Phaser.Scene): void {
     });
 }
 
-/** A soft gold mote, drifted and faded by the menu's tweens. */
-function ensureSpark(scene: Phaser.Scene): void {
-    ensureCanvas(scene, 'ui-spark', 16, 16, (ctx) => {
-        const glow = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
-        glow.addColorStop(0, 'rgba(255, 244, 214, 0.95)');
-        glow.addColorStop(0.4, 'rgba(242, 217, 140, 0.5)');
-        glow.addColorStop(1, 'rgba(217, 182, 74, 0)');
-        ctx.fillStyle = glow;
-        ctx.fillRect(0, 0, 16, 16);
-    });
-}
-
-function ensureChrome(scene: Phaser.Scene): void {
-    ensureCanvas(scene, 'ui-capsule', 120, 40, (ctx) => {
-        paintSlab(ctx, 120, 40, 5, { stops: ['#3e4b6e', '#27314e', '#1c2440'], edge: '#9db0cf', inner: 'rgba(255,255,255,0.14)' });
-    });
-    const button = (key: string, style: SlabStyle): void => {
-        ensureCanvas(scene, key, 240, 56, (ctx) => {
-            paintSlab(ctx, 240, 56, 7, style);
-        });
-    };
-    button('ui-button', SLATE);
-    // Primary is gate gold: the one button that carries the round forward.
-    button('ui-button-primary', GOLD);
-    button('ui-button-danger', { stops: ['#a05058', '#71383f', '#4c242b'], edge: '#e08a90', inner: 'rgba(255,255,255,0.18)' });
-    button('ui-button-disabled', { stops: ['#343b4f', '#242a3a', '#1b2030'], edge: '#4a5163', inner: 'rgba(255,255,255,0.08)' });
-
-    // Build buttons carry their tower's colour, so the bar reads at a glance.
-    button('ui-button-dart', { ...SLATE, edge: '#37c2b8' });
-    button('ui-button-cannon', { ...SLATE, edge: '#e07b39' });
-    button('ui-button-frost', { ...SLATE, edge: '#7ec8ff' });
-
-    ensureCanvas(scene, 'ui-panel', 360, 320, (ctx) => {
-        paintSlab(ctx, 360, 320, 9, { stops: ['#26314f', '#1a2340', '#131a2e'], edge: '#8fa2c4', inner: 'rgba(255,255,255,0.12)' });
+/** Solid ink block, used to darken the field behind the pause overlay. */
+function ensureInk(scene: Phaser.Scene): void {
+    ensure(scene, 'ui-ink', 8, 8, (g) => {
+        g.fillStyle(COLORS.ink, 1);
+        g.fillRect(0, 0, 8, 8);
     });
 }
 
@@ -253,185 +242,33 @@ export function ensurePadTexture(scene: Phaser.Scene): void {
     ctx.strokeRect(4.5, 4.5, size - 9, size - 9);
 
     scene.textures.addCanvas(PAD_KEY, canvas);
+    markNearest(scene, PAD_KEY);
 }
 
 /**
- * The Play Screen's title plaque: the stone tile set repeated at native size (a
- * pattern never stretches, so the bricks stay crisp at any width), a dark wash so
- * the gold title reads, ribbon tails at both ends and a carved gold frame with
- * corner diamonds — a banner, not a rectangle. Rebaked when the size changes.
+ * Crops frame 0 of the pack's blue castle and upscales it by an integer factor with
+ * nearest-neighbour, so the Play Screen shows the thing the player is defending — the
+ * pack's own art, not a generic UI glyph. Returns the texture key, or null when the
+ * pack is unavailable.
  */
-export function renderTitlePlaque(scene: Phaser.Scene, width: number, height: number): void {
-    const key = 'ui-plaque';
-    const w = Math.max(1, Math.round(width));
-    const h = Math.max(1, Math.round(height));
-    if (scene.textures.exists(key)) {
-        const source = scene.textures.get(key).source[0];
-        if (source && source.width === w && source.height === h) return;
-        scene.textures.remove(key);
-    }
+export function ensureCastleIcon(scene: Phaser.Scene, scale: 2 | 3): string | null {
+    const key = `ui-castle-${scale}`;
+    if (scene.textures.exists(key)) return key;
+    const spec = CASTLES[0];
+    if (!spec) return null;
+    const source = assetImage(scene, spec.file);
+    if (!source) return null;
 
     const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = spec.frameWidth * scale;
+    canvas.height = spec.frameHeight * scale;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const stone = assetImage(scene, STONE_TILESET.file);
-    const pattern = stone ? ctx.createPattern(stone, 'repeat') : null;
-    ctx.fillStyle = pattern ?? hex(COLORS.stone);
-    ctx.fillRect(0, 0, w, h);
-    // The wash keeps the gold title readable on the masonry.
-    ctx.fillStyle = 'rgba(13, 21, 36, 0.55)';
-    ctx.fillRect(0, 0, w, h);
-
-    // Ribbon tails: dark-gold ends with a V-notch, like a hanging banner.
-    const tail = Math.min(30, w * 0.14);
-    const notch = Math.min(12, tail * 0.5);
-    ctx.fillStyle = '#7d6a24';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(tail, 0);
-    ctx.lineTo(tail - notch, h / 2);
-    ctx.lineTo(tail, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(w, 0);
-    ctx.lineTo(w - tail, 0);
-    ctx.lineTo(w - tail + notch, h / 2);
-    ctx.lineTo(w - tail, h);
-    ctx.lineTo(w, h);
-    ctx.closePath();
-    ctx.fill();
-
-    // Carved frame: ink hairline under the gold edge, dark line inside.
-    chamferPath(ctx, 1.5, 1.5, w - 3, h - 3, 7);
-    ctx.strokeStyle = hex(COLORS.ink);
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    chamferPath(ctx, 1.5, 1.5, w - 3, h - 3, 7);
-    ctx.strokeStyle = hex(COLORS.gold);
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    chamferPath(ctx, 6.5, 6.5, w - 13, h - 13, 4);
-    ctx.strokeStyle = 'rgba(13, 21, 36, 0.8)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Gold studs on the four chamfered corners.
-    ctx.fillStyle = hex(COLORS.goldBright);
-    for (const [cx, cy] of [
-        [9, 9],
-        [w - 9, 9],
-        [9, h - 9],
-        [w - 9, h - 9],
-    ]) {
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - 4);
-        ctx.lineTo(cx + 4, cy);
-        ctx.lineTo(cx, cy + 4);
-        ctx.lineTo(cx - 4, cy);
-        ctx.closePath();
-        ctx.fill();
-    }
-
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(source, 0, 0, spec.frameWidth, spec.frameHeight, 0, 0, canvas.width, canvas.height);
     scene.textures.addCanvas(key, canvas);
-}
-
-/**
- * The full-screen backdrop every screen stands on: the pack's masonry washed into
- * a dark gradient, a warm glow where the title sits, a vignette, and a gold frame
- * with corner and edge diamonds — the chrome mobile games wrap their menus in.
- * Rebaked only when the screen size changes; `topInset` keeps the frame clear of
- * the cutout.
- */
-export function renderBackdrop(scene: Phaser.Scene, width: number, height: number, topInset: number): void {
-    const key = 'ui-backdrop';
-    const w = Math.max(1, Math.round(width));
-    const h = Math.max(1, Math.round(height));
-    if (scene.textures.exists(key)) {
-        const source = scene.textures.get(key).source[0];
-        if (source && source.width === w && source.height === h) return;
-        scene.textures.remove(key);
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const base = ctx.createLinearGradient(0, 0, 0, h);
-    base.addColorStop(0, '#16233f');
-    base.addColorStop(0.55, '#101a2e');
-    base.addColorStop(1, '#0a101d');
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, w, h);
-
-    const stone = assetImage(scene, STONE_TILESET.file);
-    const pattern = stone ? ctx.createPattern(stone, 'repeat') : null;
-    if (pattern) {
-        ctx.globalAlpha = 0.12;
-        ctx.fillStyle = pattern;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
-    }
-
-    // Warm glow behind the title band.
-    const glow = ctx.createRadialGradient(w / 2, h * 0.17, 8, w / 2, h * 0.17, Math.max(w * 0.7, h * 0.3));
-    glow.addColorStop(0, 'rgba(217, 182, 74, 0.16)');
-    glow.addColorStop(1, 'rgba(217, 182, 74, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, w, h);
-
-    // Vignette: every screen darkens towards its edges.
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.32, w / 2, h / 2, Math.hypot(w, h) * 0.62);
-    vignette.addColorStop(0, 'rgba(4, 8, 16, 0)');
-    vignette.addColorStop(1, 'rgba(4, 8, 16, 0.66)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, w, h);
-
-    // The frame, dropped below the cutout.
-    const margin = 14;
-    const top = Math.max(margin, Math.round(topInset) + 8);
-    const frameWidth = w - margin * 2;
-    const frameHeight = h - margin - top;
-    ctx.strokeStyle = 'rgba(217, 182, 74, 0.55)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(margin + 1, top + 1, frameWidth - 2, frameHeight - 2);
-    ctx.strokeStyle = 'rgba(217, 182, 74, 0.2)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(margin + 6.5, top + 6.5, frameWidth - 13, frameHeight - 13);
-
-    const diamond = (x: number, y: number, r: number): void => {
-        ctx.beginPath();
-        ctx.moveTo(x, y - r);
-        ctx.lineTo(x + r, y);
-        ctx.lineTo(x, y + r);
-        ctx.lineTo(x - r, y);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(242, 217, 140, 0.92)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(13, 21, 36, 0.85)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-    };
-    for (const [x, y] of [
-        [margin, top],
-        [margin + frameWidth, top],
-        [margin, top + frameHeight],
-        [margin + frameWidth, top + frameHeight],
-    ]) {
-        diamond(x, y, 6);
-    }
-    diamond(margin + frameWidth / 2, top, 5);
-    diamond(margin + frameWidth / 2, top + frameHeight, 5);
-    diamond(margin, top + frameHeight / 2, 5);
-    diamond(margin + frameWidth, top + frameHeight / 2, 5);
-
-    scene.textures.addCanvas(key, canvas);
+    markNearest(scene, key);
+    return key;
 }
 
 // -- procedural fallbacks ---------------------------------------------------
@@ -530,11 +367,10 @@ function ensureShots(scene: Phaser.Scene): void {
 
 // -- texture entry points ---------------------------------------------------
 
-/** Generates the UI chrome. Idempotent, so a scene restart is free. */
+/** Generates the two flat textures the UI cannot size itself. Idempotent. */
 export function ensureTextures(scene: Phaser.Scene): void {
     ensureWhite(scene);
-    ensureSpark(scene);
-    ensureChrome(scene);
+    ensureInk(scene);
 }
 
 /**
@@ -571,6 +407,7 @@ export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: numb
     if (scene.textures.exists(BOARD_KEY)) scene.textures.remove(BOARD_KEY);
     const texture = scene.textures.createCanvas(BOARD_KEY, width, height);
     if (!texture) return;
+    texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     const ctx = texture.context;
     ctx.imageSmoothingEnabled = false;
 
