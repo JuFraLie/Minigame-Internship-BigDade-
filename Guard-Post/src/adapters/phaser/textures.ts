@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 
 import { GRID_HEIGHT, GRID_WIDTH, distanceToRoad, measureRoad, type GameMap } from '../../domain/maps.ts';
 import { TOWER_TYPES, type EnemyType, type TowerType } from '../../domain/types.ts';
+import { PALETTE, UI_PALETTE, type PixelPalette, type PixelVariant as PaletteVariant } from './palette.ts';
+
+export type PixelVariant = PaletteVariant;
 
 /**
  * Textures: everything the game draws with.
@@ -17,8 +20,9 @@ import { TOWER_TYPES, type EnemyType, type TowerType } from '../../domain/types.
  * nominal tile of `NOMINAL_TILE` px and scaled by the renderer, so a resize never
  * regenerates anything but the board itself.
  *
- * A plain olive field with a chunky pixel border backs every screen, quiet enough
- * to let the code-drawn field and the sprites be the detail.
+ * A deep grass-green field with a sandy pixel border backs every screen. The whole
+ * look — board, chrome, text and accents — comes from the shared palette in
+ * `palette.ts`, so the game reads as one grassy, sandy place.
  */
 
 export const NOMINAL_TILE = 44;
@@ -36,41 +40,42 @@ export const ENEMY_ANIM: Record<EnemyType, { readonly frames: number; readonly f
 };
 
 export const COLORS = {
-    /** Deep olive green behind the frame — dark enough to sit under the grass field. */
-    background: 0x18271c,
-    /** Desert sand: one quiet line around the field, softer than the button gold. */
-    sand: 0xc2a15c,
-    void: 0x101a2e,
-    grass: 0x27503b,
-    grassEdge: 0x1f4131,
-    /** Flat dirt sampled from the ground tile set (`spr_tile_set_ground.png`). */
-    road: 0xbf6f4a,
-    /** Silvered build pad: the stone tile set lifted toward silver. */
-    padSilver: 0xa7b0c0,
-    padEdge: 0xf2f5fa,
-    padShade: 0x6d7688,
+    /** Deep grass green behind the frame — dark enough to sit under the board. */
+    background: PALETTE.deep,
+    /** Sand: one quiet line around the field and the band of the board frame. */
+    sand: PALETTE.sand,
+    void: PALETTE.void,
+    grass: PALETTE.grass,
+    grassEdge: PALETTE.grassDark,
+    /** Sandy path cutting through the grass. */
+    road: PALETTE.sand,
+    /** Sandstone build pad, edged with the lightest sand. */
+    padSilver: PALETTE.sand,
+    padEdge: PALETTE.sandLight,
+    padShade: PALETTE.sandShade,
     /** Gate gold — the accent colour for primary actions and the title. */
-    gate: 0xd9b64a,
-    gold: 0xd9b64a,
-    goldBright: 0xf2d98c,
-    white: 0xffffff,
-    text: 0xe8eefc,
-    textDim: 0x9db1d4,
-    danger: 0xe05a5a,
-    dart: 0x37c2b8,
-    cannon: 0xe07b39,
-    frost: 0x7ec8ff,
-    grunt: 0xd9534f,
-    runner: 0xf0ad4e,
-    brute: 0x8e6bbf,
-    boss: 0xa02c3f,
-    range: 0x8fd0ff,
-    /** Selection outline: gold on the silver pad. */
-    select: 0xf2d98c,
-    hp: 0x68d391,
-    hpLost: 0x3a2029,
+    gate: PALETTE.sand,
+    gold: PALETTE.sand,
+    goldBright: PALETTE.sandLight,
+    white: PALETTE.flash,
+    text: PALETTE.cream,
+    textDim: PALETTE.sage,
+    danger: PALETTE.clay,
+    dangerLight: PALETTE.clayLight,
+    dart: PALETTE.leaf,
+    cannon: PALETTE.ochre,
+    frost: PALETTE.mint,
+    grunt: PALETTE.clay,
+    runner: PALETTE.ochre,
+    brute: PALETTE.plum,
+    boss: PALETTE.berry,
+    range: PALETTE.sandLight,
+    /** Selection outline: light sand on the sandstone pad. */
+    select: PALETTE.sandLight,
+    hp: PALETTE.moss,
+    hpLost: PALETTE.void,
     /** Ink used for pixel borders and the hard title shadow. */
-    ink: 0x0d1524,
+    ink: PALETTE.ink,
 } as const;
 
 export function hex(color: number): string {
@@ -91,42 +96,11 @@ function markNearest(scene: Phaser.Scene, key: string): void {
 // Pixel chrome
 // ---------------------------------------------------------------------------
 
-/** Every UI surface variant. One variant = one flat palette, no gradients. */
-export type PixelVariant =
-    | 'panel'
-    | 'plaque'
-    | 'capsule'
-    | 'button'
-    | 'primary'
-    | 'danger'
-    | 'disabled'
-    | 'dart'
-    | 'cannon'
-    | 'frost';
-
-interface PixelPalette {
-    readonly body: number;
-    readonly light: number;
-    readonly shade: number;
-    readonly border: number;
-}
-
 /**
- * Colours sampled from the sprite pack: ink for outlines, slate for neutral chrome,
- * gate gold for the forward action, and each tower's own colour for its build button.
+ * The shared grass-and-sand surfaces. Definition lives in `palette.ts`; this alias
+ * keeps the drawing code close to the variant it is painting.
  */
-const PIXEL: Record<PixelVariant, PixelPalette> = {
-    panel: { border: 0x070b14, body: 0x1a2238, light: 0x2f3d5e, shade: 0x111827 },
-    plaque: { border: 0xd9b64a, body: 0x18223a, light: 0xf2d98c, shade: 0x8a7426 },
-    capsule: { border: 0x070b14, body: 0x1c263e, light: 0x33415f, shade: 0x121a2b },
-    button: { border: 0x070b14, body: 0x2b3552, light: 0x47577f, shade: 0x171d2e },
-    primary: { border: 0x2a1c08, body: 0xe0a92e, light: 0xffd76a, shade: 0x9c6b12 },
-    danger: { border: 0x2a0e0e, body: 0xb0443f, light: 0xe07168, shade: 0x6e2422 },
-    disabled: { border: 0x070b14, body: 0x262c3c, light: 0x333b4d, shade: 0x181c28 },
-    dart: { border: 0x1b7a74, body: 0x243652, light: 0x7fe8e0, shade: 0x143f4a },
-    cannon: { border: 0x8f4a1d, body: 0x3a2b3e, light: 0xffb07a, shade: 0x5a2a14 },
-    frost: { border: 0x3f7fa8, body: 0x22324e, light: 0xc4e8ff, shade: 0x254c68 },
-};
+const PIXEL: Record<PixelVariant, PixelPalette> = UI_PALETTE;
 
 /**
  * A flat pixel box drawn at its exact final size: a hard 2 px ink border, a solid
@@ -169,12 +143,12 @@ export function pixelBox(scene: Phaser.Scene, width: number, height: number, var
 
 /** Framed backdrop for the Play Screen and Result Panel. */
 export const BACKDROP_KEY = 'ui-backdrop';
-/** Olive-only backdrop for gameplay: the board carries its own front frame there. */
+/** Grass-green-only backdrop for gameplay: the board carries its own front frame there. */
 export const BACKDROP_PLAIN_KEY = 'ui-backdrop-plain';
 
 /**
- * A flat olive field. Menus and the Result Panel get the chunky pixel ring — a dark
- * keyline with a sand inner band — while gameplay stays unframed so the board's own
+ * A flat deep-grass field. Menus and the Result Panel get the chunky pixel ring — an
+ * ink keyline with a sand inner band — while gameplay stays unframed so the board's own
  * front frame is the only border on screen. The ring starts below `topInset`, clear
  * of status-bar icons and cutouts. Each key is baked once per screen size.
  */
@@ -231,7 +205,7 @@ export function renderBackdrop(
     return key;
 }
 
-/** Texture key for the yellow frame drawn in front of the game board. */
+/** Texture key for the sandy frame drawn in front of the game board. */
 export const BOARD_FRAME_KEY = 'ui-board-frame';
 /** Border thickness around the board, in design pixels. */
 export const BOARD_FRAME_THICKNESS = 12;
@@ -317,13 +291,13 @@ function ensureInk(scene: Phaser.Scene): void {
 
 // -- code-drawn surfaces -----------------------------------------------------
 
-/** Texture key for a build pad: a silver slab drawn in code. */
+/** Texture key for a build pad: a sandstone slab drawn in code. */
 export const PAD_KEY = 'ui-pad';
 
 /** Pad edge in texture pixels. */
 const PAD_TEXTURE = 40;
 
-/** A silver pavement slab with a simple brick seam, drawn once at its final size. */
+/** A sandstone pavement slab with a simple brick seam, drawn once at its final size. */
 export function ensurePadTexture(scene: Phaser.Scene): void {
     if (scene.textures.exists(PAD_KEY)) return;
     const size = PAD_TEXTURE;
@@ -361,8 +335,8 @@ const GATE_ART_WIDTH = 48;
 const GATE_ART_HEIGHT = 36;
 
 /**
- * The gate the player defends: two flanking towers, a crenellated keep, a gold pennant
- * and an arched doorway. Every coordinate is in the 48 x 36 art space above and mapped
+ * The gate the player defends: two flanking towers, a crenellated keep, a sand-gold
+ * pennant and an arched doorway. Every coordinate is in the 48 x 36 art space above and mapped
  * to integer device pixels, so the shape stays crisp at any board tile size.
  */
 function drawGateShape(
@@ -506,12 +480,12 @@ function ensureEnemies(scene: Phaser.Scene): void {
         enemyTexture(scene, 'grunt', frame, 16, 2, (px) => {
             px(4, 3 + lift, 8, 7, COLORS.ink);
             px(5, 4 + lift, 6, 5, COLORS.grunt);
-            px(5, 4 + lift, 6, 2, 0xf28078);
+            px(5, 4 + lift, 6, 2, PALETTE.clayLight);
             px(6, 6 + lift, 1, 1, COLORS.ink);
             px(9, 6 + lift, 1, 1, COLORS.ink);
             px(5, 10 + lift, 6, 1, COLORS.ink);
             px(6 + tail, 11 + lift, 4, 1, COLORS.grunt);
-            px(7 + tail, 12 + lift, 2, 1, 0x6fbfb5);
+            px(7 + tail, 12 + lift, 2, 1, PALETTE.mint);
         });
     }
 
@@ -535,7 +509,7 @@ function ensureEnemies(scene: Phaser.Scene): void {
             px(7, 5 + lift, 2, 5, COLORS.runner);
             px(7, 6 + lift, 1, 1, COLORS.ink);
             px(8, 6 + lift, 1, 1, COLORS.ink);
-            px(7, 11 + lift, 2, 1, 0xf7d9a0);
+            px(7, 11 + lift, 2, 1, PALETTE.sandLight);
         });
     }
 
@@ -549,12 +523,12 @@ function ensureEnemies(scene: Phaser.Scene): void {
             px(14, 3 + lift, 1, 1, COLORS.goldBright);
             px(3, 4 + lift, 12, 9, COLORS.ink);
             px(4, 5 + lift, 10, 7, COLORS.brute);
-            px(4, 5 + lift, 10, 2, 0xb79ae0);
+            px(4, 5 + lift, 10, 2, PALETTE.plumLight);
             px(6, 8 + lift, 2, 2, COLORS.ink);
             px(10, 8 + lift, 2, 2, COLORS.ink);
             px(5, 13 + lift, 8, 1, COLORS.ink);
             px(6, 14 + lift, 6, 1, COLORS.brute);
-            px(8, 15 + lift, 2, 1, 0xb79ae0);
+            px(8, 15 + lift, 2, 1, PALETTE.plumLight);
         });
     }
 
@@ -570,12 +544,12 @@ function ensureEnemies(scene: Phaser.Scene): void {
             px(15, 4 + lift, 1, 1, COLORS.goldBright);
             px(2, 6 + lift, 16, 10, COLORS.ink);
             px(3, 7 + lift, 14, 8, COLORS.boss);
-            px(3, 7 + lift, 14, 2, 0xd45a70);
+            px(3, 7 + lift, 14, 2, PALETTE.berryLight);
             px(6, 10 + lift, 2, 2, COLORS.ink);
             px(12, 10 + lift, 2, 2, COLORS.ink);
             px(4, 16 + lift, 12, 1, COLORS.ink);
             px(5, 17 + lift, 10, 1, COLORS.boss);
-            px(8, 18 + lift, 4, 1, 0xd45a70);
+            px(8, 18 + lift, 4, 1, PALETTE.berryLight);
         });
     }
 }
@@ -588,27 +562,27 @@ function ensureTowers(scene: Phaser.Scene): void {
             ensure(scene, `tower-${type}-${level}`, 36, 36, (g) => {
                 const color = colorOf[type];
                 // Base plate, shared by every tower.
-                g.fillStyle(0x1c2942, 1);
-                g.lineStyle(3, 0x0d1524, 1);
+                g.fillStyle(PALETTE.grassDark, 1);
+                g.lineStyle(3, PALETTE.ink, 1);
                 g.fillRoundedRect(2, 6, 32, 28, 8);
                 g.strokeRoundedRect(2, 6, 32, 28, 8);
                 // The barrel distinguishes the type.
                 g.fillStyle(color, 1);
                 if (type === 'dart') {
                     g.fillRoundedRect(12, 2, 12, 22, 5);
-                    g.fillStyle(0x0d1524, 1);
+                    g.fillStyle(PALETTE.ink, 1);
                     g.fillRect(16, 0, 4, 8);
                 } else if (type === 'cannon') {
                     g.fillCircle(18, 16, 10);
-                    g.fillStyle(0x0d1524, 1);
+                    g.fillStyle(PALETTE.ink, 1);
                     g.fillRoundedRect(14, 2, 8, 14, 3);
                 } else {
                     polygon(g, 18, 14, 11, 4, Math.PI / 4);
-                    g.fillStyle(0xffffff, 0.85);
+                    g.fillStyle(PALETTE.cream, 0.85);
                     g.fillCircle(18, 14, 3);
                 }
                 // Level pips along the bottom edge.
-                g.fillStyle(0xf2d98c, 1);
+                g.fillStyle(PALETTE.sandLight, 1);
                 for (let pip = 0; pip < level - 1; pip++) {
                     g.fillCircle(13 + pip * 10, 30, 3);
                 }
@@ -623,7 +597,7 @@ function ensureShots(scene: Phaser.Scene): void {
         const size = type === 'cannon' ? 14 : 10;
         ensure(scene, `shot-${type}`, size, size, (g) => {
             g.fillStyle(colorOf[type], 1);
-            g.lineStyle(2, 0x0d1524, 1);
+            g.lineStyle(2, PALETTE.ink, 1);
             g.fillCircle(size / 2, size / 2, size / 2 - 1);
             g.strokeCircle(size / 2, size / 2, size / 2 - 1);
         });
@@ -657,19 +631,19 @@ export const BOARD_KEY = 'board';
 
 type Ctx = CanvasRenderingContext2D;
 
-/** One flat palette per map theme: grass, its patch, road and three gate stone tones. */
+/** One flat palette per map theme: grass, its patch, sand road and three gate tones. */
 const BOARD_THEMES = [
     {
-        grass: 0x2f7a4f, patch: 0x37875a, edge: 0x1d4d33, road: 0xc07a4f,
-        gate: 0x6f8fd6, gateShade: 0x3f5f9e, gateLight: 0xa8c2f0,
+        grass: PALETTE.grass, patch: PALETTE.leaf, edge: PALETTE.grassDark, road: PALETTE.sand,
+        gate: PALETTE.sand, gateShade: PALETTE.sandShade, gateLight: PALETTE.sandLight,
     },
     {
-        grass: 0x1e6e50, patch: 0x27835d, edge: 0x154a35, road: 0xb96f47,
-        gate: 0x5ba36a, gateShade: 0x2f6f42, gateLight: 0x8fd0a0,
+        grass: PALETTE.jade, patch: PALETTE.jadeLight, edge: PALETTE.jadeDark, road: PALETTE.ochre,
+        gate: PALETTE.moss, gateShade: PALETTE.leaf, gateLight: PALETTE.sage,
     },
     {
-        grass: 0x6b6a3a, patch: 0x797742, edge: 0x454427, road: 0xcf7b4a,
-        gate: 0xc06545, gateShade: 0x8a3d29, gateLight: 0xe99576,
+        grass: PALETTE.olive, patch: PALETTE.oliveLight, edge: PALETTE.oliveDark, road: PALETTE.sandShade,
+        gate: PALETTE.ochre, gateShade: PALETTE.sandDeep, gateLight: PALETTE.wheat,
     },
 ] as const;
 
@@ -795,7 +769,7 @@ function paintScenery(ctx: Ctx, map: GameMap, tile: number, width: number, heigh
             if (kind === 'tree') {
                 const trunk = Math.max(2, Math.round(tile * 0.16));
                 const crown = Math.round(tile * 0.8);
-                ctx.fillStyle = '#6b4a2b';
+                ctx.fillStyle = hex(PALETTE.sandDeep);
                 ctx.fillRect(Math.round(x - trunk / 2), Math.round(y - crown * 0.45), trunk, Math.round(crown * 0.45));
                 ctx.fillStyle = hex(theme.edge);
                 ctx.fillRect(Math.round(x - crown / 2), Math.round(y - crown), crown, Math.round(crown * 0.65));
@@ -803,15 +777,15 @@ function paintScenery(ctx: Ctx, map: GameMap, tile: number, width: number, heigh
                 ctx.fillRect(Math.round(x - crown / 3), Math.round(y - crown * 0.95), Math.round(crown * 0.66), Math.round(crown * 0.4));
             } else if (kind === 'rock') {
                 const size = Math.round(tile * 0.45);
-                ctx.fillStyle = '#6d7280';
+                ctx.fillStyle = hex(PALETTE.stone);
                 ctx.fillRect(Math.round(x - size / 2), Math.round(y - size), size, size);
-                ctx.fillStyle = '#9aa3b4';
+                ctx.fillStyle = hex(PALETTE.stoneLight);
                 ctx.fillRect(Math.round(x - size / 2), Math.round(y - size), size, Math.round(size / 3));
             } else {
                 const size = Math.round(tile * 0.3);
-                ctx.fillStyle = '#e8eefc';
+                ctx.fillStyle = hex(PALETTE.cream);
                 ctx.fillRect(Math.round(x - size / 5), Math.round(y - size), Math.round(size * 0.4), size);
-                ctx.fillStyle = '#d9534f';
+                ctx.fillStyle = hex(PALETTE.clay);
                 ctx.fillRect(Math.round(x - size / 2), Math.round(y - size * 1.2), size, Math.round(size * 0.5));
             }
         }
@@ -824,7 +798,7 @@ function paintScenery(ctx: Ctx, map: GameMap, tile: number, width: number, heigh
 
 /**
  * The gate the player defends: the remade pixel castle, three tiles wide and themed
- * blue / green / red. The same drawing is used for the Play Screen icon.
+ * sand / leaf / ochre. The same drawing is used for the Play Screen icon.
  */
 function paintGate(ctx: Ctx, map: GameMap, tile: number): void {
     const gate = map.waypoints[map.waypoints.length - 1];

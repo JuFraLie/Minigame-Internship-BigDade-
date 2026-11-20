@@ -56,7 +56,7 @@ export class GameOver extends Phaser.Scene {
         const title = victory ? 'VICTORY!' : 'DEFEAT';
         const titleSize = fitFontSize(layout.panel.width - 32, title.length, 24, 12);
         uiText(this, layout.width / 2, layout.titleY, title, titleSize, {
-            color: victory ? COLORS.goldBright : COLORS.danger,
+            color: victory ? COLORS.goldBright : COLORS.dangerLight,
             shadow: true,
         }).setOrigin(0.5);
 
