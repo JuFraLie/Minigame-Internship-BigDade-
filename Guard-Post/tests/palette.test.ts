@@ -22,6 +22,15 @@ test('every UI surface uses a named tone from the shared palette', () => {
     }
 });
 
+test('the build menu keeps its earlier high-contrast tones', () => {
+    assert.equal(UI_PALETTE.dart.body, PALETTE.dartBody);
+    assert.equal(UI_PALETTE.dart.light, PALETTE.dartLight);
+    assert.equal(UI_PALETTE.cannon.body, PALETTE.cannonBody);
+    assert.equal(UI_PALETTE.cannon.light, PALETTE.cannonLight);
+    assert.equal(UI_PALETTE.frost.body, PALETTE.frostBody);
+    assert.equal(UI_PALETTE.frost.light, PALETTE.frostLight);
+});
+
 test('the renderer never invents its own colours', () => {
     const literal = /0x[0-9a-fA-F]{6}|#[0-9a-fA-F]{6}/;
     for (const file of readdirSync(RENDER_DIR)) {

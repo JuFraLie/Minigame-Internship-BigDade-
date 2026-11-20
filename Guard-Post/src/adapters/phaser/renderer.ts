@@ -227,13 +227,13 @@ export class PhaserCanvasRenderer implements GameViewPort {
         this.#buildCostCached = [];
         const buildColor: Record<TowerType, number> = { dart: COLORS.dart, cannon: COLORS.cannon, frost: COLORS.frost };
         layout.menu.buildButtons.forEach((rect, index) => {
-            this.#buildImages.push(this.#button(rect, 'button').setVisible(false));
             const type = TOWER_TYPES[index];
+            this.#buildImages.push(this.#button(rect, type ?? 'button').setVisible(false));
             this.#buildLabels.push(
                 this.#label(
                     { ...rect, y: rect.y + rect.height * 0.3 },
                     '',
-                    fitFontSize(rect.width - 8, 8, 11, 8),
+                    fitFontSize(rect.width - 8, 8, 13, 10),
                     type ? buildColor[type] : COLORS.text,
                 ).setVisible(false),
             );
@@ -241,8 +241,8 @@ export class PhaserCanvasRenderer implements GameViewPort {
                 this.#label(
                     { ...rect, y: rect.y + rect.height * 0.7 },
                     '',
-                    fitFontSize(rect.width - 8, 5, 9, 7),
-                    COLORS.textDim,
+                    fitFontSize(rect.width - 8, 5, 10, 8),
+                    COLORS.buildDim,
                 ).setVisible(false),
             );
             this.#buildCached.push('');
@@ -350,10 +350,10 @@ export class PhaserCanvasRenderer implements GameViewPort {
                 .setPosition(Math.round(rect.x), Math.round(rect.y));
             label
                 .setPosition(rect.x + rect.width / 2, rect.y + rect.height * 0.3)
-                .setFontSize(fitFontSize(rect.width - 8, 8, 11, 8));
+                .setFontSize(fitFontSize(rect.width - 8, 8, 13, 10));
             cost
                 .setPosition(rect.x + rect.width / 2, rect.y + rect.height * 0.7)
-                .setFontSize(fitFontSize(rect.width - 8, 5, 9, 7));
+                .setFontSize(fitFontSize(rect.width - 8, 5, 10, 8));
         });
         layout.menu.towerButtons.forEach((rect, index) => {
             const image = this.#towerImages[index];

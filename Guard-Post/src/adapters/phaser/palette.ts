@@ -50,6 +50,30 @@ export const PALETTE = {
     stone: 0x6d7280,
     stoneLight: 0x9aa3b4,
     flash: 0xffffff,
+
+    // Build menu: kept from the earlier UI on purpose. The dark slate buttons and
+    // bright tower labels read far more clearly than green-on-green did.
+    legacyInk: 0x070b14,
+    legacyBody: 0x2b3552,
+    legacyLight: 0x47577f,
+    legacyShade: 0x171d2e,
+    legacyText: 0xe8eefc,
+    legacyDim: 0x9db1d4,
+    dartLabel: 0x37c2b8,
+    cannonLabel: 0xe07b39,
+    frostLabel: 0x7ec8ff,
+    dartBorder: 0x1b7a74,
+    dartBody: 0x243652,
+    dartLight: 0x7fe8e0,
+    dartShade: 0x143f4a,
+    cannonBorder: 0x8f4a1d,
+    cannonBody: 0x3a2b3e,
+    cannonLight: 0xffb07a,
+    cannonShade: 0x5a2a14,
+    frostBorder: 0x3f7fa8,
+    frostBody: 0x22324e,
+    frostLight: 0xc4e8ff,
+    frostShade: 0x254c68,
 } as const;
 
 export type PixelVariant =
@@ -73,8 +97,9 @@ export interface PixelPalette {
 
 /**
  * One flat palette per UI surface. Greens carry the neutral chrome, sand carries the
- * forward actions and the title plaque, and the three tower buttons borrow a tone from
- * their own sprite.
+ * forward actions and the title plaque. The three tower buttons are the deliberate
+ * exception: their earlier dark slate and bright labels stay because they are the
+ * clearest way to read the build menu.
  */
 export const UI_PALETTE: Record<PixelVariant, PixelPalette> = {
     panel: {
@@ -119,22 +144,23 @@ export const UI_PALETTE: Record<PixelVariant, PixelPalette> = {
         light: PALETTE.grassDark,
         shade: PALETTE.void,
     },
+    // The build buttons deliberately keep their earlier high-contrast look.
     dart: {
-        border: PALETTE.grassDark,
-        body: PALETTE.grass,
-        light: PALETTE.moss,
-        shade: PALETTE.deep,
+        border: PALETTE.dartBorder,
+        body: PALETTE.dartBody,
+        light: PALETTE.dartLight,
+        shade: PALETTE.dartShade,
     },
     cannon: {
-        border: PALETTE.sandDeep,
-        body: PALETTE.sandShade,
-        light: PALETTE.ochre,
-        shade: PALETTE.sandDeep,
+        border: PALETTE.cannonBorder,
+        body: PALETTE.cannonBody,
+        light: PALETTE.cannonLight,
+        shade: PALETTE.cannonShade,
     },
     frost: {
-        border: PALETTE.mintDark,
-        body: PALETTE.mintDark,
-        light: PALETTE.mint,
-        shade: PALETTE.deep,
+        border: PALETTE.frostBorder,
+        body: PALETTE.frostBody,
+        light: PALETTE.frostLight,
+        shade: PALETTE.frostShade,
     },
 };
