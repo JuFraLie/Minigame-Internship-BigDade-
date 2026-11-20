@@ -191,13 +191,13 @@ export function computePlayLayout(input: LayoutInput): PlayLayout {
 // Play Screen and Result Panel geometry
 // ---------------------------------------------------------------------------
 
-/** Estimated height of the two-line how-to block, so nothing is stacked on top of it. */
+/** Height of the three-line how-to block at the largest pixel-font size (10 px + 8 px leading). */
 export const HOW_TO_HEIGHT = 46;
 
 export interface MenuLayout {
     readonly width: number;
     readonly titleY: number;
-    /** The stone plaque the title sits on, sized from the screen. */
+    /** The pixel plaque the title sits on, sized from the screen. */
     readonly titlePlate: Rect;
     readonly howToY: number;
     readonly play: Rect;
@@ -217,7 +217,7 @@ export function computeMenuLayout(input: Omit<LayoutInput, 'spots'>): MenuLayout
     // The plaque is a backdrop for the title only — it never becomes a touch target
     // and never changes the vertical order the Play Screen test asserts.
     const plateWidth = Math.min(width * 0.86, 340);
-    const plateHeight = 64;
+    const plateHeight = 56;
     const titlePlate: Rect = {
         x: (width - plateWidth) / 2,
         y: titleY - plateHeight / 2,
@@ -270,8 +270,8 @@ export function computeResultLayout(input: Omit<LayoutInput, 'spots'>): ResultLa
     return {
         width,
         panel,
-        titleY: panel.y + 58,
-        bodyY: panel.y + 130,
+        titleY: panel.y + 52,
+        bodyY: panel.y + 108,
         primary,
         exit,
     };

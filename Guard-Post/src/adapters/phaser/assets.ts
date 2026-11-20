@@ -64,8 +64,8 @@ function bakedProduct(file: string): string | null {
 /**
  * Bakes every loaded file into its final texture: enemy frame textures plus their
  * `walk-<type>` animations, tower textures with level pips and shot textures. The
- * field, scenery, gate and the stone the UI cuts its pads and plaque from are read
- * raw instead. Called once per round, after `preloadSprites`.
+ * field, scenery, gate, the stone the UI cuts its pads from and the Play Screen's
+ * castle are read raw instead. Called once per round, after `preloadSprites`.
  */
 export function bakeSprites(scene: Phaser.Scene): void {
     bakeEnemyStrips(scene);
@@ -98,6 +98,12 @@ function sourceOf(scene: Phaser.Scene, file: string): HTMLImageElement | HTMLCan
     return assetImage(scene, file);
 }
 
+/** Adds a baked canvas as a nearest-neighbour texture, so the Canvas renderer keeps it crisp. */
+function addPixelTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement): void {
+    const texture = scene.textures.addCanvas(key, canvas);
+    texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+}
+
 function bakeEnemyStrips(scene: Phaser.Scene): void {
     for (const type of Object.keys(ENEMY_STRIPS) as EnemyType[]) {
         const spec = ENEMY_STRIPS[type];
@@ -116,7 +122,7 @@ function bakeEnemyStrips(scene: Phaser.Scene): void {
                 complete = false;
                 break;
             }
-            scene.textures.addCanvas(`enemy-${type}-${frame}`, canvas);
+            addPixelTexture(scene, `enemy-${type}-${frame}`, canvas);
         }
         if (!complete) continue;
         ensureWalkAnimation(scene, type);
@@ -170,7 +176,7 @@ function bakeTowers(scene: Phaser.Scene): void {
                     ctx.fill();
                 }
             }
-            scene.textures.addCanvas(`tower-${type}-${level}`, canvas);
+            addPixelTexture(scene, `tower-${type}-${level}`, canvas);
         }
         scene.textures.remove(rawAssetKey(spec.file));
     }
@@ -185,7 +191,7 @@ function bakeShots(scene: Phaser.Scene): void {
         if (!source) continue;
         const canvas = bakeCanvas(source, 0, 0, source.width, source.height, spec.scale);
         if (!canvas) continue;
-        scene.textures.addCanvas(key, canvas);
+        addPixelTexture(scene, key, canvas);
         scene.textures.remove(rawAssetKey(spec.file));
     }
 }

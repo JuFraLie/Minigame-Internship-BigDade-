@@ -3,24 +3,26 @@ import Phaser from 'phaser';
 import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
 import { preloadSprites } from '../assets.ts';
-import { COLORS, ensureTextures, hex, renderTitlePlaque } from '../textures.ts';
+import { COLORS, ensureCastleIcon, ensureTextures, pixelBox } from '../textures.ts';
 import { computeMenuLayout, hitRect, type MenuLayout } from '../layout.ts';
 import { applyRenderScale } from '../scale.ts';
+import { fitFontSize, uiText } from '../uiStyle.ts';
 import { SCENE_GAME, SCENE_MENU } from './keys.ts';
 
-const FONT = 'Segoe UI, Arial, sans-serif';
-/** A serif for the title only — the one flourish that reads as "fantasy" on any device. */
-const TITLE_FONT = 'Georgia, "Times New Roman", serif';
+/** The two how-to sentences (AGENTS.md §2), wrapped for the pixel font's width. */
+const HOW_TO = 'Tap a spot to build\na tower.\nStop them at the gate.';
 
-/** The two how-to sentences (AGENTS.md §2): the controls are not self-evident. */
-const HOW_TO = 'Tap a spot to build a tower.\nStop the enemies before they reach the gate.';
+const TITLE = 'GUARD POST';
 
 /**
- * The Play Screen: title, Play button, a small tap icon, the how-to text and the credit.
+ * The Play Screen: title, the gate castle, Play button, the how-to text and the credit.
  *
  * It shows only on launch — Retry and Next Level go straight back to gameplay — and a
  * tap anywhere on it starts the game, exactly as the host app expects. The credit line
  * is the one exception: tapping it opens the credited page and starts nothing.
+ *
+ * The screen uses the same flat pixel boxes as the HUD: one gold plaque, one gold
+ * button, no stone pattern, no serif and no outlined text.
  */
 export class MainMenu extends Phaser.Scene {
     readonly #deps: AppDeps;
@@ -36,7 +38,7 @@ export class MainMenu extends Phaser.Scene {
         this.#deps = deps;
     }
 
-    /** The plaque is cut from the pack's stone, so the pack must be local first. */
+    /** The castle icon is cut from the pack, so the pack must be local first. */
     preload(): void {
         preloadSprites(this);
     }
@@ -50,71 +52,70 @@ export class MainMenu extends Phaser.Scene {
         const layout = computeMenuLayout(viewport);
         this.#layout = layout;
 
-        // The title plaque: the pack's masonry, gold-bevelled, behind the gold title.
-        renderTitlePlaque(this, layout.titlePlate.width, layout.titlePlate.height);
-        this.add.image(layout.titlePlate.x, layout.titlePlate.y, 'ui-plaque').setOrigin(0, 0).setDepth(4);
-
-        // The tap icon: a ring with a dot, drawn once — gate gold, like the castle.
-        const icon = this.add.graphics().setDepth(5);
-        icon.lineStyle(4, COLORS.gold, 1);
-        icon.strokeCircle(layout.icon.x, layout.icon.y, layout.icon.radius);
-        icon.fillStyle(COLORS.gold, 1);
-        icon.fillCircle(layout.icon.x, layout.icon.y, layout.icon.radius * 0.32);
-
+        // The plaque: a flat dark banner with a gold pixel border behind the title.
+        const plaqueKey = pixelBox(this, layout.titlePlate.width, layout.titlePlate.height, 'plaque');
         this.add
-            .text(layout.width / 2, layout.titleY, 'Guard Post', {
-                fontFamily: TITLE_FONT,
-                fontSize: '46px',
-                color: hex(COLORS.goldBright),
-                fontStyle: 'bold',
-                stroke: hex(COLORS.ink),
-                strokeThickness: 5,
-            })
+            .image(Math.round(layout.titlePlate.x), Math.round(layout.titlePlate.y), plaqueKey)
+            .setOrigin(0, 0)
+            .setDepth(4);
+
+        // The thing being defended, straight from the pack; a plain gate if it is missing.
+        // A tall screen can afford the 3x castle; a short one keeps the 2x icon so the
+        // title plaque and the Play button stay clear of it.
+        const gapUnderPlaque = layout.play.y - (layout.titlePlate.y + layout.titlePlate.height);
+        const castleKey = ensureCastleIcon(this, gapUnderPlaque >= 130 ? 3 : 2);
+        if (castleKey) {
+            this.add.image(layout.icon.x, layout.icon.y, castleKey).setDepth(5);
+        } else {
+            const gate = this.add.graphics().setDepth(5);
+            gate.fillStyle(COLORS.gold, 1);
+            gate.fillRect(layout.icon.x - 30, layout.icon.y - 24, 60, 48);
+            gate.fillStyle(COLORS.void, 1);
+            gate.fillRect(layout.icon.x - 10, layout.icon.y - 4, 20, 28);
+        }
+
+        const titleSize = fitFontSize(layout.titlePlate.width - 24, TITLE.length, 30, 10);
+        uiText(this, layout.width / 2, layout.titleY, TITLE, titleSize, {
+            color: COLORS.goldBright,
+            shadow: true,
+        })
             .setOrigin(0.5)
             .setDepth(5);
 
-        const play = this.add.image(layout.play.x, layout.play.y, 'ui-button-primary').setOrigin(0, 0).setDepth(5);
-        play.setDisplaySize(layout.play.width, layout.play.height);
-        this.add
-            .text(layout.play.x + layout.play.width / 2, layout.play.y + layout.play.height / 2, 'Play', {
-                fontFamily: FONT,
-                fontSize: '26px',
-                color: hex(COLORS.goldBright),
-                fontStyle: 'bold',
-                stroke: hex(COLORS.ink),
-                strokeThickness: 3,
-            })
+        const playKey = pixelBox(this, layout.play.width, layout.play.height, 'primary');
+        this.add.image(Math.round(layout.play.x), Math.round(layout.play.y), playKey).setOrigin(0, 0).setDepth(5);
+        const playSize = fitFontSize(layout.play.width - 24, 'PLAY'.length, 18, 10);
+        uiText(this, layout.play.x + layout.play.width / 2, layout.play.y + layout.play.height / 2, 'PLAY', playSize, {
+            color: COLORS.ink,
+        })
             .setOrigin(0.5)
             .setDepth(6);
 
-        this.add
-            .text(layout.width / 2, layout.howToY, HOW_TO, {
-                fontFamily: FONT,
-                fontSize: '17px',
-                color: hex(COLORS.textDim),
-                align: 'center',
-                stroke: hex(COLORS.ink),
-                strokeThickness: 2,
-            })
+        const howToSize = fitFontSize(layout.width - 32, 22, 10, 7);
+        uiText(this, layout.width / 2, layout.howToY, HOW_TO, howToSize, {
+            color: COLORS.text,
+            lineSpacing: Math.round(howToSize * 0.8),
+        })
             .setOrigin(0.5, 0)
             .setDepth(5);
 
         // The credit, underlined so it reads as a link. Tapping it opens skyel's page
         // and deliberately does NOT start the game — see #onPointerDown.
-        const credit = this.add
-            .text(layout.credit.x + layout.credit.width / 2, layout.credit.y + layout.credit.height / 2, this.#deps.credit.label, {
-                fontFamily: FONT,
-                fontSize: '16px',
-                color: hex(COLORS.textDim),
-            })
+        const creditSize = fitFontSize(layout.credit.width, this.#deps.credit.label.length, 10, 7);
+        const credit = uiText(
+            this,
+            layout.credit.x + layout.credit.width / 2,
+            layout.credit.y + layout.credit.height / 2,
+            this.#deps.credit.label,
+            creditSize,
+            { color: COLORS.textDim },
+        )
             .setOrigin(0.5)
             .setDepth(5);
         const underline = this.add.graphics().setDepth(5);
-        underline.beginPath();
-        underline.lineStyle(1, COLORS.textDim, 0.9);
-        underline.moveTo(credit.x - credit.width / 2, credit.y + credit.height / 2 + 3);
-        underline.lineTo(credit.x + credit.width / 2, credit.y + credit.height / 2 + 3);
-        underline.strokePath();
+        const underlineY = credit.y + creditSize / 2 + 3;
+        underline.fillStyle(COLORS.textDim, 0.9);
+        underline.fillRect(credit.x - credit.width / 2, underlineY, credit.width, 1);
 
         this.input.on('pointerdown', this.#onPointerDown, this);
         this.game.events.on(VIEWPORT_CHANGED, this.#onViewportChanged);

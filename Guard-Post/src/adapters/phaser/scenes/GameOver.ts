@@ -2,14 +2,11 @@ import Phaser from 'phaser';
 
 import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
-import { COLORS, ensureTextures, hex } from '../textures.ts';
+import { COLORS, ensureTextures, pixelBox } from '../textures.ts';
 import { computeResultLayout, hitRect, type ResultLayout } from '../layout.ts';
 import { applyRenderScale } from '../scale.ts';
+import { fitFontSize, uiText } from '../uiStyle.ts';
 import { SCENE_GAME, SCENE_RESULT } from './keys.ts';
-
-const FONT = 'Segoe UI, Arial, sans-serif';
-/** The same serif as the Play Screen's title — one voice across both screens. */
-const TITLE_FONT = 'Georgia, "Times New Roman", serif';
 
 /**
  * The Result Panel — the only screen with Restart, Next Level and Exit.
@@ -18,6 +15,9 @@ const TITLE_FONT = 'Georgia, "Times New Roman", serif';
  * and offers exactly the buttons for the outcome: Next Level on a victory, Retry on a
  * defeat, plus Exit on both. Retry and Next Level go straight back to gameplay (the
  * Play Screen never replays), and Exit calls the bridge once and does nothing else.
+ *
+ * Styling is the same flat pixel language as the Play Screen: one panel, one gold
+ * primary button, one red exit button, no beveled stone and no outlined text.
  */
 export class GameOver extends Phaser.Scene {
     readonly #deps: AppDeps;
@@ -44,62 +44,44 @@ export class GameOver extends Phaser.Scene {
         const layout = computeResultLayout(viewport);
         this.#layout = layout;
 
-        const panel = this.add.image(layout.panel.x, layout.panel.y, 'ui-panel').setOrigin(0, 0);
-        panel.setDisplaySize(layout.panel.width, layout.panel.height);
+        const panelKey = pixelBox(this, layout.panel.width, layout.panel.height, 'panel');
+        this.add.image(Math.round(layout.panel.x), Math.round(layout.panel.y), panelKey).setOrigin(0, 0);
 
-        this.add
-            .text(layout.width / 2, layout.titleY, victory ? 'Victory!' : 'Defeat', {
-                fontFamily: TITLE_FONT,
-                fontSize: '38px',
-                color: victory ? hex(COLORS.goldBright) : hex(COLORS.danger),
-                fontStyle: 'bold',
-                stroke: hex(COLORS.ink),
-                strokeThickness: 4,
-            })
-            .setOrigin(0.5);
+        const title = victory ? 'VICTORY!' : 'DEFEAT';
+        const titleSize = fitFontSize(layout.panel.width - 32, title.length, 24, 12);
+        uiText(this, layout.width / 2, layout.titleY, title, titleSize, {
+            color: victory ? COLORS.goldBright : COLORS.danger,
+            shadow: true,
+        }).setOrigin(0.5);
 
-        this.add
-            .text(layout.width / 2, layout.bodyY, `Level ${flow.level}\nScore ${flow.lastScore}`, {
-                fontFamily: FONT,
-                fontSize: '24px',
-                color: hex(COLORS.text),
-                align: 'center',
-                lineSpacing: 14,
-                stroke: hex(COLORS.ink),
-                strokeThickness: 3,
-            })
-            .setOrigin(0.5, 0);
+        const bodySize = fitFontSize(layout.panel.width - 48, 12, 14, 9);
+        uiText(this, layout.width / 2, layout.bodyY, `LEVEL ${flow.level}\nSCORE ${flow.lastScore}`, bodySize, {
+            color: COLORS.text,
+            lineSpacing: Math.round(bodySize * 0.7),
+        }).setOrigin(0.5, 0);
 
-        const primary = this.add.image(layout.primary.x, layout.primary.y, 'ui-button-primary').setOrigin(0, 0);
-        primary.setDisplaySize(layout.primary.width, layout.primary.height);
-        this.add
-            .text(
-                layout.primary.x + layout.primary.width / 2,
-                layout.primary.y + layout.primary.height / 2,
-                victory ? 'Next Level' : 'Retry',
-                {
-                    fontFamily: FONT,
-                    fontSize: '24px',
-                    color: hex(COLORS.goldBright),
-                    fontStyle: 'bold',
-                    stroke: hex(COLORS.ink),
-                    strokeThickness: 3,
-                },
-            )
-            .setOrigin(0.5);
+        const primaryLabel = victory ? 'NEXT LEVEL' : 'RETRY';
+        const primaryKey = pixelBox(this, layout.primary.width, layout.primary.height, 'primary');
+        this.add.image(Math.round(layout.primary.x), Math.round(layout.primary.y), primaryKey).setOrigin(0, 0);
+        uiText(
+            this,
+            layout.primary.x + layout.primary.width / 2,
+            layout.primary.y + layout.primary.height / 2,
+            primaryLabel,
+            fitFontSize(layout.primary.width - 24, primaryLabel.length, 16, 8),
+            { color: COLORS.ink },
+        ).setOrigin(0.5);
 
-        const exit = this.add.image(layout.exit.x, layout.exit.y, 'ui-button-danger').setOrigin(0, 0);
-        exit.setDisplaySize(layout.exit.width, layout.exit.height);
-        this.add
-            .text(layout.exit.x + layout.exit.width / 2, layout.exit.y + layout.exit.height / 2, 'Exit', {
-                fontFamily: FONT,
-                fontSize: '24px',
-                color: hex(COLORS.text),
-                fontStyle: 'bold',
-                stroke: hex(COLORS.ink),
-                strokeThickness: 3,
-            })
-            .setOrigin(0.5);
+        const exitKey = pixelBox(this, layout.exit.width, layout.exit.height, 'danger');
+        this.add.image(Math.round(layout.exit.x), Math.round(layout.exit.y), exitKey).setOrigin(0, 0);
+        uiText(
+            this,
+            layout.exit.x + layout.exit.width / 2,
+            layout.exit.y + layout.exit.height / 2,
+            'EXIT',
+            fitFontSize(layout.exit.width - 24, 4, 16, 8),
+            { color: COLORS.white },
+        ).setOrigin(0.5);
 
         this.input.on('pointerdown', this.#onPointerDown, this);
         this.game.events.on(VIEWPORT_CHANGED, this.#onViewportChanged);

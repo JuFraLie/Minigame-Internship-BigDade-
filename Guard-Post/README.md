@@ -49,9 +49,11 @@ tile per theme (levels cycle three themes), a road built from the ground tile se
 rocks, mushrooms and a gate castle per theme. Loading and baking live in
 `src/adapters/phaser/assets.ts`; `src/adapters/phaser/assetManifest.ts` is the only file
 that names image files, and `tests/assets.test.ts` checks every path against the disk
-plus the frame geometry against the actual PNG dimensions. UI chrome is still drawn
-procedurally at boot, and any missing file falls back to the old procedural shape, so a
-lost asset never stops a round.
+plus the frame geometry against the actual PNG dimensions. UI chrome is drawn
+procedurally per size (flat pixel boxes, no image files) and uses the bundled
+`Press Start 2P` font in `public/fonts/` (SIL Open Font License, see the `OFL.txt` next
+to it). Any missing file falls back to the old procedural shape, so a lost asset never
+stops a round.
 
 ## Rules summary
 

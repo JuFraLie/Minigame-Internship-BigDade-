@@ -8,20 +8,21 @@ import { assetImage, bakeSprites } from './assets.ts';
 /**
  * Textures: everything the game draws with.
  *
- * UI chrome (buttons, panels, capsules) is generated at boot with `Phaser.Graphics`
- * — no image file and no CDN (AGENTS.md §3.4). The chrome is carved-stone by design:
- * chamfered slabs with a light slate bevel over a dark slate fill, so the HUD reads as
- * part of the pack's pixel-art world rather than a modern overlay. The sprite pack in
- * `public/` supplies the game world: enemies, towers, shots, the grass field, the
- * tile-set road, the gate castle and the scenery, baked into the renderer's texture
- * keys by `assets.ts`. Entity textures are authored at a nominal tile of
- * `NOMINAL_TILE` px and scaled by the renderer, so a resize never regenerates
- * anything but the board itself. Any entity texture the pack did not provide falls
- * back to the old procedural drawing, so a missing file never stops a round.
+ * UI chrome (buttons, panels, capsules) is generated per size with a 2D canvas — no
+ * image file and no CDN (AGENTS.md §3.4). The chrome is deliberately flat pixel art:
+ * a hard ink border, a solid fill, and a two-pixel light/shade bevel. No gradients,
+ * rounded corners or inner outlines, so the UI speaks the same visual language as the
+ * sprites instead of looking like a modern overlay. The sprite pack in `public/`
+ * supplies the game world: enemies, towers, shots, the grass field, the tile-set
+ * road, the gate castle and the scenery, baked into the renderer's texture keys by
+ * `assets.ts`. Entity textures are authored at a nominal tile of `NOMINAL_TILE` px
+ * and scaled by the renderer, so a resize never regenerates anything but the board
+ * itself. Any entity texture the pack did not provide falls back to the old procedural
+ * drawing, so a missing file never stops a round.
  *
  * Two surfaces are cut from the pack itself rather than drawn: the build pads (a
  * silvered slab of the stone tile set, so a pad reads as pavement) and the Play
- * Screen's title plaque (the same stone, behind the gold title).
+ * Screen's gate castle.
  */
 
 export const NOMINAL_TILE = 44;
@@ -40,21 +41,6 @@ export const COLORS = {
     gate: 0xd9b64a,
     gold: 0xd9b64a,
     goldBright: 0xf2d98c,
-    goldDark: 0x8a7426,
-    /** Slate sampled from the stone tile set, darkened for chrome fills. */
-    stone: 0x27314e,
-    stoneEdge: 0x9db0cf,
-    stoneShadow: 0x151b2e,
-    capsule: 0x27314e,
-    capsuleEdge: 0x9db0cf,
-    button: 0x2c3854,
-    buttonEdge: 0x9db0cf,
-    buttonPrimary: 0x7d6a24,
-    buttonDanger: 0x5c2f36,
-    buttonDisabled: 0x242a3a,
-    buttonDisabledEdge: 0x4a5163,
-    panel: 0x1a2340,
-    panelEdge: 0x8fa2c4,
     white: 0xffffff,
     text: 0xe8eefc,
     textDim: 0x9db1d4,
@@ -71,12 +57,100 @@ export const COLORS = {
     select: 0xf2d98c,
     hp: 0x68d391,
     hpLost: 0x3a2029,
-    /** Ink behind every label stroke, so text survives on grass or stone alike. */
+    /** Ink used for pixel borders and the hard title shadow. */
     ink: 0x0d1524,
 } as const;
 
 export function hex(color: number): string {
     return `#${color.toString(16).padStart(6, '0')}`;
+}
+
+/**
+ * Makes a texture sample with nearest-neighbour. The Canvas renderer reads this from
+ * the texture source, so it is the only way to keep generated pixels crisp when the
+ * camera zooms for a high-density screen.
+ */
+function markNearest(scene: Phaser.Scene, key: string): void {
+    const texture = scene.textures.get(key);
+    if (texture && texture.key !== '__MISSING') texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+}
+
+// ---------------------------------------------------------------------------
+// Pixel chrome
+// ---------------------------------------------------------------------------
+
+/** Every UI surface variant. One variant = one flat palette, no gradients. */
+export type PixelVariant =
+    | 'panel'
+    | 'plaque'
+    | 'capsule'
+    | 'button'
+    | 'primary'
+    | 'danger'
+    | 'disabled'
+    | 'dart'
+    | 'cannon'
+    | 'frost';
+
+interface PixelPalette {
+    readonly body: number;
+    readonly light: number;
+    readonly shade: number;
+    readonly border: number;
+}
+
+/**
+ * Colours sampled from the sprite pack: ink for outlines, slate for neutral chrome,
+ * gate gold for the forward action, and each tower's own colour for its build button.
+ */
+const PIXEL: Record<PixelVariant, PixelPalette> = {
+    panel: { border: 0x070b14, body: 0x1a2238, light: 0x2f3d5e, shade: 0x111827 },
+    plaque: { border: 0xd9b64a, body: 0x18223a, light: 0xf2d98c, shade: 0x8a7426 },
+    capsule: { border: 0x070b14, body: 0x1c263e, light: 0x33415f, shade: 0x121a2b },
+    button: { border: 0x070b14, body: 0x2b3552, light: 0x47577f, shade: 0x171d2e },
+    primary: { border: 0x2a1c08, body: 0xe0a92e, light: 0xffd76a, shade: 0x9c6b12 },
+    danger: { border: 0x2a0e0e, body: 0xb0443f, light: 0xe07168, shade: 0x6e2422 },
+    disabled: { border: 0x070b14, body: 0x262c3c, light: 0x333b4d, shade: 0x181c28 },
+    dart: { border: 0x1b7a74, body: 0x243652, light: 0x7fe8e0, shade: 0x143f4a },
+    cannon: { border: 0x8f4a1d, body: 0x3a2b3e, light: 0xffb07a, shade: 0x5a2a14 },
+    frost: { border: 0x3f7fa8, body: 0x22324e, light: 0xc4e8ff, shade: 0x254c68 },
+};
+
+/**
+ * A flat pixel box drawn at its exact final size: a hard 2 px ink border, a solid
+ * body, a 2 px light bevel on top/left and a 2 px shade bevel on bottom/right.
+ *
+ * No rounding, gradient, shadow or inner outline — the same vocabulary as the sprites.
+ * Generating one texture per size keeps the 2 px bevel identical on every screen
+ * instead of stretching a small texture and blurring its edges.
+ */
+export function pixelBox(scene: Phaser.Scene, width: number, height: number, variant: PixelVariant): string {
+    const w = Math.max(10, Math.round(width));
+    const h = Math.max(10, Math.round(height));
+    const key = `ui-${variant}-${w}x${h}`;
+    if (scene.textures.exists(key)) return key;
+
+    const palette = PIXEL[variant];
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 'ui-white';
+
+    ctx.fillStyle = hex(palette.border);
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = hex(palette.body);
+    ctx.fillRect(2, 2, w - 4, h - 4);
+    ctx.fillStyle = hex(palette.light);
+    ctx.fillRect(2, 2, w - 4, 2);
+    ctx.fillRect(2, 2, 2, h - 4);
+    ctx.fillStyle = hex(palette.shade);
+    ctx.fillRect(2, h - 4, w - 4, 2);
+    ctx.fillRect(w - 4, 2, 2, h - 4);
+
+    scene.textures.addCanvas(key, canvas);
+    markNearest(scene, key);
+    return key;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,60 +167,16 @@ function polygon(g: Phaser.GameObjects.Graphics, cx: number, cy: number, radius:
     g.strokePoints(points, true);
 }
 
-/**
- * A chamfered rectangle: the blocky, carved-stone outline the pixel art asks for,
- * instead of a modern rounded pill. `cut` is the corner notch in pixels.
- */
-function chamfer(x: number, y: number, width: number, height: number, cut: number): Phaser.Geom.Point[] {
-    const c = Math.min(cut, width / 2, height / 2);
-    return [
-        new Phaser.Geom.Point(x + c, y),
-        new Phaser.Geom.Point(x + width - c, y),
-        new Phaser.Geom.Point(x + width, y + c),
-        new Phaser.Geom.Point(x + width, y + height - c),
-        new Phaser.Geom.Point(x + width - c, y + height),
-        new Phaser.Geom.Point(x + c, y + height),
-        new Phaser.Geom.Point(x, y + height - c),
-        new Phaser.Geom.Point(x, y + c),
-    ];
-}
-
-/**
- * Fills a chamfered slab, strokes a light bevel around it and drops a dark inner
- * line just inside — the double border that makes flat colour read as carved stone.
- */
-function slab(
-    g: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    cut: number,
-    fill: number,
-    edge: number,
-    inner: number,
-    alpha = 1,
-): void {
-    const outer = chamfer(x, y, width, height, cut);
-    g.fillStyle(fill, alpha);
-    g.fillPoints(outer, true);
-    g.lineStyle(3, edge, 1);
-    g.strokePoints(outer, true);
-    const inset = 4;
-    const line = chamfer(x + inset, y + inset, width - inset * 2, height - inset * 2, Math.max(1, cut - 2));
-    g.lineStyle(1, inner, 1);
-    g.strokePoints(line, true);
-}
-
 function ensure(scene: Phaser.Scene, key: string, width: number, height: number, draw: (g: Phaser.GameObjects.Graphics) => void): void {
     if (scene.textures.exists(key)) return;
     const g = scene.add.graphics();
     draw(g);
     g.generateTexture(key, width, height);
     g.destroy();
+    markNearest(scene, key);
 }
 
-/** Solid white block; stretched and tinted for fills, flashes and the pause dim. */
+/** Solid white block, used for the leak flash. */
 function ensureWhite(scene: Phaser.Scene): void {
     ensure(scene, 'ui-white', 8, 8, (g) => {
         g.fillStyle(COLORS.white, 1);
@@ -154,28 +184,11 @@ function ensureWhite(scene: Phaser.Scene): void {
     });
 }
 
-function ensureChrome(scene: Phaser.Scene): void {
-    ensure(scene, 'ui-capsule', 120, 40, (g) => {
-        slab(g, 2, 2, 116, 36, 5, COLORS.capsule, COLORS.capsuleEdge, COLORS.stoneShadow);
-    });
-    const button = (key: string, fill: number, edge: number, inner: number): void => {
-        ensure(scene, key, 240, 56, (g) => {
-            slab(g, 2, 2, 236, 52, 7, fill, edge, inner);
-        });
-    };
-    button('ui-button', COLORS.button, COLORS.buttonEdge, COLORS.stoneShadow);
-    // Primary is gate gold: the one button that carries the round forward.
-    button('ui-button-primary', COLORS.buttonPrimary, COLORS.gold, COLORS.goldDark);
-    button('ui-button-danger', COLORS.buttonDanger, 0xc46a72, 0x3a1e23);
-    button('ui-button-disabled', COLORS.buttonDisabled, COLORS.buttonDisabledEdge, 0x1a1f2c);
-
-    // Build buttons carry their tower's colour, so the bar reads at a glance.
-    button('ui-button-dart', COLORS.button, COLORS.dart, COLORS.stoneShadow);
-    button('ui-button-cannon', COLORS.button, COLORS.cannon, COLORS.stoneShadow);
-    button('ui-button-frost', COLORS.button, COLORS.frost, COLORS.stoneShadow);
-
-    ensure(scene, 'ui-panel', 360, 320, (g) => {
-        slab(g, 2, 2, 356, 316, 9, COLORS.panel, COLORS.panelEdge, COLORS.stoneShadow, 0.97);
+/** Solid ink block, used to darken the field behind the pause overlay. */
+function ensureInk(scene: Phaser.Scene): void {
+    ensure(scene, 'ui-ink', 8, 8, (g) => {
+        g.fillStyle(COLORS.ink, 1);
+        g.fillRect(0, 0, 8, 8);
     });
 }
 
@@ -227,58 +240,33 @@ export function ensurePadTexture(scene: Phaser.Scene): void {
     ctx.strokeRect(4.5, 4.5, size - 9, size - 9);
 
     scene.textures.addCanvas(PAD_KEY, canvas);
-}
-
-/** Chamfered path on a 2D context — the same carved corner as the chrome slabs. */
-function chamferPath(ctx: Ctx, x: number, y: number, width: number, height: number, cut: number): void {
-    ctx.beginPath();
-    ctx.moveTo(x + cut, y);
-    ctx.lineTo(x + width - cut, y);
-    ctx.lineTo(x + width, y + cut);
-    ctx.lineTo(x + width, y + height - cut);
-    ctx.lineTo(x + width - cut, y + height);
-    ctx.lineTo(x + cut, y + height);
-    ctx.lineTo(x, y + height - cut);
-    ctx.lineTo(x, y + cut);
-    ctx.closePath();
+    markNearest(scene, PAD_KEY);
 }
 
 /**
- * The Play Screen's title plaque: the stone tile set repeated at native size (a
- * pattern never stretches, so the bricks stay crisp at any width), pushed back
- * behind a dark wash and cut with a gold bevel. Rebaked on every call — a viewport
- * change resizes it.
+ * Crops frame 0 of the pack's blue castle and upscales it by an integer factor with
+ * nearest-neighbour, so the Play Screen shows the thing the player is defending — the
+ * pack's own art, not a generic UI glyph. Returns the texture key, or null when the
+ * pack is unavailable.
  */
-export function renderTitlePlaque(scene: Phaser.Scene, width: number, height: number): void {
-    const key = 'ui-plaque';
-    if (scene.textures.exists(key)) scene.textures.remove(key);
+export function ensureCastleIcon(scene: Phaser.Scene, scale: 2 | 3): string | null {
+    const key = `ui-castle-${scale}`;
+    if (scene.textures.exists(key)) return key;
+    const spec = CASTLES[0];
+    if (!spec) return null;
+    const source = assetImage(scene, spec.file);
+    if (!source) return null;
 
-    const w = Math.max(1, Math.round(width));
-    const h = Math.max(1, Math.round(height));
     const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = spec.frameWidth * scale;
+    canvas.height = spec.frameHeight * scale;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const stone = assetImage(scene, STONE_TILESET.file);
-    const pattern = stone ? ctx.createPattern(stone, 'repeat') : null;
-    ctx.fillStyle = pattern ?? hex(COLORS.stone);
-    ctx.fillRect(0, 0, w, h);
-    // The wash keeps the gold title readable on the masonry.
-    ctx.fillStyle = 'rgba(13, 21, 36, 0.55)';
-    ctx.fillRect(0, 0, w, h);
-
-    chamferPath(ctx, 1.5, 1.5, w - 3, h - 3, 7);
-    ctx.strokeStyle = hex(COLORS.gold);
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    chamferPath(ctx, 6.5, 6.5, w - 13, h - 13, 4);
-    ctx.strokeStyle = 'rgba(13, 21, 36, 0.8)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(source, 0, 0, spec.frameWidth, spec.frameHeight, 0, 0, canvas.width, canvas.height);
     scene.textures.addCanvas(key, canvas);
+    markNearest(scene, key);
+    return key;
 }
 
 // -- procedural fallbacks ---------------------------------------------------
@@ -377,10 +365,10 @@ function ensureShots(scene: Phaser.Scene): void {
 
 // -- texture entry points ---------------------------------------------------
 
-/** Generates the UI chrome. Idempotent, so a scene restart is free. */
+/** Generates the two flat textures the UI cannot size itself. Idempotent. */
 export function ensureTextures(scene: Phaser.Scene): void {
     ensureWhite(scene);
-    ensureChrome(scene);
+    ensureInk(scene);
 }
 
 /**
@@ -417,6 +405,7 @@ export function renderBoardTexture(scene: Phaser.Scene, map: GameMap, tile: numb
     if (scene.textures.exists(BOARD_KEY)) scene.textures.remove(BOARD_KEY);
     const texture = scene.textures.createCanvas(BOARD_KEY, width, height);
     if (!texture) return;
+    texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     const ctx = texture.context;
     ctx.imageSmoothingEnabled = false;
 
