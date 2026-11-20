@@ -1,4 +1,4 @@
-import type { EnemyType, TowerType } from '../../domain/types.ts';
+import type { TowerType } from '../../domain/types.ts';
 
 /**
  * The sprite pack manifest: every image file the game ships with, and how each one is
@@ -9,28 +9,10 @@ import type { EnemyType, TowerType } from '../../domain/types.ts';
  * (AGENTS.md §3.4: bundled locally, no CDN). Paths are relative so the game works
  * from any base URL the host app serves it from.
  *
- * The renderer keys are fixed by the manifest: enemies bake to one
- * `enemy-<type>-<frame>` texture per strip frame (cycled by the renderer), towers
- * to `tower-<type>-<level>`, shots to `shot-<type>`.
+ * The renderer keys are fixed by the manifest: towers bake to `tower-<type>-<level>`
+ * and shots to `shot-<type>`. Enemies are drawn in code by `textures.ts`, so their
+ * pack art is deliberately absent here.
  */
-
-/** A horizontal strip of equal frames, baked with an integer nearest-neighbour upscale. */
-export interface StripSpec {
-    readonly file: string;
-    readonly frameWidth: number;
-    readonly frameHeight: number;
-    readonly frames: number;
-    /** Integer scale applied when baking, so pixel art stays crisp at any screen size. */
-    readonly scale: number;
-    /** Walk-cycle speed the renderer uses to cycle the baked frames, in fps. */
-    readonly fps: number;
-    /**
-     * Optional frame order. A five-frame strip whose ends do not meet reads as a
-     * jarring snap when it loops, so those use a ping-pong (there and back) order.
-     * Indices must stay within `frames`.
-     */
-    readonly cycle?: readonly number[];
-}
 
 /** A single image baked with an integer nearest-neighbour upscale. */
 export interface ImageSpec {
@@ -51,21 +33,6 @@ export interface CastleSpec {
     readonly frameHeight: number;
     readonly frames: number;
 }
-
-/**
- * The four enemy types, mapped to the pack: a skeleton for the grunt, a bat for the
- * runner, a demon for the brute and the crowned slime for the boss. Frame counts are
- * measured from the files (the strips are walk cycles of equal frames).
- */
-/** Forward then back: the bat and demon strips do not meet cleanly at the seam. */
-const PING_PONG_5 = [0, 1, 2, 3, 4, 3, 2, 1] as const;
-
-export const ENEMY_STRIPS: Record<EnemyType, StripSpec> = {
-    grunt: { file: 'Enemies/spr_skeleton.png', frameWidth: 8, frameHeight: 7, frames: 4, scale: 4, fps: 8 },
-    runner: { file: 'Enemies/spr_bat.png', frameWidth: 8, frameHeight: 7, frames: 5, scale: 3, fps: 8, cycle: PING_PONG_5 },
-    brute: { file: 'Enemies/spr_demon.png', frameWidth: 8, frameHeight: 8, frames: 5, scale: 5, fps: 6, cycle: PING_PONG_5 },
-    boss: { file: 'Enemies/spr_king_slime.png', frameWidth: 16, frameHeight: 12, frames: 4, scale: 3, fps: 6 },
-};
 
 /** The three buildable towers: archer, cannon and ice wizard. */
 export const TOWER_IMAGES: Record<TowerType, ImageSpec> = {
@@ -137,7 +104,6 @@ export const SCENERY: readonly ScenerySpec[] = [
 /** Every file the loader asks for, deduplicated. */
 export const ALL_FILES: readonly string[] = [
     ...new Set([
-        ...Object.values(ENEMY_STRIPS).map((spec) => spec.file),
         ...Object.values(TOWER_IMAGES).map((spec) => spec.file),
         ...Object.values(SHOT_IMAGES).map((spec) => spec.file),
         ...CASTLES.map((spec) => spec.file),

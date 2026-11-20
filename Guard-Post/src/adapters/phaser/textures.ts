@@ -12,13 +12,12 @@ import { assetImage, bakeSprites } from './assets.ts';
  * image file and no CDN (AGENTS.md §3.4). The chrome is deliberately flat pixel art:
  * a hard ink border, a solid fill, and a two-pixel light/shade bevel. No gradients,
  * rounded corners or inner outlines, so the UI speaks the same visual language as the
- * sprites instead of looking like a modern overlay. The sprite pack in `public/`
- * supplies the game world: enemies, towers, shots, the grass field, the tile-set
- * road, the gate castle and the scenery, baked into the renderer's texture keys by
- * `assets.ts`. Entity textures are authored at a nominal tile of `NOMINAL_TILE` px
- * and scaled by the renderer, so a resize never regenerates anything but the board
- * itself. Any entity texture the pack did not provide falls back to the old procedural
- * drawing, so a missing file never stops a round.
+ * sprites instead of looking like a modern overlay. Enemies are drawn here too, as
+ * four clean code-generated frames per type — the sprite pack's enemy art is not used.
+ * Towers, shots, the grass field, the tile-set road, the gate castle and the scenery
+ * still come from the local pack, baked by `assets.ts`. Entity textures are authored at
+ * a nominal tile of `NOMINAL_TILE` px and scaled by the renderer, so a resize never
+ * regenerates anything but the board itself.
  *
  * Two surfaces are cut from the pack itself rather than drawn: the build pads (a
  * silvered slab of the stone tile set, so a pad reads as pavement) and the Play
@@ -27,6 +26,18 @@ import { assetImage, bakeSprites } from './assets.ts';
  */
 
 export const NOMINAL_TILE = 44;
+
+/**
+ * Enemies are drawn in code, not read from PNG strips. Four clean frames per type
+ * are baked at startup and cycled by the renderer; this keeps the animation entirely
+ * under our control and removes the sprite pack as a source of visual bugs.
+ */
+export const ENEMY_ANIM: Record<EnemyType, { readonly frames: number; readonly fps: number }> = {
+    grunt: { frames: 4, fps: 7 },
+    runner: { frames: 4, fps: 8 },
+    brute: { frames: 4, fps: 6 },
+    boss: { frames: 4, fps: 5 },
+};
 
 export const COLORS = {
     /** Deep olive green behind the frame — dark enough to sit under the grass field. */
@@ -330,48 +341,114 @@ export function ensureCastleIcon(scene: Phaser.Scene, scale: 2 | 3): string | nu
     return key;
 }
 
-// -- procedural fallbacks ---------------------------------------------------
+// -- enemies drawn in code --------------------------------------------------
 //
-// The pack normally provides every entity texture, so these run only when a file is
-// missing. They keep the old shapes under the pack's texture keys (`enemy-<type>-0`),
-// so the renderer needs no branch either way.
+// No sprite strips: every enemy is a handful of hard-edged rectangles baked to four
+// frames. Clean silhouettes, a two-step bob and a clear colour per type mean the
+// animation comes from this file alone and cannot be broken by a pack asset.
+
+type Pixel = (x: number, y: number, w: number, h: number, color: number) => void;
+
+function enemyTexture(
+    scene: Phaser.Scene,
+    type: EnemyType,
+    frame: number,
+    pixels: number,
+    scale: number,
+    draw: (px: Pixel) => void,
+): void {
+    const key = `enemy-${type}-${frame}`;
+    if (scene.textures.exists(key)) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = pixels * scale;
+    canvas.height = pixels * scale;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    const px: Pixel = (x, y, w, h, color) => {
+        ctx.fillStyle = hex(color);
+        ctx.fillRect(x * scale, y * scale, w * scale, h * scale);
+    };
+    draw(px);
+    scene.textures.addCanvas(key, canvas);
+    markNearest(scene, key);
+}
 
 function ensureEnemies(scene: Phaser.Scene): void {
-    const enemy = (type: EnemyType, size: number, draw: (g: Phaser.GameObjects.Graphics) => void): void => {
-        ensure(scene, `enemy-${type}-0`, size, size, (g) => {
-            g.lineStyle(3, 0x0d1524, 1);
-            draw(g);
+    for (let frame = 0; frame < ENEMY_ANIM.grunt.frames; frame++) {
+        const step = frame % 2;
+        enemyTexture(scene, 'grunt', frame, 16, 2, (px) => {
+            px(4, 3, 8, 8, COLORS.ink);
+            px(5, 4, 6, 6, COLORS.grunt);
+            px(5, 4, 6, 2, 0xf28078);
+            px(6, 6, 1, 1, COLORS.ink);
+            px(9, 6, 1, 1, COLORS.ink);
+            px(3, 9, 10, 5, COLORS.ink);
+            px(4, 10, 8, 3, COLORS.grunt);
+            px(5, 11, 6, 1, 0xf28078);
+            px(5 + step, 14, 2, 2, COLORS.ink);
+            px(9 - step, 14, 2, 2, COLORS.ink);
         });
-    };
+    }
 
-    enemy('grunt', 28, (g) => {
-        g.fillStyle(COLORS.grunt, 1);
-        g.fillCircle(14, 14, 12);
-        g.strokeCircle(14, 14, 12);
-        g.fillStyle(0x7e2a28, 1);
-        g.fillCircle(14, 14, 4);
-    });
-    enemy('runner', 26, (g) => {
-        g.fillStyle(COLORS.runner, 1);
-        polygon(g, 13, 13, 11, 4, Math.PI / 4);
-        g.fillStyle(0x8a5d16, 1);
-        g.fillCircle(13, 13, 3);
-    });
-    enemy('brute', 34, (g) => {
-        g.fillStyle(COLORS.brute, 1);
-        g.fillRoundedRect(3, 3, 28, 28, 7);
-        g.strokeRoundedRect(3, 3, 28, 28, 7);
-        g.fillStyle(0x4d3a70, 1);
-        g.fillRoundedRect(9, 9, 16, 16, 4);
-    });
-    enemy('boss', 48, (g) => {
-        g.fillStyle(COLORS.boss, 1);
-        polygon(g, 24, 24, 21, 6, Math.PI / 6);
-        g.fillStyle(0x5c1522, 1);
-        polygon(g, 24, 24, 10, 6, Math.PI / 6);
-        g.lineStyle(3, 0xf0c0c0, 1);
-        polygon(g, 24, 24, 21, 6, Math.PI / 6);
-    });
+    for (let frame = 0; frame < ENEMY_ANIM.runner.frames; frame++) {
+        const up = frame % 2 === 1;
+        enemyTexture(scene, 'runner', frame, 16, 2, (px) => {
+            if (up) {
+                px(2, 3, 4, 3, COLORS.ink);
+                px(10, 3, 4, 3, COLORS.ink);
+                px(3, 4, 3, 1, COLORS.runner);
+                px(10, 4, 3, 1, COLORS.runner);
+            } else {
+                px(1, 6, 5, 3, COLORS.ink);
+                px(10, 6, 5, 3, COLORS.ink);
+                px(2, 7, 4, 1, COLORS.runner);
+                px(10, 7, 4, 1, COLORS.runner);
+            }
+            px(6, 5, 4, 6, COLORS.ink);
+            px(7, 6, 2, 4, COLORS.runner);
+            px(7, 7, 1, 1, COLORS.ink);
+            px(8, 7, 1, 1, COLORS.ink);
+            px(7, 10, 1, 2, COLORS.ink);
+            px(8, 10, 1, 2, COLORS.ink);
+        });
+    }
+
+    for (let frame = 0; frame < ENEMY_ANIM.brute.frames; frame++) {
+        const step = frame % 2;
+        enemyTexture(scene, 'brute', frame, 18, 2, (px) => {
+            px(2, 2, 3, 3, COLORS.ink);
+            px(13, 2, 3, 3, COLORS.ink);
+            px(3, 3, 1, 1, COLORS.goldBright);
+            px(14, 3, 1, 1, COLORS.goldBright);
+            px(3, 4, 12, 10, COLORS.ink);
+            px(4, 5, 10, 8, COLORS.brute);
+            px(4, 5, 10, 2, 0xb79ae0);
+            px(6, 8, 2, 2, COLORS.ink);
+            px(10, 8, 2, 2, COLORS.ink);
+            px(5 + step, 14, 3, 4, COLORS.ink);
+            px(10 - step, 14, 3, 4, COLORS.ink);
+        });
+    }
+
+    for (let frame = 0; frame < ENEMY_ANIM.boss.frames; frame++) {
+        const step = frame % 2;
+        enemyTexture(scene, 'boss', frame, 20, 2, (px) => {
+            px(4, 3, 2, 3, COLORS.ink);
+            px(9, 2, 2, 4, COLORS.ink);
+            px(14, 3, 2, 3, COLORS.ink);
+            px(5, 4, 1, 1, COLORS.goldBright);
+            px(10, 3, 1, 1, COLORS.goldBright);
+            px(15, 4, 1, 1, COLORS.goldBright);
+            px(2, 6, 16, 10, COLORS.ink);
+            px(3, 7, 14, 8, COLORS.boss);
+            px(3, 7, 14, 2, 0xd45a70);
+            px(6, 10, 2, 2, COLORS.ink);
+            px(12, 10, 2, 2, COLORS.ink);
+            px(5 + step, 16, 3, 4, COLORS.ink);
+            px(12 - step, 16, 3, 4, COLORS.ink);
+        });
+    }
 }
 
 function ensureTowers(scene: Phaser.Scene): void {

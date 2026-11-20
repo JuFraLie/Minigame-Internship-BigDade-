@@ -10,7 +10,6 @@ import {
     type RoundSnapshot,
     type TowerType,
 } from '../../domain/types.ts';
-import { ENEMY_STRIPS } from './assetManifest.ts';
 import type { Selection } from './inputAdapter.ts';
 import type { PlayLayout } from './layout.ts';
 import type { GameViewPort, PlayUiState } from './playView.ts';
@@ -18,6 +17,7 @@ import {
     BACKDROP_KEY,
     BOARD_KEY,
     COLORS,
+    ENEMY_ANIM,
     NOMINAL_TILE,
     PAD_KEY,
     ensureEntityTextures,
@@ -596,23 +596,17 @@ export class PhaserCanvasRenderer implements GameViewPort {
     }
 
     /**
-     * Cycles the enemy's own baked strip frames. Driving the frames from the strip
-     * data keeps every type on its own animation — no shared Phaser timeline that
-     * can stall or fall back to one frame — and a per-sprite offset stops a crowd
-     * from marching in lockstep. A missing frame falls back to that type's first.
+     * Cycles the code-drawn frames for each enemy type. No sprite strips or shared
+     * Phaser timeline, so nothing in the pack can stall the animation. A per-sprite
+     * offset stops a crowd from marching in lockstep.
      */
     #walk(sprite: Phaser.GameObjects.Sprite, type: EnemyType, slot: number): void {
-        const spec = ENEMY_STRIPS[type];
-        const frames = spec?.frames ?? 1;
-        const sequence = spec?.cycle?.length ? spec.cycle : null;
-        const length = sequence?.length ?? frames;
-        const frameMs = 1000 / (spec?.fps ?? 6);
-        const offset = (slot * 137) % Math.max(1, length);
-        const step = length > 1 ? Math.floor(this.#animTime / frameMs + offset) % length : 0;
-        const frame = sequence ? (sequence[step] ?? 0) : step;
+        const spec = ENEMY_ANIM[type];
+        const frameMs = 1000 / spec.fps;
+        const offset = (slot * 137) % spec.frames;
+        const frame = spec.frames > 1 ? Math.floor(this.#animTime / frameMs + offset) % spec.frames : 0;
         const key = `enemy-${type}-${frame}`;
-        const frameKey = this.#scene.textures.exists(key) ? key : `enemy-${type}-0`;
-        if (sprite.texture.key !== frameKey) sprite.setTexture(frameKey);
+        if (sprite.texture.key !== key) sprite.setTexture(key);
     }
 
     /** Empty build pads, the selection outline and the selected tower's range circle. */

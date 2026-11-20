@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
-import type { EnemyType, TowerType } from '../../domain/types.ts';
-import { ALL_FILES, ENEMY_STRIPS, SHOT_IMAGES, TOWER_IMAGES } from './assetManifest.ts';
+import type { TowerType } from '../../domain/types.ts';
+import { ALL_FILES, SHOT_IMAGES, TOWER_IMAGES } from './assetManifest.ts';
 
 /**
  * Loads the sprite pack and bakes it into the texture keys the renderer already uses.
@@ -49,9 +49,6 @@ export function preloadSprites(scene: Phaser.Scene): void {
 
 /** The texture key a file produces once baked; null for files the board paints raw. */
 function bakedProduct(file: string): string | null {
-    for (const [type, spec] of Object.entries(ENEMY_STRIPS)) {
-        if (spec.file === file) return `enemy-${type}-0`;
-    }
     for (const [type, spec] of Object.entries(TOWER_IMAGES)) {
         if (spec.file === file) return `tower-${type}-1`;
     }
@@ -62,14 +59,13 @@ function bakedProduct(file: string): string | null {
 }
 
 /**
- * Bakes every loaded file into its final texture: one texture per enemy strip frame,
- * tower textures with level pips and shot textures. The renderer cycles the enemy
- * frames itself. The
- * field, scenery, gate, the stone the UI cuts its pads from and the Play Screen's
- * castle are read raw instead. Called once per round, after `preloadSprites`.
+ * Bakes every loaded file into its final texture: tower textures with level pips and
+ * shot textures. Enemies are drawn in code by `textures.ts`, so their pack art is not
+ * fetched or baked. The field, scenery, gate, the stone the UI cuts its pads from and
+ * the Play Screen's castle are read raw instead. Called once per round, after
+ * `preloadSprites`.
  */
 export function bakeSprites(scene: Phaser.Scene): void {
-    bakeEnemyStrips(scene);
     bakeTowers(scene);
     bakeShots(scene);
 }
@@ -103,28 +99,6 @@ function sourceOf(scene: Phaser.Scene, file: string): HTMLImageElement | HTMLCan
 function addPixelTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement): void {
     const texture = scene.textures.addCanvas(key, canvas);
     texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
-}
-
-function bakeEnemyStrips(scene: Phaser.Scene): void {
-    for (const type of Object.keys(ENEMY_STRIPS) as EnemyType[]) {
-        const spec = ENEMY_STRIPS[type];
-        const firstKey = `enemy-${type}-0`;
-        if (scene.textures.exists(firstKey)) continue;
-        const source = sourceOf(scene, spec.file);
-        if (!source) continue; // Not loaded — the procedural fallback stands in.
-
-        let complete = true;
-        for (let frame = 0; frame < spec.frames; frame++) {
-            const canvas = bakeCanvas(source, frame * spec.frameWidth, 0, spec.frameWidth, spec.frameHeight, spec.scale);
-            if (!canvas) {
-                complete = false;
-                break;
-            }
-            addPixelTexture(scene, `enemy-${type}-${frame}`, canvas);
-        }
-        if (!complete) continue;
-        scene.textures.remove(rawAssetKey(spec.file));
-    }
 }
 
 function bakeTowers(scene: Phaser.Scene): void {
