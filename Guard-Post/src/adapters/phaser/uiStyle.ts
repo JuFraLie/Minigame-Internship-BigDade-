@@ -28,6 +28,12 @@ function textResolution(): number {
 /**
  * A text object in the UI font. Sizes are clamped to a legible minimum and rounded to
  * whole pixels, because a fractional pixel font size loses its pixel grid.
+ *
+ * The resolution goes into the *constructor* style, so Phaser also records it on the
+ * text's texture source. Calling `setResolution()` afterwards would double the drawn
+ * size: the internal canvas would be 2x, but the Canvas renderer divides by the source
+ * resolution, which stays at 1, so every glyph would be painted twice as large. That
+ * made the whole UI look oversized and chunky on any phone (devicePixelRatio >= 1.5).
  */
 export function uiText(
     scene: Phaser.Scene,
@@ -42,6 +48,7 @@ export function uiText(
         fontSize: `${Math.max(6, Math.round(size))}px`,
         color: hex(options.color ?? COLORS.text),
         align: options.align ?? 'center',
+        resolution: textResolution(),
     };
 
     if (options.lineSpacing !== undefined) style.lineSpacing = Math.max(0, Math.round(options.lineSpacing));
@@ -58,9 +65,7 @@ export function uiText(
         };
     }
 
-    const text = scene.add.text(x, y, value, style);
-    text.setResolution(textResolution());
-    return text;
+    return scene.add.text(x, y, value, style);
 }
 
 /** Sets a whole-pixel font size on an existing text object. */
