@@ -129,57 +129,26 @@ function chamferPath(ctx: Ctx, x: number, y: number, width: number, height: numb
 }
 
 interface SlabStyle {
-    /** Fill gradient: top, middle, bottom. */
-    readonly stops: readonly [string, string, string];
+    readonly fill: string;
     /** Border colour; the variant's identity (gold, silver, tower colour, red). */
     readonly edge: string;
-    readonly inner: string;
 }
 
-const SLATE: SlabStyle = { stops: ['#4a5a82', '#2c3854', '#1d2540'], edge: '#9db0cf', inner: 'rgba(255,255,255,0.16)' };
-const GOLD: SlabStyle = { stops: ['#ffe9a3', '#d9b64a', '#9a7a26'], edge: '#fff0b8', inner: 'rgba(92,74,18,0.55)' };
+const SLATE: SlabStyle = { fill: '#2c3854', edge: '#55648a' };
+const GOLD: SlabStyle = { fill: '#b39134', edge: '#7d6a24' };
 
 /**
- * The one look every chrome slab shares: a vertical gradient, a top sheen and a
- * bottom shade (the "lifted" feel), then a carved border — ink hairline, bright
- * edge, thin inner line — around a chamfered outline.
+ * The one look every chrome slab shares, kept deliberately plain: a flat fill and
+ * a thin border around a chamfered outline — no gradients, no sheens, no inner
+ * lines. Colour alone carries the variant.
  */
 function paintSlab(ctx: Ctx, width: number, height: number, cut: number, style: SlabStyle): void {
-    const fill = ctx.createLinearGradient(0, 0, 0, height);
-    fill.addColorStop(0, style.stops[0]);
-    fill.addColorStop(0.5, style.stops[1]);
-    fill.addColorStop(1, style.stops[2]);
-    chamferPath(ctx, 1.5, 1.5, width - 3, height - 3, cut);
-    ctx.fillStyle = fill;
+    chamferPath(ctx, 1, 1, width - 2, height - 2, cut);
+    ctx.fillStyle = style.fill;
     ctx.fill();
-
-    // Sheen and shade, clipped to the slab.
-    ctx.save();
-    chamferPath(ctx, 1.5, 1.5, width - 3, height - 3, cut);
-    ctx.clip();
-    const sheen = ctx.createLinearGradient(0, 0, 0, height * 0.55);
-    sheen.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
-    sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = sheen;
-    ctx.fillRect(0, 0, width, height * 0.55);
-    const shade = ctx.createLinearGradient(0, height * 0.6, 0, height);
-    shade.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    shade.addColorStop(1, 'rgba(0, 0, 0, 0.32)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(0, height * 0.6, width, height * 0.4);
-    ctx.restore();
-
-    chamferPath(ctx, 1.5, 1.5, width - 3, height - 3, cut);
-    ctx.strokeStyle = '#0d1524';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    chamferPath(ctx, 1.5, 1.5, width - 3, height - 3, cut);
+    chamferPath(ctx, 1, 1, width - 2, height - 2, cut);
     ctx.strokeStyle = style.edge;
     ctx.lineWidth = 2;
-    ctx.stroke();
-    chamferPath(ctx, 5.5, 5.5, width - 11, height - 11, Math.max(1, cut - 2));
-    ctx.strokeStyle = style.inner;
-    ctx.lineWidth = 1;
     ctx.stroke();
 }
 
