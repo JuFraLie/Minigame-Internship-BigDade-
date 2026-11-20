@@ -70,6 +70,9 @@ test('strip geometry in the manifest matches the actual PNG frames', () => {
         assert.ok(Number.isInteger(spec.scale) && spec.scale >= 1, `${type}: scale must upscale, not blur`);
         assert.ok(spec.frameWidth * spec.scale <= 128, `${type}: baked frame would be oversized`);
         assert.ok(spec.fps >= 4, `${type}: walk cycle would strobe at ${spec.fps}fps`);
+        for (const frame of spec.cycle ?? []) {
+            assert.ok(Number.isInteger(frame) && frame >= 0 && frame < spec.frames, `${type}: frame ${frame} is outside the strip`);
+        }
     }
 
     for (const type of Object.keys(TOWER_IMAGES) as TowerType[]) {

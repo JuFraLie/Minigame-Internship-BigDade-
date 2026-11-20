@@ -164,11 +164,11 @@ export function pixelBox(scene: Phaser.Scene, width: number, height: number, var
 export const BACKDROP_KEY = 'ui-backdrop';
 
 /**
- * A simple mobile-game backdrop: one flat olive field and one quiet sand line
- * around it. No weave, no diamonds, no bevel — the board and the buttons carry
- * the detail, so the background only has to hold them steady.
+ * A simple mobile-game backdrop: one flat olive field inside a chunky pixel
+ * border — a dark block keyline with a sand inner band, all drawn in 4 px steps.
+ * No weave, no diamonds, no bevel: the board and buttons still carry the detail.
  *
- * The line starts below `topInset`, clear of status-bar icons and cutouts. The
+ * The border starts below `topInset`, clear of status-bar icons and cutouts. The
  * canvas is baked once per screen size and shared by all three scenes.
  */
 export function renderBackdrop(scene: Phaser.Scene, width: number, height: number, topInset: number): void {
@@ -189,14 +189,25 @@ export function renderBackdrop(scene: Phaser.Scene, width: number, height: numbe
     ctx.fillStyle = hex(COLORS.background);
     ctx.fillRect(0, 0, w, h);
 
-    const margin = Math.max(8, Math.round(Math.min(w, h) * 0.03));
-    const top = Math.max(margin + 4, Math.round(topInset) + 6);
-    const frameWidth = Math.max(1, w - margin * 2);
-    const frameHeight = Math.max(1, h - margin - top);
-    ctx.globalAlpha = 0.45;
-    ctx.strokeStyle = hex(COLORS.sand);
-    ctx.lineWidth = 2;
-    ctx.strokeRect(margin + 1, top + 1, frameWidth - 2, frameHeight - 2);
+    // Two hard-edged pixel rings. Four fillRects per ring keep the corners square
+    // instead of rounded, so the border reads like the rest of the pixel UI.
+    const unit = 4;
+    const margin = Math.max(unit * 2, Math.round((Math.min(w, h) * 0.035) / unit) * unit);
+    const top = Math.max(margin + unit * 2, Math.round(topInset) + unit * 2);
+    const frameWidth = Math.max(unit * 4, w - margin * 2);
+    const frameHeight = Math.max(unit * 4, h - margin - top);
+
+    const ring = (x: number, y: number, rw: number, rh: number, thickness: number, color: string): void => {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, rw, thickness);
+        ctx.fillRect(x, y + rh - thickness, rw, thickness);
+        ctx.fillRect(x, y + thickness, thickness, rh - thickness * 2);
+        ctx.fillRect(x + rw - thickness, y + thickness, thickness, rh - thickness * 2);
+    };
+
+    ring(margin, top, frameWidth, frameHeight, unit * 2, hex(COLORS.ink));
+    ctx.globalAlpha = 0.8;
+    ring(margin + unit * 2, top + unit * 2, frameWidth - unit * 4, frameHeight - unit * 4, unit, hex(COLORS.sand));
     ctx.globalAlpha = 1;
 
     scene.textures.addCanvas(BACKDROP_KEY, canvas);

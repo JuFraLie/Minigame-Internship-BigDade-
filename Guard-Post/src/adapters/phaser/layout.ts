@@ -23,8 +23,9 @@ const BOARD_GAP = 8;
 const BOTTOM_CONTENT = 64;
 const MENU_HEIGHT = 132;
 const CALL_WAVE_HEIGHT = 56;
-/** Horizontal share of the HUD row each capsule gets, left to right. */
-const CAPSULE_SHARES = [0.17, 0.22, 0.17, 0.21, 0.23] as const;
+/** The level-wave readout takes the middle of the HUD row; the rest share the sides. */
+const ROUND_SHARE = 0.36;
+const SIDE_SHARE = (1 - ROUND_SHARE) / 2;
 
 export interface Rect {
     readonly x: number;
@@ -59,10 +60,10 @@ export interface PlayLayout {
     readonly hud: {
         readonly y: number;
         readonly height: number;
-        readonly level: Rect;
-        readonly wave: Rect;
         readonly lives: Rect;
         readonly gold: Rect;
+        /** Centred readout showing level and wave together, e.g. LEVEL 1-1. */
+        readonly round: Rect;
         readonly score: Rect;
         readonly pause: Rect;
     };
@@ -127,12 +128,17 @@ export function computePlayLayout(input: LayoutInput): PlayLayout {
     const boardX = (width - boardWidth) / 2;
     const boardY = bandTop + (band - boardHeight) / 2;
 
-    // HUD capsules share everything left of a fixed 44 px pause button.
+    // HUD capsules share everything left of a fixed 44 px pause button. The
+    // level-wave readout is centred in that row, with the other stats on either side.
     const rowX = MARGIN;
     const rowWidth = width - 2 * MARGIN;
     const pause: Rect = { x: rowX + rowWidth - MIN_TAP, y: hudY + (HUD_HEIGHT - MIN_TAP) / 2, width: MIN_TAP, height: MIN_TAP };
     const capsuleArea = rowWidth - MIN_TAP - 6;
-    const [level, wave, lives, gold, score] = row(rowX, hudY + (HUD_HEIGHT - CAPSULE_HEIGHT) / 2, CAPSULE_SHARES, capsuleArea, CAPSULE_HEIGHT);
+    const capsuleY = hudY + (HUD_HEIGHT - CAPSULE_HEIGHT) / 2;
+    const sideWidth = capsuleArea * SIDE_SHARE;
+    const round: Rect = { x: rowX + sideWidth, y: capsuleY, width: capsuleArea * ROUND_SHARE, height: CAPSULE_HEIGHT };
+    const [lives, gold] = row(rowX, capsuleY, [0.45, 0.55], sideWidth, CAPSULE_HEIGHT);
+    const [score] = row(round.x + round.width, capsuleY, [1], sideWidth, CAPSULE_HEIGHT);
 
     const callWaveWidth = Math.min(width * 0.6, 300);
     const callWave: Rect = {
@@ -177,7 +183,7 @@ export function computePlayLayout(input: LayoutInput): PlayLayout {
         width,
         height,
         topPad,
-        hud: { y: hudY, height: HUD_HEIGHT, level, wave, lives, gold, score, pause },
+        hud: { y: hudY, height: HUD_HEIGHT, lives, gold, round, score, pause },
         board: { x: boardX, y: boardY, tile, width: boardWidth, height: boardHeight },
         bottom: { y: bottomY, height: BOTTOM_CONTENT },
         callWave,

@@ -110,7 +110,7 @@ test('the HUD, menus and overlays stay inside the screen', () => {
 
         // Capsules end before the pause button begins; everything sits in the row.
         let previousRight = 0;
-        for (const capsule of [layout.hud.level, layout.hud.wave, layout.hud.lives, layout.hud.gold, layout.hud.score]) {
+        for (const capsule of [layout.hud.lives, layout.hud.gold, layout.hud.round, layout.hud.score]) {
             assert.ok(capsule.x >= previousRight - 1e-9, 'HUD capsules must not overlap');
             assert.ok(capsule.x + capsule.width <= width + 1e-9, 'a capsule leaves the screen');
             previousRight = capsule.x + capsule.width;

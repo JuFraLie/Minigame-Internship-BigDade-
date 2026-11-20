@@ -10,7 +10,7 @@ import { fitFontSize, uiText } from '../uiStyle.ts';
 import { SCENE_GAME, SCENE_MENU } from './keys.ts';
 
 /** The two how-to sentences (AGENTS.md §2), wrapped for the pixel font's width. */
-const HOW_TO = 'Tap a spot to build\na tower.\nStop them at the gate.';
+const HOW_TO = 'Ketuk titik untuk\nmemasang menara.\nHentikan musuh di gerbang.';
 
 const TITLE = 'GUARD POST';
 
@@ -98,7 +98,7 @@ export class MainMenu extends Phaser.Scene {
             .setOrigin(0.5)
             .setDepth(6);
 
-        const howToSize = fitFontSize(layout.width - 32, 22, 10, 7);
+        const howToSize = fitFontSize(layout.width - 32, 26, 10, 7);
         uiText(this, layout.width / 2, layout.howToY, HOW_TO, howToSize, {
             // Light text: the how-to sits on the dark field inside the frame.
             color: COLORS.text,

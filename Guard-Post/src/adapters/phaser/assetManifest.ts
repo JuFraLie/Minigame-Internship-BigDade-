@@ -24,6 +24,12 @@ export interface StripSpec {
     readonly scale: number;
     /** Walk-cycle speed the renderer uses to cycle the baked frames, in fps. */
     readonly fps: number;
+    /**
+     * Optional frame order. A five-frame strip whose ends do not meet reads as a
+     * jarring snap when it loops, so those use a ping-pong (there and back) order.
+     * Indices must stay within `frames`.
+     */
+    readonly cycle?: readonly number[];
 }
 
 /** A single image baked with an integer nearest-neighbour upscale. */
@@ -51,10 +57,13 @@ export interface CastleSpec {
  * runner, a demon for the brute and the crowned slime for the boss. Frame counts are
  * measured from the files (the strips are walk cycles of equal frames).
  */
+/** Forward then back: the bat and demon strips do not meet cleanly at the seam. */
+const PING_PONG_5 = [0, 1, 2, 3, 4, 3, 2, 1] as const;
+
 export const ENEMY_STRIPS: Record<EnemyType, StripSpec> = {
     grunt: { file: 'Enemies/spr_skeleton.png', frameWidth: 8, frameHeight: 7, frames: 4, scale: 4, fps: 8 },
-    runner: { file: 'Enemies/spr_bat.png', frameWidth: 8, frameHeight: 7, frames: 5, scale: 3, fps: 12 },
-    brute: { file: 'Enemies/spr_demon.png', frameWidth: 8, frameHeight: 8, frames: 5, scale: 5, fps: 8 },
+    runner: { file: 'Enemies/spr_bat.png', frameWidth: 8, frameHeight: 7, frames: 5, scale: 3, fps: 8, cycle: PING_PONG_5 },
+    brute: { file: 'Enemies/spr_demon.png', frameWidth: 8, frameHeight: 8, frames: 5, scale: 5, fps: 6, cycle: PING_PONG_5 },
     boss: { file: 'Enemies/spr_king_slime.png', frameWidth: 16, frameHeight: 12, frames: 4, scale: 3, fps: 6 },
 };
 
