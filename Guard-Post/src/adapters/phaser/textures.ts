@@ -466,9 +466,10 @@ export function ensureCastleIcon(scene: Phaser.Scene, scale: 2 | 3): string | nu
 
 // -- enemies drawn in code --------------------------------------------------
 //
-// No sprite strips: every enemy is a handful of hard-edged rectangles baked to four
-// frames. Clean silhouettes, a two-step bob and a clear colour per type mean the
-// animation comes from this file alone and cannot be broken by a pack asset.
+// No sprite strips and no legs: every enemy is a hovering or flying silhouette built
+// from hard-edged rectangles and baked to four frames. A two-step bob (and wing flap
+// for the runner) supplies the motion, so the animation comes from this file alone
+// and cannot be broken by a pack asset.
 
 type Pixel = (x: number, y: number, w: number, h: number, color: number) => void;
 
@@ -498,78 +499,83 @@ function enemyTexture(
 }
 
 function ensureEnemies(scene: Phaser.Scene): void {
+    // Grunt — a hovering blob with a wavy tail instead of feet.
     for (let frame = 0; frame < ENEMY_ANIM.grunt.frames; frame++) {
-        const step = frame % 2;
+        const lift = frame % 2;
+        const tail = frame % 4 === 1 ? 1 : 0;
         enemyTexture(scene, 'grunt', frame, 16, 2, (px) => {
-            px(4, 3, 8, 8, COLORS.ink);
-            px(5, 4, 6, 6, COLORS.grunt);
-            px(5, 4, 6, 2, 0xf28078);
-            px(6, 6, 1, 1, COLORS.ink);
-            px(9, 6, 1, 1, COLORS.ink);
-            px(3, 9, 10, 5, COLORS.ink);
-            px(4, 10, 8, 3, COLORS.grunt);
-            px(5, 11, 6, 1, 0xf28078);
-            px(5 + step, 14, 2, 2, COLORS.ink);
-            px(9 - step, 14, 2, 2, COLORS.ink);
+            px(4, 3 + lift, 8, 7, COLORS.ink);
+            px(5, 4 + lift, 6, 5, COLORS.grunt);
+            px(5, 4 + lift, 6, 2, 0xf28078);
+            px(6, 6 + lift, 1, 1, COLORS.ink);
+            px(9, 6 + lift, 1, 1, COLORS.ink);
+            px(5, 10 + lift, 6, 1, COLORS.ink);
+            px(6 + tail, 11 + lift, 4, 1, COLORS.grunt);
+            px(7 + tail, 12 + lift, 2, 1, 0x6fbfb5);
         });
     }
 
+    // Runner — a fast flier: the wings flap through four phases, no legs below.
     for (let frame = 0; frame < ENEMY_ANIM.runner.frames; frame++) {
-        const up = frame % 2 === 1;
+        const flap = frame % 4;
+        const lift = flap % 2;
         enemyTexture(scene, 'runner', frame, 16, 2, (px) => {
-            if (up) {
-                px(2, 3, 4, 3, COLORS.ink);
-                px(10, 3, 4, 3, COLORS.ink);
-                px(3, 4, 3, 1, COLORS.runner);
-                px(10, 4, 3, 1, COLORS.runner);
+            if (flap < 2) {
+                px(1, 3 + lift, 5, 3, COLORS.ink);
+                px(2, 4 + lift, 3, 1, COLORS.runner);
+                px(10, 3 + lift, 5, 3, COLORS.ink);
+                px(11, 4 + lift, 3, 1, COLORS.runner);
             } else {
-                px(1, 6, 5, 3, COLORS.ink);
-                px(10, 6, 5, 3, COLORS.ink);
-                px(2, 7, 4, 1, COLORS.runner);
-                px(10, 7, 4, 1, COLORS.runner);
+                px(1, 6 + lift, 5, 2, COLORS.ink);
+                px(2, 7 + lift, 4, 1, COLORS.runner);
+                px(10, 6 + lift, 5, 2, COLORS.ink);
+                px(10, 7 + lift, 4, 1, COLORS.runner);
             }
-            px(6, 5, 4, 6, COLORS.ink);
-            px(7, 6, 2, 4, COLORS.runner);
-            px(7, 7, 1, 1, COLORS.ink);
-            px(8, 7, 1, 1, COLORS.ink);
-            px(7, 10, 1, 2, COLORS.ink);
-            px(8, 10, 1, 2, COLORS.ink);
+            px(6, 4 + lift, 4, 7, COLORS.ink);
+            px(7, 5 + lift, 2, 5, COLORS.runner);
+            px(7, 6 + lift, 1, 1, COLORS.ink);
+            px(8, 6 + lift, 1, 1, COLORS.ink);
+            px(7, 11 + lift, 2, 1, 0xf7d9a0);
         });
     }
 
+    // Brute — a heavy hoverer whose lower body tapers to a single float trail.
     for (let frame = 0; frame < ENEMY_ANIM.brute.frames; frame++) {
-        const step = frame % 2;
+        const lift = frame % 2;
         enemyTexture(scene, 'brute', frame, 18, 2, (px) => {
-            px(2, 2, 3, 3, COLORS.ink);
-            px(13, 2, 3, 3, COLORS.ink);
-            px(3, 3, 1, 1, COLORS.goldBright);
-            px(14, 3, 1, 1, COLORS.goldBright);
-            px(3, 4, 12, 10, COLORS.ink);
-            px(4, 5, 10, 8, COLORS.brute);
-            px(4, 5, 10, 2, 0xb79ae0);
-            px(6, 8, 2, 2, COLORS.ink);
-            px(10, 8, 2, 2, COLORS.ink);
-            px(5 + step, 14, 3, 4, COLORS.ink);
-            px(10 - step, 14, 3, 4, COLORS.ink);
+            px(2, 2 + lift, 3, 3, COLORS.ink);
+            px(13, 2 + lift, 3, 3, COLORS.ink);
+            px(3, 3 + lift, 1, 1, COLORS.goldBright);
+            px(14, 3 + lift, 1, 1, COLORS.goldBright);
+            px(3, 4 + lift, 12, 9, COLORS.ink);
+            px(4, 5 + lift, 10, 7, COLORS.brute);
+            px(4, 5 + lift, 10, 2, 0xb79ae0);
+            px(6, 8 + lift, 2, 2, COLORS.ink);
+            px(10, 8 + lift, 2, 2, COLORS.ink);
+            px(5, 13 + lift, 8, 1, COLORS.ink);
+            px(6, 14 + lift, 6, 1, COLORS.brute);
+            px(8, 15 + lift, 2, 1, 0xb79ae0);
         });
     }
 
+    // Boss — a crowned overlord suspended above the road, with a robe hem.
     for (let frame = 0; frame < ENEMY_ANIM.boss.frames; frame++) {
-        const step = frame % 2;
+        const lift = frame % 2;
         enemyTexture(scene, 'boss', frame, 20, 2, (px) => {
-            px(4, 3, 2, 3, COLORS.ink);
-            px(9, 2, 2, 4, COLORS.ink);
-            px(14, 3, 2, 3, COLORS.ink);
-            px(5, 4, 1, 1, COLORS.goldBright);
-            px(10, 3, 1, 1, COLORS.goldBright);
-            px(15, 4, 1, 1, COLORS.goldBright);
-            px(2, 6, 16, 10, COLORS.ink);
-            px(3, 7, 14, 8, COLORS.boss);
-            px(3, 7, 14, 2, 0xd45a70);
-            px(6, 10, 2, 2, COLORS.ink);
-            px(12, 10, 2, 2, COLORS.ink);
-            px(5 + step, 16, 3, 4, COLORS.ink);
-            px(12 - step, 16, 3, 4, COLORS.ink);
+            px(4, 3 + lift, 2, 3, COLORS.ink);
+            px(9, 2 + lift, 2, 4, COLORS.ink);
+            px(14, 3 + lift, 2, 3, COLORS.ink);
+            px(5, 4 + lift, 1, 1, COLORS.goldBright);
+            px(10, 3 + lift, 1, 1, COLORS.goldBright);
+            px(15, 4 + lift, 1, 1, COLORS.goldBright);
+            px(2, 6 + lift, 16, 10, COLORS.ink);
+            px(3, 7 + lift, 14, 8, COLORS.boss);
+            px(3, 7 + lift, 14, 2, 0xd45a70);
+            px(6, 10 + lift, 2, 2, COLORS.ink);
+            px(12, 10 + lift, 2, 2, COLORS.ink);
+            px(4, 16 + lift, 12, 1, COLORS.ink);
+            px(5, 17 + lift, 10, 1, COLORS.boss);
+            px(8, 18 + lift, 4, 1, 0xd45a70);
         });
     }
 }
