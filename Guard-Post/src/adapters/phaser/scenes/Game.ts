@@ -4,7 +4,6 @@ import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
 import { Simulation } from '../../../domain/simulation.ts';
 import type { RoundEvent } from '../../../domain/types.ts';
-import { preloadSprites } from '../assets.ts';
 import type { InputPort, PlayAction, PlayContext, Selection } from '../inputAdapter.ts';
 import { computePlayLayout, type PlayLayout } from '../layout.ts';
 import type { GameViewPort } from '../playView.ts';
@@ -47,11 +46,6 @@ export class Game extends Phaser.Scene {
     constructor(deps: AppDeps) {
         super({ key: SCENE_GAME });
         this.#deps = deps;
-    }
-
-    /** Fetches the sprite pack; the renderer bakes it into textures in `create()`. */
-    preload(): void {
-        preloadSprites(this);
     }
 
     create(): void {

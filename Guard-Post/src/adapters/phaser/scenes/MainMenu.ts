@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 
 import type { AppDeps } from '../../../app/deps.ts';
 import { VIEWPORT_CHANGED } from '../../../app/viewport.ts';
-import { preloadSprites } from '../assets.ts';
 import { BACKDROP_KEY, COLORS, ensureCastleIcon, ensureTextures, pixelBox, renderBackdrop } from '../textures.ts';
 import { computeMenuLayout, hitRect, type MenuLayout } from '../layout.ts';
 import { applyRenderScale } from '../scale.ts';
@@ -37,11 +36,6 @@ export class MainMenu extends Phaser.Scene {
     constructor(deps: AppDeps) {
         super({ key: SCENE_MENU });
         this.#deps = deps;
-    }
-
-    /** The castle icon is cut from the pack, so the pack must be local first. */
-    preload(): void {
-        preloadSprites(this);
     }
 
     create(): void {

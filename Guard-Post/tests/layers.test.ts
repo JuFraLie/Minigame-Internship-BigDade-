@@ -316,17 +316,6 @@ test('nothing in src/ reaches for an external resource', () => {
     assert.deepEqual(linked, [LINK_ADAPTER], 'the credit link must be the only URL in the codebase');
 });
 
-test('every image reference lives in the asset manifest', () => {
-    // One file names the sprite pack, exactly like MpBridge.ts names the host channel:
-    // paths can then be audited (relative, on disk, no CDN) in a single place.
-    const MANIFEST = 'adapters/phaser/assetManifest.ts';
-    const media = /\.(png|jpe?g|gif|svg|mp3|ogg|wav|m4a)['"]/;
-    const offenders = [...SOURCE]
-        .filter(([relative, source]) => relative !== MANIFEST && media.test(stripComments(source)))
-        .map(([relative]) => relative);
-    assert.deepEqual(offenders, [], 'declare bundled assets in assetManifest.ts only');
-});
-
 test('the scripts never invoke the removed log.js', () => {
     const manifest = readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf8');
     assert.ok(!manifest.includes('log.js'), 'log.js must be deleted and not referenced by any script');
