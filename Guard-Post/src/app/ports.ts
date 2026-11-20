@@ -81,16 +81,3 @@ export interface ViewportPort {
     current(): ViewportSnapshot;
 }
 
-/**
- * Start-screen credit → the outside page it points at.
- *
- * Implemented by the credit-link adapter in production; the scene only ever sees a
- * label and a tap action, so the one outbound URL in the project stays auditable in
- * exactly one file — the same arrangement as `MpBridge.ts` and the host channel.
- */
-export interface CreditPort {
-    /** What the Play Screen shows, e.g. who the art or the game is credited to. */
-    readonly label: string;
-    /** Opens the credited page. Must be called straight from a tap, never on a timer. */
-    open(): void;
-}

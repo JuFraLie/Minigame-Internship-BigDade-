@@ -179,20 +179,15 @@ test('the Result Panel stacks the title above the buttons, primary above exit', 
     }
 });
 
-test('the credit sits at the bottom with a 44 px target, clear of the how-to text', () => {
+test('the how-to text stays clear of Play and the bottom safe area', () => {
     for (const { width, height, safeTop, safeBottom } of everyScreen()) {
         const menu = computeMenuLayout(input(width, height, safeTop, safeBottom));
-        const credit = menu.credit;
 
-        assert.ok(credit.width >= MIN_TAP && credit.height >= MIN_TAP, `${width}x${height}: credit is too small to tap`);
-        assert.ok(credit.x >= 0 && credit.x + credit.width <= width + 1e-9, `${width}x${height}: credit leaves the screen`);
+        assert.ok(menu.howToY > menu.play.y + menu.play.height, `${width}x${height}: how-to overlaps Play`);
         assert.ok(
-            credit.y >= 0 && credit.y + credit.height <= height - safeBottom + 1e-9,
-            `${width}x${height}: credit leaves the screen`,
+            menu.howToY + HOW_TO_HEIGHT <= height - safeBottom + 1e-9,
+            `${width}x${height}: how-to enters the home indicator`,
         );
-        assert.ok(credit.y >= menu.howToY + HOW_TO_HEIGHT, `${width}x${height}: credit overlaps the how-to text`);
-        assert.ok(credit.y > menu.play.y + menu.play.height, `${width}x${height}: credit overlaps Play`);
-        assert.ok(Math.abs(credit.x + credit.width / 2 - width / 2) < 1e-9, 'the credit is centred');
     }
 });
 

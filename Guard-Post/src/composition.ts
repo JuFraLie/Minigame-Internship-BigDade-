@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 
 import { createProceduralAudio } from './adapters/audio/ProceduralAudio.ts';
 import { createHostBridge } from './adapters/hostBridge.ts';
-import { createCreditLink } from './adapters/creditLink.ts';
 import { ProceduralMapSource } from './adapters/maps/ProceduralMapSource.ts';
 import { InputAdapter } from './adapters/phaser/inputAdapter.ts';
 import { PhaserCanvasRenderer } from './adapters/phaser/renderer.ts';
@@ -39,7 +38,6 @@ export function createGame(parent: string): Phaser.Game {
         // keeps its layout for the whole session (and for any test that passes 0).
         maps: new ProceduralMapSource(Math.floor(Math.random() * 0xffffffff)),
         viewport,
-        credit: createCreditLink(),
         audio: createProceduralAudio(),
         createView: (scene) => new PhaserCanvasRenderer(scene),
         createInput: (contextOf) => new InputAdapter(contextOf),

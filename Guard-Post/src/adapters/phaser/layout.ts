@@ -211,8 +211,6 @@ export interface MenuLayout {
     readonly play: Rect;
     /** The small tap icon above the Play button. */
     readonly icon: { readonly x: number; readonly y: number; readonly radius: number };
-    /** The credit line, pinned to the bottom of the screen; tapping it opens the link. */
-    readonly credit: Rect;
 }
 
 export function computeMenuLayout(input: Omit<LayoutInput, 'spots'>): MenuLayout {
@@ -237,19 +235,11 @@ export function computeMenuLayout(input: Omit<LayoutInput, 'spots'>): MenuLayout
     const playWidth = Math.min(width * 0.62, 280);
     const play: Rect = { x: (width - playWidth) / 2, y: icon.y + icon.radius + 48, width: playWidth, height: 60 };
 
-    // The credit is bottom-anchored (edge-to-edge, above the home indicator) and gets a
-    // full 44 px target. The how-to block then sits under Play, but never on top of it —
-    // on a short screen the gap between them tightens instead of the credit moving.
-    const creditWidth = Math.min(width * 0.8, 320);
-    const credit: Rect = {
-        x: (width - creditWidth) / 2,
-        y: height - input.safeBottom - 8 - MIN_TAP,
-        width: creditWidth,
-        height: MIN_TAP,
-    };
-    const howToY = Math.min(play.y + play.height + 44, credit.y - 8 - HOW_TO_HEIGHT);
+    // The how-to block sits under Play, but never on top of it and never in the home
+    // indicator. On a short screen the gap tightens instead of pushing it off-screen.
+    const howToY = Math.min(play.y + play.height + 44, height - input.safeBottom - 24 - HOW_TO_HEIGHT);
 
-    return { width, titleY, titlePlate, howToY, play, icon, credit };
+    return { width, titleY, titlePlate, howToY, play, icon };
 }
 
 export interface ResultLayout {

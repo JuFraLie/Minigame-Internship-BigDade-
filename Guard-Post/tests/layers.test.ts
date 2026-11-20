@@ -72,8 +72,8 @@ const ALLOWED_TARGETS: Record<Layer, (target: string, dependency: Dependency) =>
         target.startsWith('adapters/maps/'),
     // The bridge module is preserved verbatim: it imports nothing at all.
     'bridge-module': () => false,
-    // Output adapters over the app's ports: the host bridge, the credit link, and the
-    // map sources — which also reach into the domain for the generator they wrap.
+    // Output adapters over the app's ports: the host bridge, audio, and the map sources
+    // — which also reach into the domain for the generator they wrap.
     adapter: (target) => target === 'adapters/MpBridge.ts' || target === 'app/ports.ts' || target.startsWith('domain/'),
     // The Phaser world may speak to the domain, to the app's ports and to its siblings;
     // it may not reach the testing layer or the composition root.
@@ -195,15 +195,14 @@ test('only MpBridge.ts touches window.MpPostMessage', () => {
     assert.deepEqual(offenders, [], 'host communication must be auditable in exactly one file');
 });
 
-test('only the credit adapter opens an external page', () => {
+test('nothing opens an external page', () => {
     const offenders = [...SOURCE]
-        .filter(([relative, source]) => {
-            if (relative === 'adapters/creditLink.ts') return false;
+        .filter(([, source]) => {
             const code = stripComments(source);
             return code.includes('window.open') || code.includes('location.href') || code.includes('location.assign');
         })
         .map(([relative]) => relative);
-    assert.deepEqual(offenders, [], 'outbound navigation must be auditable in exactly one file');
+    assert.deepEqual(offenders, [], 'the game is offline and must never navigate outside');
 });
 
 test('the bridge module is preserved as written', () => {
@@ -298,22 +297,13 @@ test('Phaser is instantiated as CANVAS, and only there', () => {
 
 test('nothing in src/ reaches for an external resource', () => {
     const banned = [/https?:\/\//, /\/\/[\w-]+\.\w+\//, /\burl\s*\(/];
-    // Bundled assets are legal (AGENTS.md §3.4 requires them); external ones are not.
-    // The credit link is the one sanctioned outbound URL.
-    const LINK_ADAPTER = 'adapters/creditLink.ts';
 
     for (const [relative, source] of SOURCE) {
-        if (relative === LINK_ADAPTER) continue;
         const code = stripComments(source);
         for (const pattern of banned) {
             assert.ok(!pattern.test(code), `${relative} references an external resource: ${pattern}`);
         }
     }
-
-    const linked = [...SOURCE]
-        .filter(([, source]) => /https?:\/\//.test(stripComments(source)))
-        .map(([relative]) => relative);
-    assert.deepEqual(linked, [LINK_ADAPTER], 'the credit link must be the only URL in the codebase');
 });
 
 test('the scripts never invoke the removed log.js', () => {

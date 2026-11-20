@@ -3,8 +3,8 @@ import type { AudioPort, SfxName } from '../../app/ports.ts';
 /**
  * All audio, synthesized in code — no files, no network, no storage.
  *
- * A tiny Web Audio chiptune plays under the round and short oscillator/noise blips mark
- * the game's events. The AudioContext is created lazily on the first user gesture (the
+ * A fast, driving arcade chiptune plays under the round and short oscillator/noise blips
+ * mark the game's events. The AudioContext is created lazily on the first user gesture (the
  * Play tap), which is what mobile WebViews require before they will make any sound.
  * Music is a look-ahead sequencer driven by the audio clock, so it keeps time even when
  * a frame is late; sounds are throttled so a busy wave never turns into a wall of noise.
@@ -14,13 +14,22 @@ const MASTER_VOLUME = 0.9;
 const MUSIC_VOLUME = 0.35;
 const SFX_VOLUME = 0.7;
 
-const STEP_SECONDS = 0.125; // eighth notes at 120 BPM
+const STEP_SECONDS = 0.1; // driving eighth notes at 150 BPM
 const LOOKAHEAD_SECONDS = 0.12;
 const TICK_MS = 25;
 
-/** Semitone offsets from A4. Negative values are the bass register. */
-const BASS: readonly number[] = [-24, -24, -17, -17, -19, -19, -21, -21];
-const LEAD: readonly (number | null)[] = [0, null, 7, 3, 10, null, 7, 3, 0, null, 5, 3, -2, null, 3, 7];
+/**
+ * Two bars of A-minor arcade energy: a pulsing square bass, a fast lead arpeggio and a
+ * kick/snare/hat grid on every beat. Semitones are offsets from A4.
+ */
+const BASS: readonly number[] = [
+    -24, -24, -24, -24, -21, -21, -21, -21,
+    -19, -19, -19, -19, -17, -17, -17, -17,
+];
+const LEAD: readonly number[] = [
+    0, 3, 7, 10, 12, 10, 7, 3,
+    -2, 3, 7, 12, 15, 12, 7, 3,
+];
 
 /** Sounds that can fire many times in one frame get a minimum gap. */
 const MIN_GAP: Partial<Record<SfxName, number>> = { shoot: 0.045, hit: 0.045, blocked: 0.1 };
@@ -131,10 +140,23 @@ export function createProceduralAudio(): AudioPort {
     /** Schedules the next couple of notes from the audio clock, never from frame time. */
     function schedule(audio: AudioContext): void {
         while (nextNoteAt < audio.currentTime + LOOKAHEAD_SECONDS) {
-            tone(audio, music, hz(BASS[step % BASS.length]), nextNoteAt, STEP_SECONDS * 0.9, 'triangle', 0.5);
+            const beat = step % 4;
+
+            // Kick on beats 1 and 3, snare on 2 and 4, hat on every eighth note.
+            if (beat === 0 || beat === 2) {
+                tone(audio, music, 130, nextNoteAt, 0.09, 'sine', 0.45, 45);
+            } else {
+                noise(audio, music, noiseSample, nextNoteAt, 0.07, 0.18);
+            }
+            noise(audio, music, noiseSample, nextNoteAt, 0.02, 0.06);
+
+            tone(audio, music, hz(BASS[step % BASS.length]), nextNoteAt, STEP_SECONDS * 0.8, 'square', 0.28);
             const lead = LEAD[step % LEAD.length];
-            if (lead !== null) tone(audio, music, hz(lead), nextNoteAt, STEP_SECONDS * 0.7, 'square', 0.12);
-            if (step % 4 === 0) noise(audio, music, noiseSample, nextNoteAt, 0.03, 0.12);
+            tone(audio, music, hz(lead), nextNoteAt, STEP_SECONDS * 0.75, 'square', 0.14);
+            if (step % 2 === 0) {
+                tone(audio, music, hz(lead - 12), nextNoteAt, STEP_SECONDS * 0.6, 'square', 0.06);
+            }
+
             nextNoteAt += STEP_SECONDS;
             step = (step + 1) % LEAD.length;
         }

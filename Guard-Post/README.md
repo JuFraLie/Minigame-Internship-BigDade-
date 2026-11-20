@@ -34,13 +34,6 @@ src/
 tests/             unit tests (Node native runner)
 ```
 
-## Credit
-
-The Play Screen carries a credit line ("Assets by skyel"); tapping it opens
-`https://skyel13.itch.io/` and does **not** start the game. `src/adapters/creditLink.ts`
-is the only file that navigates outside the game — `tests/layers.test.ts` keeps it that
-way, the same way it fences `window.MpPostMessage` inside `MpBridge.ts`.
-
 ## Assets
 
 There are no image or audio files: every visual is generated in code by
